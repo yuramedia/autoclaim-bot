@@ -76,19 +76,23 @@ export class EndfieldService {
 
     private async getOAuthCode(): Promise<string | null> {
         try {
+            console.log('[Endfield] Getting OAuth code...');
             const response = await this.client.post(OAUTH_GRANT_URL, {
                 token: this.accountToken,
                 appCode: SKPORT_APP_CODE,
                 type: 0,
             });
 
+            console.log('[Endfield] OAuth response:', JSON.stringify(response.data));
+
             if (response.data.status === 0 && response.data.data?.code) {
+                console.log('[Endfield] OAuth code obtained successfully');
                 return response.data.data.code;
             }
-            console.error('OAuth grant failed:', response.data);
+            console.error('[Endfield] OAuth grant failed:', response.data);
             return null;
         } catch (error: any) {
-            console.error('OAuth grant error:', error.message);
+            console.error('[Endfield] OAuth grant error:', error.response?.data || error.message);
             return null;
         }
     }

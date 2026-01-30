@@ -3,7 +3,8 @@ import {
     GatewayIntentBits,
     Events,
     Collection,
-    ChatInputCommandInteraction,
+    type ChatInputCommandInteraction,
+    MessageFlags,
 } from 'discord.js';
 import { config } from './config';
 import { connectDatabase } from './database/connection';
@@ -50,15 +51,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
         } catch (error) {
             console.error(`Error executing ${interaction.commandName}:`, error);
 
-            const reply = {
-                content: '❌ An error occurred while executing this command.',
-                ephemeral: true,
-            };
-
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp(reply);
+                await interaction.followUp({
+                    content: '❌ An error occurred while executing this command.',
+                    flags: MessageFlags.Ephemeral,
+                });
             } else {
-                await interaction.reply(reply);
+                await interaction.reply({
+                    content: '❌ An error occurred while executing this command.',
+                    flags: MessageFlags.Ephemeral,
+                });
             }
         }
     }
@@ -74,15 +76,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
         } catch (error) {
             console.error('Error handling modal:', error);
 
-            const reply = {
-                content: '❌ An error occurred while processing your input.',
-                ephemeral: true,
-            };
-
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp(reply);
+                await interaction.followUp({
+                    content: '❌ An error occurred while processing your input.',
+                    flags: MessageFlags.Ephemeral,
+                });
             } else {
-                await interaction.reply(reply);
+                await interaction.reply({
+                    content: '❌ An error occurred while processing your input.',
+                    flags: MessageFlags.Ephemeral,
+                });
             }
         }
     }

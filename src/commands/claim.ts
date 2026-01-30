@@ -2,6 +2,7 @@ import {
     SlashCommandBuilder,
     type ChatInputCommandInteraction,
     EmbedBuilder,
+    MessageFlags,
 } from 'discord.js';
 import { User } from '../database/models/User';
 import { HoyolabService, formatHoyolabResults } from '../services/hoyolab';
@@ -23,7 +24,7 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const service = interaction.options.getString('service') || 'all';
     const user = await User.findOne({ discordId: interaction.user.id });

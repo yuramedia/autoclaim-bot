@@ -1,6 +1,7 @@
 import {
     SlashCommandBuilder,
     type ChatInputCommandInteraction,
+    MessageFlags,
 } from 'discord.js';
 import { User } from '../database/models/User';
 
@@ -20,7 +21,7 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const service = interaction.options.getString('service', true);
     const user = await User.findOne({ discordId: interaction.user.id });
@@ -35,26 +36,19 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     if (service === 'all') {
         await User.deleteOne({ discordId: interaction.user.id });
         await interaction.editReply({
-            content: '✅ All your data has been removed from the database.',
+            content: '✅ All your data has been removed.',
         });
-        return;
-    }
-
-    if (service === 'hoyolab') {
+    } else if (service === 'hoyolab') {
         user.hoyolab = undefined;
         await user.save();
         await interaction.editReply({
             content: '✅ Your Hoyolab token has been removed.',
         });
-        return;
-    }
-
-    if (service === 'endfield') {
+    } else if (service === 'endfield') {
         user.endfield = undefined;
         await user.save();
         await interaction.editReply({
             content: '✅ Your Endfield token has been removed.',
         });
-        return;
     }
 }

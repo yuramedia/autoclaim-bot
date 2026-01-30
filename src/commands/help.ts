@@ -2,6 +2,7 @@ import {
     SlashCommandBuilder,
     type ChatInputCommandInteraction,
     EmbedBuilder,
+    MessageFlags,
 } from 'discord.js';
 
 export const data = new SlashCommandBuilder()
@@ -80,5 +81,5 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         .setFooter({ text: 'Auto-Claim Bot • Hoyolab & Endfield' })
         .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }

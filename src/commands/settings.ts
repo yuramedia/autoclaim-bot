@@ -1,6 +1,7 @@
 import {
     SlashCommandBuilder,
     type ChatInputCommandInteraction,
+    MessageFlags,
 } from 'discord.js';
 import { User } from '../database/models/User';
 
@@ -20,27 +21,28 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const subcommand = interaction.options.getSubcommand();
 
-    let user = await User.findOne({ discordId: interaction.user.id });
-
-    if (!user) {
-        await interaction.editReply({
-            content: '❌ You have not set up any tokens yet. Use `/setup-hoyolab` or `/setup-endfield` first.',
-        });
-        return;
-    }
-
     if (subcommand === 'notify') {
         const enabled = interaction.options.getBoolean('enabled', true);
-        user.settings.notifyOnClaim = enabled;
-        await user.save();
+
+        await User.findOneAndUpdate(
+            { discordId: interaction.user.id },
+            {
+                $set: {
+                    username: interaction.user.username,
+                    'settings.notifyOnClaim': enabled,
+                },
+            },
+            { upsert: true }
+        );
 
         await interaction.editReply({
-            content: `✅ Notifications ${enabled ? 'enabled' : 'disabled'}. You will ${enabled ? 'now' : 'no longer'} receive DMs after claims.`,
+            content: enabled
+                ? '✅ DM notifications enabled. You will receive claim results via DM.'
+                : '❌ DM notifications disabled. You will no longer receive claim results.',
         });
-        return;
     }
 }

@@ -2,6 +2,7 @@ import {
     SlashCommandBuilder,
     type ChatInputCommandInteraction,
     EmbedBuilder,
+    MessageFlags,
 } from 'discord.js';
 import { User } from '../database/models/User';
 
@@ -10,7 +11,7 @@ export const data = new SlashCommandBuilder()
     .setDescription('Check your auto-claim status');
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const user = await User.findOne({ discordId: interaction.user.id });
 

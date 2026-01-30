@@ -1,9 +1,9 @@
-import { ModalSubmitInteraction } from 'discord.js';
+import { type ModalSubmitInteraction, MessageFlags } from 'discord.js';
 import { User } from '../database/models/User';
 import { HoyolabService } from '../services/hoyolab';
 
 export async function handleHoyolabModal(interaction: ModalSubmitInteraction): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const token = interaction.fields.getTextInputValue('hoyolab-token').trim();
     const nickname = interaction.fields.getTextInputValue('hoyolab-nickname')?.trim() || 'Unknown';
@@ -76,6 +76,6 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
         .join(', ');
 
     await interaction.editReply({
-        content: `✅ **Hoyolab token saved successfully!**\n\n**Account**: ${nickname}\n**Games**: ${enabledGames || 'None'}\n\nYour daily rewards will be claimed automatically every day at 09:00 WIB.`,
+        content: `✅ **Hoyolab token saved successfully!**\n\n**Account**: ${nickname}\n**Games**: ${enabledGames || 'None'}\n\nYour daily rewards will be claimed automatically every day at 00:00 UTC+8.`,
     });
 }

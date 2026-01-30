@@ -1,9 +1,9 @@
-import { ModalSubmitInteraction } from 'discord.js';
+import { type ModalSubmitInteraction, MessageFlags } from 'discord.js';
 import { User } from '../database/models/User';
 import { EndfieldService } from '../services/endfield';
 
 export async function handleEndfieldModal(interaction: ModalSubmitInteraction): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const token = interaction.fields.getTextInputValue('endfield-token').trim();
     const nickname = interaction.fields.getTextInputValue('endfield-nickname')?.trim() || 'Unknown';
@@ -38,6 +38,6 @@ export async function handleEndfieldModal(interaction: ModalSubmitInteraction): 
     );
 
     await interaction.editReply({
-        content: `✅ **Endfield token saved successfully!**\n\n**Account**: ${nickname}\n\nYour daily rewards will be claimed automatically every day at 09:00 WIB.`,
+        content: `✅ **Endfield token saved successfully!**\n\n**Account**: ${nickname}\n\nYour daily rewards will be claimed automatically every day at 00:00 UTC+8.`,
     });
 }

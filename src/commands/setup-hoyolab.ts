@@ -19,8 +19,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     const tokenInput = new TextInputBuilder()
         .setCustomId('hoyolab-token')
-        .setLabel('Token (ltoken_v2 + ltuid_v2 + cookie_token)')
-        .setPlaceholder('Paste result of document.cookie from https://genshin.hoyoverse.com/en/gift')
+        .setLabel('Token (ltoken + ltuid + cookie_token)')
+        .setPlaceholder('ltoken_v2=...; ltuid_v2=...; cookie_token_v2=...; (Get from F12 -> Application -> Cookies)')
         .setStyle(TextInputStyle.Paragraph)
         .setRequired(true)
         .setMinLength(20);

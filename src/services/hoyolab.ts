@@ -11,6 +11,7 @@ interface GameConfig {
     name: string;
     url: string;
     actId: string;
+    bizName: string;
     extraHeaders?: Record<string, string>;
 }
 
@@ -19,26 +20,31 @@ const GAMES: Record<string, GameConfig> = {
         name: 'Genshin Impact',
         url: 'https://sg-hk4e-api.hoyolab.com/event/sol/sign',
         actId: 'e202102251931481',
+        bizName: 'hk4e_global',
     },
     starRail: {
         name: 'Honkai: Star Rail',
         url: 'https://sg-public-api.hoyolab.com/event/luna/os/sign',
         actId: 'e202303301540311',
+        bizName: 'hkrpg_global',
     },
     honkai3: {
         name: 'Honkai Impact 3rd',
         url: 'https://sg-public-api.hoyolab.com/event/mani/sign',
         actId: 'e202110291205111',
+        bizName: 'bh3_global',
     },
     tearsOfThemis: {
         name: 'Tears of Themis',
         url: 'https://sg-public-api.hoyolab.com/event/luna/os/sign',
         actId: 'e202308141137581',
+        bizName: 'tot_global',
     },
     zenlessZoneZero: {
         name: 'Zenless Zone Zero',
         url: 'https://sg-public-api.hoyolab.com/event/luna/zzz/os/sign',
         actId: 'e202406031448091',
+        bizName: 'nap_global',
         extraHeaders: {
             'x-rpc-signgame': 'zzz',
         },
@@ -55,6 +61,17 @@ const DEFAULT_HEADERS = {
     'Referer': 'https://act.hoyolab.com/',
     'Origin': 'https://act.hoyolab.com',
 };
+
+export interface GameAccount {
+    game_biz: string;
+    region: string;
+    game_uid: string;
+    nickname: string;
+    level: number;
+    is_chosen?: boolean;
+    region_name: string;
+    is_official: boolean;
+}
 
 export class HoyolabService {
     private client: AxiosInstance;
@@ -165,6 +182,55 @@ export class HoyolabService {
             return { valid: false, message: response.data.message || 'Invalid token' };
         } catch (error: any) {
             return { valid: false, message: error.message || 'Validation failed' };
+        }
+    }
+
+    async getGameAccounts(gameKey: string): Promise<GameAccount[]> {
+        const game = GAMES[gameKey];
+        if (!game) return [];
+
+        try {
+            const url = `https://api-os-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie?game_biz=${game.bizName}`;
+            const response = await this.client.get(url);
+
+            if (response.data.retcode === 0 && response.data.data?.list) {
+                // Filter out invalid or unwanted regions if necessary
+                return response.data.data.list;
+            }
+            return [];
+        } catch (error) {
+            console.error(`Error fetching accounts for ${gameKey}:`, error);
+            return [];
+        }
+    }
+
+    async redeemCode(gameKey: string, account: GameAccount, code: string): Promise<{ success: boolean; message: string }> {
+        const game = GAMES[gameKey];
+        if (!game) return { success: false, message: 'Unknown game' };
+
+        // Redemption endpoints vary slightly by game, but most use the common one now
+        // Genshin: https://sg-hk4e-api.hoyoverse.com/common/apicdkey/api/webExchangeCdkey
+        // HSR: https://sg-hkrpg-api.hoyoverse.com/common/apicdkey/api/webExchangeCdkey
+        // ZZZ: https://public-operation-nap.hoyoverse.com/common/apicdkey/api/webExchangeCdkey
+
+        let baseUrl = 'https://sg-hk4e-api.hoyoverse.com';
+        if (gameKey === 'starRail') baseUrl = 'https://sg-hkrpg-api.hoyoverse.com';
+        if (gameKey === 'zenlessZoneZero') baseUrl = 'https://public-operation-nap.hoyoverse.com';
+        if (gameKey === 'honkai3') baseUrl = 'https://sg-public-api.hoyoverse.com'; // Verify this one
+
+        const url = `${baseUrl}/common/apicdkey/api/webExchangeCdkey?uid=${account.game_uid}&region=${account.region}&lang=en&cdkey=${code}&game_biz=${game.bizName}`;
+
+        try {
+            const response = await this.client.get(url);
+            const data = response.data;
+
+            if (data.retcode === 0) {
+                return { success: true, message: 'Redeemed successfully' };
+            }
+
+            return { success: false, message: data.message };
+        } catch (error: any) {
+            return { success: false, message: error.message || 'Request failed' };
         }
     }
 }

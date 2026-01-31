@@ -22,3 +22,4 @@ jobs:
           git pull origin main
           bun install
           pm2 restart autoclaim-bot
+          pm2 save

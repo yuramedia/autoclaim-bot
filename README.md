@@ -51,7 +51,9 @@ Bot Discord untuk auto-claim daily rewards dari:
    - `ltoken_v2` (atau `ltoken`)
    - `ltuid_v2` (atau `ltuid`)
    - `cookie_token_v2` (atau `cookie_token`)
-5. Gabungkan formatnya: `ltoken_v2=...; ltuid_v2=...; cookie_token_v2=...;`
+   - `account_id_v2` (atau `account_id`)
+5. Gabungkan formatnya:
+   `ltoken_v2=...; ltuid_v2=...; cookie_token_v2=...; account_id_v2=...;`
 
 ### Endfield/SKPORT Token
 1. Buka [Endfield Sign-in Page](https://game.skport.com/endfield/sign-in) dan login

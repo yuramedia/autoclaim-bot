@@ -19,8 +19,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     const tokenInput = new TextInputBuilder()
         .setCustomId('hoyolab-token')
-        .setLabel('Token (ltoken + ltuid + cookie_token)')
-        .setPlaceholder('ltoken_v2=...; ltuid_v2=...; cookie_token_v2=...; (Get from F12 -> Application -> Cookies)')
+        .setLabel('Token (ltoken + ltuid + cookie_token + account_id)')
+        .setPlaceholder('ltoken_v2=...; ltuid_v2=...; cookie_token_v2=...; account_id_v2=...; (Get from Application -> Cookies)')
         .setStyle(TextInputStyle.Paragraph)
         .setRequired(true)
         .setMinLength(20);

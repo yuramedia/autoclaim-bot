@@ -240,15 +240,25 @@ export class HoyolabService {
         const url = `${baseUrl}/common/apicdkey/api/webExchangeCdkey?uid=${account.game_uid}&region=${account.region}&lang=en&cdkey=${code}&game_biz=${game.bizName}`;
 
         try {
-            // Redemption requires specific Origin/Referer and cookie_token
+            // Debugging: Log the headers being sent
+            console.log(`[Redeem] Attempting to redeem for ${account.game_uid} (${gameKey})`);
+            console.log(`[Redeem] URL: ${url}`);
+            console.log(`[Redeem] Cookie length: ${this.token.length}`);
+            if (!this.token.includes('account_id') && !this.token.includes('account_id_v2')) {
+                console.warn('[Redeem] Warning: account_id/account_id_v2 missing from cookie, this is likely why it fails.');
+            }
+
+            // Redemption requires specific Origin/Referer and cookie_token + account_id
             const response = await this.client.get(url, {
                 headers: {
                     'Origin': referer,
                     'Referer': `${referer}/gift`,
-                    'Cookie': this.token // Ensure cookie is passed (it's in default but explicit here doesn't hurt)
+                    'Cookie': this.token
                 }
             });
             const data = response.data;
+
+            console.log(`[Redeem] Response for ${code}:`, JSON.stringify(data));
 
             if (data.retcode === 0) {
                 return { success: true, message: 'Redeemed successfully' };

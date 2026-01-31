@@ -15,13 +15,16 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
     // Validate token quality
     const hasLToken = token.includes('ltoken') || token.includes('ltoken_v2');
     const hasCookieToken = token.includes('cookie_token') || token.includes('cookie_token_v2');
+    const hasAccountId = token.includes('account_id') || token.includes('account_id_v2');
 
     let warningMsg = '';
     if (!hasLToken) {
         warningMsg += '\n⚠️ **Critical:** `ltoken` is missing. Daily check-in might fail.';
     }
     if (!hasCookieToken) {
-        warningMsg += '\n⚠️ **Warning:** `cookie_token` is missing. The `/redeem` command will NOT work. (Get cookie from https://genshin.hoyoverse.com/en/gift to fix this)';
+        warningMsg += '\n⚠️ **Warning:** `cookie_token` is missing. `/redeem` will FAIL.';
+    } else if (!hasAccountId) {
+        warningMsg += '\n⚠️ **Warning:** `account_id` is missing. `/redeem` requires it matching `cookie_token`.';
     }
 
     // Validate token

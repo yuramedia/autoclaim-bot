@@ -39,13 +39,13 @@ const HoyolabSchema = new Schema<IHoyolabData>({
     token: { type: String, required: true },
     accountName: { type: String, default: 'Unknown' },
     games: {
-        genshin: { type: Boolean, default: true },
-        starRail: { type: Boolean, default: true },
+        genshin: { type: Boolean, default: false },
+        starRail: { type: Boolean, default: false },
         honkai3: { type: Boolean, default: false },
         tearsOfThemis: { type: Boolean, default: false },
-        zenlessZoneZero: { type: Boolean, default: true },
+        zenlessZoneZero: { type: Boolean, default: false },
     },
-    lastClaim: { type: Date },
+    lastClaim: { type: Date, index: true },
     lastClaimResult: { type: String },
 });
 
@@ -54,7 +54,7 @@ const EndfieldSchema = new Schema<IEndfieldData>({
     gameId: { type: String, required: true },
     server: { type: String, default: '2' },
     accountName: { type: String, default: 'Unknown' },
-    lastClaim: { type: Date },
+    lastClaim: { type: Date, index: true },
     lastClaimResult: { type: String },
 });
 

@@ -211,8 +211,14 @@ export class HoyolabService {
             };
         }
 
-        // Use the common "Hyl" endpoint which uses DS headers and is less strict about Origin
-        const baseUrl = 'https://sg-hkrpg-api.hoyolab.com/common/apicdkey/api/webExchangeCdkeyHyl';
+        // Determine base URL based on game
+        let baseUrl = 'https://sg-hk4e-api.hoyolab.com';
+
+        if (gameKey === 'starRail') {
+            baseUrl = 'https://sg-hkrpg-api.hoyolab.com';
+        } else if (gameKey === 'zenlessZoneZero') {
+            baseUrl = 'https://public-operation-nap.hoyoverse.com';
+        }
 
         const params = new URLSearchParams({
             uid: String(account.game_uid),
@@ -222,7 +228,7 @@ export class HoyolabService {
             game_biz: game.bizName
         });
 
-        const url = `${baseUrl}?${params.toString()}`;
+        const url = `${baseUrl}/common/apicdkey/api/webExchangeCdkeyHyl?${params.toString()}`;
 
         try {
             console.log(`[Redeem] Attempting to redeem for ${account.game_uid} (${gameKey})`);

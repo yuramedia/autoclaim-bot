@@ -8,10 +8,40 @@ import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fi
 import { downloadMedia } from "../services/media-downloader";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
 import { getGuildSettings } from "../database/models/GuildSettings";
+import axios from "axios";
 
 // Cache to avoid processing same message twice
 const processedMessages = new Set<string>();
 const CACHE_TTL = 60000; // 1 minute
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+/**
+ * Download media directly from a URL
+ */
+async function downloadFromUrl(
+    url: string,
+    filename: string
+): Promise<{ success: boolean; buffer?: Buffer; filename: string }> {
+    try {
+        const response = await axios.get(url, {
+            responseType: "arraybuffer",
+            timeout: 60000,
+            maxContentLength: MAX_FILE_SIZE,
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+        });
+
+        const buffer = Buffer.from(response.data);
+        if (buffer.length <= MAX_FILE_SIZE) {
+            return { success: true, buffer, filename };
+        }
+        return { success: false, filename };
+    } catch (error) {
+        console.error("Direct download failed:", error);
+        return { success: false, filename };
+    }
+}
 
 /**
  * Handle message create event
@@ -62,16 +92,19 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
     let content = "";
 
     // Platforms that VKrDownloader supports (video platforms only)
-    const DOWNLOADABLE_PLATFORMS: PlatformId[] = [
+    const VKRDOWNLOADER_PLATFORMS: PlatformId[] = [
         PlatformId.TWITTER,
         PlatformId.TIKTOK,
         PlatformId.INSTAGRAM,
         PlatformId.REDDIT,
-        PlatformId.FACEBOOK,
         PlatformId.THREADS
     ];
 
-    const canDownload = DOWNLOADABLE_PLATFORMS.includes(processed.platform.id);
+    // Platforms that support direct download from scraped URLs
+    const DIRECT_DOWNLOAD_PLATFORMS: PlatformId[] = [PlatformId.FACEBOOK];
+
+    const canUseVkr = VKRDOWNLOADER_PLATFORMS.includes(processed.platform.id);
+    const canDirectDownload = DIRECT_DOWNLOAD_PLATFORMS.includes(processed.platform.id);
 
     // Try to fetch rich post info
     if (settings.embedFix.richEmbeds) {
@@ -79,26 +112,53 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
 
         if (postInfo) {
             const richEmbed = buildRichEmbed(postInfo, processed.platform);
-            embeds.push(richEmbed);
 
-            // Try to download and upload media if enabled (only for supported platforms)
-            if (settings.embedFix.autoUpload && postInfo.video && canDownload) {
-                const downloadResult = await downloadMedia(processed.originalUrl);
+            // Try to download and upload media if enabled
+            if (settings.embedFix.autoUpload) {
+                // For Facebook: download directly from the scraped video/image URL
+                if (canDirectDownload && (postInfo.video || postInfo.images.length > 0)) {
+                    const mediaUrl = postInfo.video || postInfo.images[0];
+                    if (mediaUrl) {
+                        const ext = postInfo.video ? "mp4" : "jpg";
+                        const filename = processed.spoilered
+                            ? `SPOILER_facebook_${Date.now()}.${ext}`
+                            : `facebook_${Date.now()}.${ext}`;
+                        const downloadResult = await downloadFromUrl(mediaUrl, filename);
 
-                if (downloadResult.success && downloadResult.buffer) {
-                    const attachment = new AttachmentBuilder(downloadResult.buffer, {
-                        name: processed.spoilered ? `SPOILER_${downloadResult.filename}` : downloadResult.filename
-                    });
-                    files.push(attachment);
+                        if (downloadResult.success && downloadResult.buffer) {
+                            const attachment = new AttachmentBuilder(downloadResult.buffer, {
+                                name: downloadResult.filename
+                            });
+                            files.push(attachment);
+
+                            // Set the downloaded media as the embed image
+                            if (!postInfo.video) {
+                                richEmbed.setImage(`attachment://${downloadResult.filename}`);
+                            }
+                        }
+                    }
+                }
+                // For other platforms: use VKrDownloader
+                else if (canUseVkr && postInfo.video) {
+                    const downloadResult = await downloadMedia(processed.originalUrl);
+
+                    if (downloadResult.success && downloadResult.buffer) {
+                        const attachment = new AttachmentBuilder(downloadResult.buffer, {
+                            name: processed.spoilered ? `SPOILER_${downloadResult.filename}` : downloadResult.filename
+                        });
+                        files.push(attachment);
+                    }
                 }
             }
+
+            embeds.push(richEmbed);
         }
     }
 
     // If no rich embed, use fixed URL or try download
     if (embeds.length === 0) {
-        // For platforms with download support, try to download media
-        if (settings.embedFix.autoUpload && canDownload) {
+        // For platforms with VKrDownloader support, try to download media
+        if (settings.embedFix.autoUpload && canUseVkr) {
             const downloadResult = await downloadMedia(processed.originalUrl);
 
             if (downloadResult.success && downloadResult.buffer) {

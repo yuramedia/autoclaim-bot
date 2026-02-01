@@ -182,89 +182,89 @@ export async function fetchBlueskyInfo(url: string): Promise<PostInfo | null> {
 /**
  * Fetch Facebook post info via facebed.com OpenGraph scraping
  */
-export async function fetchFacebookInfo(originalUrl: string): Promise<PostInfo | null> {
-    try {
-        // Convert original Facebook URL to facebed URL
-        const facebedUrl = originalUrl.replace("facebook.com", "facebed.com");
+// export async function fetchFacebookInfo(originalUrl: string): Promise<PostInfo | null> {
+//     try {
+//         // Convert original Facebook URL to facebed URL
+//         const facebedUrl = originalUrl.replace("facebook.com", "facebed.com");
 
-        // Fetch the facebed page to get OpenGraph meta tags
-        const response = await axios.get(facebedUrl, {
-            timeout: 15000,
-            headers: {
-                "User-Agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"
-            }
-        });
+//         // Fetch the facebed page to get OpenGraph meta tags
+//         const response = await axios.get(facebedUrl, {
+//             timeout: 15000,
+//             headers: {
+//                 "User-Agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"
+//             }
+//         });
 
-        const html = response.data;
+//         const html = response.data;
 
-        // Extract OpenGraph meta tags
-        const getMetaContent = (property: string): string => {
-            const regex = new RegExp(`<meta[^>]*property=["']${property}["'][^>]*content=["']([^"']+)["']`, "i");
-            const altRegex = new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*property=["']${property}["']`, "i");
-            const match = html.match(regex) || html.match(altRegex);
-            return match ? match[1] : "";
-        };
+//         // Extract OpenGraph meta tags
+//         const getMetaContent = (property: string): string => {
+//             const regex = new RegExp(`<meta[^>]*property=["']${property}["'][^>]*content=["']([^"']+)["']`, "i");
+//             const altRegex = new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*property=["']${property}["']`, "i");
+//             const match = html.match(regex) || html.match(altRegex);
+//             return match ? match[1] : "";
+//         };
 
-        const title = getMetaContent("og:title") || "Facebook";
-        const description = getMetaContent("og:description") || "";
-        const image = getMetaContent("og:image") || "";
-        const videoUrl = getMetaContent("og:video") || getMetaContent("og:video:url") || "";
+//         const title = getMetaContent("og:title") || "Facebook";
+//         const description = getMetaContent("og:description") || "";
+//         const image = getMetaContent("og:image") || "";
+//         const videoUrl = getMetaContent("og:video") || getMetaContent("og:video:url") || "";
 
-        // Try to extract stats from provider name if available
-        // Format: "facebed by pi.kt\n⌚ 2026/02/01 03:25:09 UTC+07\n❤️ 99 • 💬 26 • 🔁 13"
-        let likes = 0,
-            comments = 0,
-            reposts = 0;
+//         // Try to extract stats from provider name if available
+//         // Format: "facebed by pi.kt\n⌚ 2026/02/01 03:25:09 UTC+07\n❤️ 99 • 💬 26 • 🔁 13"
+//         let likes = 0,
+//             comments = 0,
+//             reposts = 0;
 
-        // Try to find stats in the page
-        const statsMatch = html.match(/❤️\s*(\d+).*?💬\s*(\d+).*?🔁\s*(\d+)/);
-        if (statsMatch) {
-            likes = parseInt(statsMatch[1]) || 0;
-            comments = parseInt(statsMatch[2]) || 0;
-            reposts = parseInt(statsMatch[3]) || 0;
-        }
+//         // Try to find stats in the page
+//         const statsMatch = html.match(/❤️\s*(\d+).*?💬\s*(\d+).*?🔁\s*(\d+)/);
+//         if (statsMatch) {
+//             likes = parseInt(statsMatch[1]) || 0;
+//             comments = parseInt(statsMatch[2]) || 0;
+//             reposts = parseInt(statsMatch[3]) || 0;
+//         }
 
-        // If no stats found in HTML, check for oEmbed
-        if (likes === 0 && comments === 0) {
-            try {
-                const oembedResponse = await axios.get(
-                    `https://facebed.com/oembed?url=${encodeURIComponent(facebedUrl)}&format=json`,
-                    { timeout: 5000 }
-                );
-                const oembedData = oembedResponse.data;
-                // Parse provider_name for stats
-                const providerName = oembedData?.provider_name || "";
-                const oembedStats = providerName.match(/❤️\s*(\d+).*?💬\s*(\d+).*?🔁\s*(\d+)/);
-                if (oembedStats) {
-                    likes = parseInt(oembedStats[1]) || 0;
-                    comments = parseInt(oembedStats[2]) || 0;
-                    reposts = parseInt(oembedStats[3]) || 0;
-                }
-            } catch {
-                // Ignore oEmbed errors
-            }
-        }
+//         // If no stats found in HTML, check for oEmbed
+//         if (likes === 0 && comments === 0) {
+//             try {
+//                 const oembedResponse = await axios.get(
+//                     `https://facebed.com/oembed?url=${encodeURIComponent(facebedUrl)}&format=json`,
+//                     { timeout: 5000 }
+//                 );
+//                 const oembedData = oembedResponse.data;
+//                 // Parse provider_name for stats
+//                 const providerName = oembedData?.provider_name || "";
+//                 const oembedStats = providerName.match(/❤️\s*(\d+).*?💬\s*(\d+).*?🔁\s*(\d+)/);
+//                 if (oembedStats) {
+//                     likes = parseInt(oembedStats[1]) || 0;
+//                     comments = parseInt(oembedStats[2]) || 0;
+//                     reposts = parseInt(oembedStats[3]) || 0;
+//                 }
+//             } catch {
+//                 // Ignore oEmbed errors
+//             }
+//         }
 
-        return {
-            author: {
-                name: title,
-                username: title,
-                url: originalUrl
-            },
-            content: description,
-            images: image ? [image] : [],
-            video: videoUrl || undefined,
-            stats: {
-                likes,
-                reposts,
-                comments
-            }
-        };
-    } catch (error) {
-        console.error("Failed to fetch Facebook info:", error);
-        return null;
-    }
-}
+//         return {
+//             author: {
+//                 name: title,
+//                 username: title,
+//                 url: originalUrl
+//             },
+//             content: description,
+//             images: image ? [image] : [],
+//             video: videoUrl || undefined,
+//             stats: {
+//                 likes,
+//                 reposts,
+//                 comments
+//             }
+//         };
+//     } catch (error) {
+//         console.error("Failed to fetch Facebook info:", error);
+//         return null;
+//     }
+// }
 
 /**
  * Fetch post info based on platform
@@ -280,8 +280,8 @@ export async function fetchPostInfo(
             break;
         case PlatformId.BLUESKY:
             return fetchBlueskyInfo(url);
-        case PlatformId.FACEBOOK:
-            return fetchFacebookInfo(url);
+        // case PlatformId.FACEBOOK:
+        //     return fetchFacebookInfo(url);
         // Add more platforms as needed
     }
     return null;

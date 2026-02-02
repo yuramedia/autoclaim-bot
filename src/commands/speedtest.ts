@@ -1,7 +1,9 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
-import speedTest from "@hola.org/speedtest-net";
+import { UniversalSpeedTest, SpeedUnits } from "universal-speedtest";
 
-export const data = new SlashCommandBuilder().setName("speedtest").setDescription("Check hosting server network speed");
+export const data = new SlashCommandBuilder()
+    .setName("speedtest")
+    .setDescription("Check hosting server network speed");
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const waitingEmbed = new EmbedBuilder()
@@ -17,51 +19,94 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     await interaction.reply({ embeds: [waitingEmbed] });
 
     try {
-        const speed = await speedTest({ acceptLicense: true });
+        const speedTest = new UniversalSpeedTest({
+            tests: {
+                measureDownload: true,
+                measureUpload: true
+            },
+            units: {
+                downloadUnit: SpeedUnits.Mbps,
+                uploadUnit: SpeedUnits.Mbps
+            }
+        });
 
-        const downloadMbps = (speed.download.bandwidth / 125000).toFixed(2);
-        const uploadMbps = (speed.upload.bandwidth / 125000).toFixed(2);
+        const result = await speedTest.performOoklaTest();
 
         const finishEmbed = new EmbedBuilder()
             .setTitle(`🌐 ${interaction.client.user?.username} Speedtest`)
             .setColor(0x00ff00)
             .setDescription(
                 [
-                    `**ISP:** ${speed.isp}`,
-                    `**Server:** ${speed.server.name} | ${speed.server.location}`,
-                    `**Host:** ${speed.server.host}`,
-                    `**Packet Loss:** ${speed.packetLoss ?? "N/A"}%`,
-                    `**Bot Ping:** ${interaction.client.ws.ping}ms`
+                    `**ISP:** ${result.client.isp}`,
+                    `**Location:** ${result.client.country}`,
+                    `**IP:** ${result.client.ip}`,
+                    `**Server:** ${result.bestServer.name} (${result.bestServer.sponsor})`,
+                    `**Server Location:** ${result.bestServer.country}`
                 ].join("\n")
             )
             .addFields(
                 {
                     name: "📥 Download",
-                    value: `\`${downloadMbps} Mbps\``,
+                    value: `\`${result.downloadResult?.speed.toFixed(2) ?? "N/A"} Mbps\``,
                     inline: true
                 },
                 {
                     name: "📤 Upload",
-                    value: `\`${uploadMbps} Mbps\``,
+                    value: `\`${result.uploadResult?.speed.toFixed(2) ?? "N/A"} Mbps\``,
                     inline: true
                 },
                 {
-                    name: "📊 Ping",
-                    value: `\`${speed.ping.latency.toFixed(2)}ms\``,
+                    name: "📊 Bot Ping",
+                    value: `\`${interaction.client.ws.ping}ms\``,
                     inline: true
                 },
                 {
-                    name: "🔗 Result",
-                    value: `[View Full Result](${speed.result.url})`,
-                    inline: false
+                    name: "🔄 Latency",
+                    value: `\`${result.pingResult.latency.toFixed(2)}ms\``,
+                    inline: true
+                },
+                {
+                    name: "� Jitter",
+                    value: `\`${result.pingResult.jitter.toFixed(2)}ms\``,
+                    inline: true
+                },
+                {
+                    name: "⏱️ Test Duration",
+                    value: `\`${result.totalTime.toFixed(2)}s\``,
+                    inline: true
                 }
             )
             .setThumbnail(
                 "https://store-images.s-microsoft.com/image/apps.52586.13510798887693184.740d7baf-50aa-4e26-adec-ae739ac12068.c9ef9495-f245-4367-872b-c5cc7b48841d"
             )
-            .setImage(`${speed.result.url}.png`)
-            .setFooter({ text: "Powered by speedtest.net" })
+            .setFooter({ text: "Powered by Ookla Speedtest" })
             .setTimestamp();
+
+        // Add download details if available
+        if (result.downloadResult) {
+            finishEmbed.addFields({
+                name: "📥 Download Details",
+                value: [
+                    `Transferred: \`${(result.downloadResult.transferredBytes / 1_000_000).toFixed(2)} MB\``,
+                    `Latency: \`${result.downloadResult.latency.toFixed(2)}ms\``,
+                    `Jitter: \`${result.downloadResult.jitter.toFixed(2)}ms\``
+                ].join(" | "),
+                inline: false
+            });
+        }
+
+        // Add upload details if available
+        if (result.uploadResult) {
+            finishEmbed.addFields({
+                name: "📤 Upload Details",
+                value: [
+                    `Transferred: \`${(result.uploadResult.transferredBytes / 1_000_000).toFixed(2)} MB\``,
+                    `Latency: \`${result.uploadResult.latency.toFixed(2)}ms\``,
+                    `Jitter: \`${result.uploadResult.jitter.toFixed(2)}ms\``
+                ].join(" | "),
+                inline: false
+            });
+        }
 
         await interaction.editReply({ embeds: [finishEmbed] });
     } catch (error) {

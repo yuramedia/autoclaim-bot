@@ -34,15 +34,21 @@ export class EndfieldService {
      * Validates if the provided parameters are in correct format
      */
     static validateParams(skOAuthCredKey: string, id: string, server: string): { valid: boolean; message?: string } {
+        console.log(`[Endfield] Validating params - UID: ${id}, Server: ${server}, Token length: ${skOAuthCredKey?.length || 0}`);
+
         if (!skOAuthCredKey || skOAuthCredKey.length < 20) {
+            console.log(`[Endfield] ❌ Validation failed: Token too short`);
             return { valid: false, message: "❌ Token too short. Provide valid SK_OAUTH_CRED_KEY." };
         }
         if (!id || !/^\d+$/.test(id)) {
+            console.log(`[Endfield] ❌ Validation failed: Game UID must be numeric`);
             return { valid: false, message: "❌ Game UID must be numeric." };
         }
         if (server !== "2" && server !== "3") {
+            console.log(`[Endfield] ❌ Validation failed: Invalid server`);
             return { valid: false, message: "❌ Invalid server. Use 2 (Asia) or 3 (Americas/Europe)." };
         }
+        console.log(`[Endfield] ✅ Validation passed`);
         return { valid: true };
     }
 
@@ -54,6 +60,13 @@ export class EndfieldService {
             "sk-game-role": `3_${this.id}_${this.server}`,
             "sk-language": this.language
         };
+
+        console.log(`[Endfield] Attempting claim for UID: ${this.id}, Server: ${this.server}`);
+        console.log(`[Endfield] URL: ${ATTENDANCE_URL}`);
+        console.log(`[Endfield] Headers:`, {
+            ...headers,
+            cred: headers.cred.substring(0, 20) + "..." // Mask token for security
+        });
 
         try {
             const response = await axios.post(
@@ -68,8 +81,12 @@ export class EndfieldService {
             const responseJson = response.data;
             const checkInResult = responseJson.message || "Unknown";
 
+            console.log(`[Endfield] Response status: ${response.status}`);
+            console.log(`[Endfield] Response data:`, JSON.stringify(responseJson));
+
             // OK = success (exactly like canaria3406 checks)
             if (checkInResult === "OK") {
+                console.log(`[Endfield] ✅ Claim successful!`);
                 return {
                     success: true,
                     message: "OK"
@@ -77,20 +94,31 @@ export class EndfieldService {
             }
 
             // Already claimed or other message
+            const isAlreadyClaimed = checkInResult.includes("already") || checkInResult.includes("Already");
+            console.log(`[Endfield] ${isAlreadyClaimed ? "🔄" : "⚠️"} Result: ${checkInResult}`);
+
             return {
-                success: checkInResult.includes("already") || checkInResult.includes("Already"),
+                success: isAlreadyClaimed,
                 message: checkInResult,
-                alreadyClaimed: checkInResult.includes("already") || checkInResult.includes("Already")
+                alreadyClaimed: isAlreadyClaimed
             };
         } catch (error: any) {
+            console.error(`[Endfield] ❌ Request error:`, error.message);
+
             // Handle axios error responses
-            if (error.response?.data) {
-                const checkInResult = error.response.data.message || "Request failed";
+            if (error.response) {
+                console.error(`[Endfield] Error status: ${error.response.status}`);
+                console.error(`[Endfield] Error data:`, JSON.stringify(error.response.data));
+
+                const checkInResult = error.response.data?.message || "Request failed";
                 return {
                     success: false,
                     message: checkInResult
                 };
             }
+
+            // Network or other errors
+            console.error(`[Endfield] Network/other error:`, error.code || error.message);
             return {
                 success: false,
                 message: error.message || "Request failed"

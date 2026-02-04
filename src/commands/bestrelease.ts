@@ -103,7 +103,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
             embed.addFields({
                 name: `${title}`,
-                value: `${releaseInfo}${notes}\n[Link](https://best-release.kazeuta.com/anime/${anime.mal_id})`,
+                value: `${releaseInfo}${notes}\n[Link](https://best-release.kazeuta.com/anime/${anime.id})`,
                 inline: false
             });
         }

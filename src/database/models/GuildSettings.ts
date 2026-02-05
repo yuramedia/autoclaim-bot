@@ -27,9 +27,15 @@ export interface IEmbedFixSettings {
     deleteReaction: string;
 }
 
+export interface ICrunchyrollFeedSettings {
+    enabled: boolean;
+    channelId: string | null;
+}
+
 export interface IGuildSettings extends Document {
     guildId: string;
     embedFix: IEmbedFixSettings;
+    crunchyrollFeed: ICrunchyrollFeedSettings;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -42,10 +48,16 @@ const EmbedFixSettingsSchema = new Schema<IEmbedFixSettings>({
     deleteReaction: { type: String, default: "❌" }
 });
 
+const CrunchyrollFeedSettingsSchema = new Schema<ICrunchyrollFeedSettings>({
+    enabled: { type: Boolean, default: false },
+    channelId: { type: String, default: null }
+});
+
 const GuildSettingsSchema = new Schema<IGuildSettings>(
     {
         guildId: { type: String, required: true, unique: true, index: true },
-        embedFix: { type: EmbedFixSettingsSchema, default: () => ({}) }
+        embedFix: { type: EmbedFixSettingsSchema, default: () => ({}) },
+        crunchyrollFeed: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) }
     },
     {
         timestamps: true

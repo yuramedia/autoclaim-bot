@@ -11,6 +11,7 @@ import * as embedSettings from "./embed-settings";
 import * as statistic from "./statistic";
 import * as speedtest from "./speedtest";
 import * as bestrelease from "./bestrelease";
+import * as crunchyrollFeed from "./crunchyroll-feed";
 
 export const commands = [
     setupHoyolab,
@@ -25,7 +26,8 @@ export const commands = [
     redeem,
     embedSettings,
     speedtest,
-    bestrelease
+    bestrelease,
+    crunchyrollFeed
 ];
 
 export const commandsData = commands.map(cmd => cmd.data);

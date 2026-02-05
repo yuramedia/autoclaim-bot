@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Events } from "discord.js";
 import { config } from "./config";
 import { connectDatabase } from "./database/connection";
 import { startScheduler } from "./services/scheduler";
+import { startCrunchyrollFeed } from "./services/crunchyroll-scheduler";
 import { handleInteraction } from "./handlers/interaction";
 import { handleMessage } from "./handlers/message";
 import { startPresenceUpdater } from "./utils/presence";
@@ -23,6 +24,9 @@ client.once(Events.ClientReady, readyClient => {
 
     // Start scheduler
     startScheduler(client);
+
+    // Start Crunchyroll feed
+    startCrunchyrollFeed(client);
 
     // Start presence updater
     startPresenceUpdater(readyClient);

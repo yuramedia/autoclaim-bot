@@ -59,13 +59,19 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
         const episodes = await service.fetchLatestEpisodes("en-US", 50);
         if (episodes.length === 0) return;
 
+        // Fetch RSS publishers for enrichment
+        await service.fetchRssPublishers();
+
         // Find new episodes
         const newEpisodes: FormattedEpisode[] = [];
         for (const ep of episodes) {
             if (!seenEpisodes.has(ep.id)) {
                 seenEpisodes.add(ep.id);
                 if (!isFirstRun) {
-                    newEpisodes.push(service.formatEpisode(ep));
+                    const formatted = service.formatEpisode(ep);
+                    // Add publisher from RSS cache
+                    formatted.publisher = service.getPublisher(ep.external_id);
+                    newEpisodes.push(formatted);
                 }
             }
         }
@@ -106,10 +112,12 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
 }
 
 function buildEpisodeEmbed(episode: FormattedEpisode): EmbedBuilder {
+    const authorName = episode.publisher ? `${episode.publisher}` : "Crunchyroll New Video";
+
     const embed = new EmbedBuilder()
         .setColor(CRUNCHYROLL_COLOR)
         .setAuthor({
-            name: "Crunchyroll New Video",
+            name: authorName,
             iconURL: "https://www.crunchyroll.com/favicons/favicon-32x32.png"
         })
         .setTitle(episode.title)

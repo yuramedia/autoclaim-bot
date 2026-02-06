@@ -113,4 +113,5 @@ export interface FormattedEpisode {
     audioLocale: string;
     subtitles: string;
     releasedAt: Date;
+    publisher?: string;
 }

@@ -216,4 +216,93 @@ export class CrunchyrollService {
 
         return formatted;
     }
+
+    // RSS publisher cache: mediaId -> publisher
+    private static publisherCache: Map<string, string> = new Map();
+    private static rssCacheTime = 0;
+    private static readonly RSS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    /**
+     * Fetch publisher info from RSS feed
+     * Returns a map of mediaId -> publisher
+     */
+    async fetchRssPublishers(): Promise<Map<string, string>> {
+        // Return cache if still valid
+        if (
+            CrunchyrollService.publisherCache.size > 0 &&
+            Date.now() - CrunchyrollService.rssCacheTime < CrunchyrollService.RSS_CACHE_TTL
+        ) {
+            return CrunchyrollService.publisherCache;
+        }
+
+        try {
+            const response = await fetch("https://www.crunchyroll.com/rss/anime", {
+                headers: {
+                    "User-Agent": "Crunchyroll/3.50.0"
+                }
+            });
+
+            if (!response.ok) {
+                console.error("Failed to fetch RSS:", response.status);
+                return CrunchyrollService.publisherCache;
+            }
+
+            const xml = await response.text();
+
+            // Simple regex parsing for publisher and mediaId
+            const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+            const mediaIdRegex = /<crunchyroll:mediaId>(\d+)<\/crunchyroll:mediaId>/;
+            const publisherRegex = /<crunchyroll:publisher>([^<]+)<\/crunchyroll:publisher>/;
+
+            let match;
+            while ((match = itemRegex.exec(xml)) !== null) {
+                const itemXml = match[1];
+                if (!itemXml) continue;
+
+                const mediaIdMatch = mediaIdRegex.exec(itemXml);
+                const publisherMatch = publisherRegex.exec(itemXml);
+
+                if (mediaIdMatch?.[1] && publisherMatch?.[1]) {
+                    CrunchyrollService.publisherCache.set(mediaIdMatch[1], publisherMatch[1]);
+                }
+            }
+
+            CrunchyrollService.rssCacheTime = Date.now();
+            console.log(`Cached ${CrunchyrollService.publisherCache.size} publishers from RSS`);
+        } catch (error) {
+            console.error("Error fetching RSS publishers:", error);
+        }
+
+        return CrunchyrollService.publisherCache;
+    }
+
+    /**
+     * Get publisher for an episode by its external_id (e.g., "EPI.976534")
+     */
+    getPublisher(externalId: string): string | undefined {
+        const mediaId = externalId?.split(".")[1];
+        if (!mediaId) return undefined;
+        return CrunchyrollService.publisherCache.get(mediaId);
+    }
+
+    /**
+     * Enrich formatted episodes with publisher info
+     */
+    async enrichWithPublisher(
+        episodes: FormattedEpisode[],
+        rawEpisodes: CrunchyrollEpisode[]
+    ): Promise<FormattedEpisode[]> {
+        await this.fetchRssPublishers();
+
+        return episodes.map((ep, index) => {
+            const raw = rawEpisodes[index];
+            if (raw?.external_id) {
+                const publisher = this.getPublisher(raw.external_id);
+                if (publisher) {
+                    return { ...ep, publisher };
+                }
+            }
+            return ep;
+        });
+    }
 }

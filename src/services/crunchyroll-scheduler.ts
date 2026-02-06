@@ -24,7 +24,7 @@ export function startCrunchyrollFeed(client: Client): void {
     // Initial fetch to populate cache
     initializeCache(service);
 
-    // Poll every 3 minutes
+    // Poll every 1 minute
     setInterval(
         async () => {
             // Only run on Shard 0 to prevent duplicates

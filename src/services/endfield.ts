@@ -184,11 +184,7 @@ export class EndfieldService {
     /**
      * Validates if the provided parameters are in correct format
      */
-    static validateParams(
-        cred: string,
-        id: string,
-        server: string
-    ): { valid: boolean; message?: string } {
+    static validateParams(cred: string, id: string, server: string): { valid: boolean; message?: string } {
         if (!cred || cred.length < 10) {
             return { valid: false, message: "❌ Invalid cred token (too short)" };
         }
@@ -249,8 +245,7 @@ export class EndfieldService {
 
             // Check if already claimed
             const already =
-                typeof msg === "string" &&
-                (msg.toLowerCase().includes("already") || data?.data?.hasToday === true);
+                typeof msg === "string" && (msg.toLowerCase().includes("already") || data?.data?.hasToday === true);
 
             if (already) {
                 return {

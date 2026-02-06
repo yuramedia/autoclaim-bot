@@ -6,6 +6,7 @@
 import { Client, TextChannel, EmbedBuilder } from "discord.js";
 import { GuildSettings } from "../database/models/GuildSettings";
 import { CrunchyrollService } from "./crunchyroll";
+import { LANG_MAP } from "../constants";
 import type { FormattedEpisode } from "../types/crunchyroll";
 
 // Cache of last seen episode IDs (in-memory)
@@ -14,27 +15,6 @@ let isFirstRun = true;
 
 // Crunchyroll orange color
 const CRUNCHYROLL_COLOR = 0xf47521;
-
-// Language code to display name mapping
-const LANG_MAP: Record<string, string> = {
-    "en-US": "English",
-    "ja-JP": "Japanese",
-    "id-ID": "Indonesian",
-    "ms-MY": "Malay",
-    "de-DE": "German",
-    "es-LA": "Spanish (LA)",
-    "es-ES": "Spanish",
-    "es-419": "Spanish",
-    "fr-FR": "French",
-    "it-IT": "Italian",
-    "pt-BR": "Portuguese (BR)",
-    "ru-RU": "Russian",
-    "ar-SA": "Arabic",
-    "zh-CN": "Mandarin",
-    "zh-HK": "Cantonese",
-    "ko-KR": "Korean",
-    "th-TH": "Thai"
-};
 
 export function startCrunchyrollFeed(client: Client): void {
     console.log("📺 Starting Crunchyroll feed scheduler...");
@@ -54,8 +34,8 @@ export function startCrunchyrollFeed(client: Client): void {
 
             await checkForNewEpisodes(client, service);
         },
-        3 * 60 * 1000
-    ); // 3 minutes
+        1 * 60 * 1000
+    ); // 1 minute
 }
 
 async function initializeCache(service: CrunchyrollService): Promise<void> {

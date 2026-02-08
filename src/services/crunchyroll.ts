@@ -146,7 +146,10 @@ export class CrunchyrollService {
             title += ` - Episode ${meta.episode}`;
         }
         if (ep.title && ep.title !== `Episode ${meta.episode}`) {
-            title += ` - ${ep.title}`;
+            // Avoid appending if episode title is just the series title
+            if (ep.title !== meta.series_title) {
+                title += ` - ${ep.title}`;
+            }
         }
 
         // Get best thumbnail

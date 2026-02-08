@@ -10,6 +10,7 @@ export * from "./embed-fix";
 export * from "./media-downloader";
 export * from "./crunchyroll";
 export * from "./languages";
+export * from "./anime";
 
 export const CHANNELS = {
     // Channel IDs will be loaded from env or config

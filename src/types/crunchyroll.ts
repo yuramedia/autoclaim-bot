@@ -115,4 +115,8 @@ export interface FormattedEpisode {
     releasedAt: Date;
     publisher?: string;
     seriesPoster?: string;
+    externalLinks?: {
+        anilist?: string;
+        mal?: string;
+    };
 }

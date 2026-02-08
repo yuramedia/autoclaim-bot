@@ -38,3 +38,6 @@ export type { InteractionHandler, ApiResponse, UserSettings, HoyolabGames } from
 
 // Best Release types
 export type { AnimeRelease, AnimeEntry } from "./bestrelease";
+
+// Anime Metadata types
+export type { AnilistMedia, AnilistResponse } from "./anime-metadata";

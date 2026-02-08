@@ -6,7 +6,8 @@
 import { Client, TextChannel, EmbedBuilder } from "discord.js";
 import { GuildSettings } from "../database/models/GuildSettings";
 import { CrunchyrollService } from "./crunchyroll";
-import { LANG_MAP, CRUNCHYROLL_COLOR } from "../constants";
+import { LANG_MAP, CRUNCHYROLL_COLOR, CRUNCHYROLL_POLL_INTERVAL } from "../constants";
+import { AnimeMetadataService } from "./anime-metadata";
 import type { FormattedEpisode } from "../types/crunchyroll";
 
 // Cache of last seen episode IDs (in-memory)
@@ -22,17 +23,14 @@ export function startCrunchyrollFeed(client: Client): void {
     initializeCache(service);
 
     // Poll every 5 minute
-    setInterval(
-        async () => {
-            // Only run on Shard 0 to prevent duplicates
-            if (client.shard && client.shard.ids[0] !== 0) {
-                return;
-            }
+    setInterval(async () => {
+        // Only run on Shard 0 to prevent duplicates
+        if (client.shard && client.shard.ids[0] !== 0) {
+            return;
+        }
 
-            await checkForNewEpisodes(client, service);
-        },
-        5 * 60 * 1000
-    ); // 5 minutes
+        await checkForNewEpisodes(client, service);
+    }, CRUNCHYROLL_POLL_INTERVAL);
 }
 
 async function initializeCache(service: CrunchyrollService): Promise<void> {
@@ -79,6 +77,27 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
         const enrichedEpisodes = await service.enrichWithSeriesPoster(newEpisodes);
 
         console.log(`📺 Found ${enrichedEpisodes.length} new Crunchyroll episode(s)`);
+
+        // Enrich with Metadata (MAL/Anilist/AniDB)
+        for (const ep of enrichedEpisodes) {
+            try {
+                const metadata = await AnimeMetadataService.searchAnime(ep.seriesTitle);
+                if (metadata) {
+                    ep.externalLinks = {
+                        anilist: metadata.siteUrl || `https://anilist.co/anime/${metadata.id}`,
+                        mal: metadata.idMal ? `https://myanimelist.net/anime/${metadata.idMal}` : undefined
+                    };
+                } else {
+                    // Search fallback
+                    ep.externalLinks = {
+                        anilist: `https://anilist.co/search/anime?search=${encodeURIComponent(ep.seriesTitle)}`,
+                        mal: `https://myanimelist.net/anime.php?q=${encodeURIComponent(ep.seriesTitle)}`
+                    };
+                }
+            } catch (e) {
+                console.error(`Error enriching metadata for ${ep.seriesTitle}:`, e);
+            }
+        }
 
         // Get all guilds with Crunchyroll feed enabled
         const guilds = await GuildSettings.find({
@@ -173,6 +192,28 @@ function buildEpisodeEmbed(episode: FormattedEpisode): EmbedBuilder {
         value: episode.subtitles,
         inline: false
     });
+
+    // External Links (2 Columns)
+    if (episode.externalLinks) {
+        const { mal, anilist } = episode.externalLinks;
+
+        // MAL
+        if (mal) {
+            // Extract ID from URL for display if possible, else "Link"
+            const malId = mal.split("/").pop() || "Link";
+            embed.addFields({ name: "MAL", value: `[${malId}](${mal})`, inline: true });
+        } else {
+            embed.addFields({ name: "MAL", value: "-", inline: true });
+        }
+
+        // Anilist
+        if (anilist) {
+            const anilistId = anilist.split("/").pop() || "Link";
+            embed.addFields({ name: "Anilist", value: `[${anilistId}](${anilist})`, inline: true });
+        } else {
+            embed.addFields({ name: "Anilist", value: "-", inline: true });
+        }
+    }
 
     // Footer
     embed.setFooter({

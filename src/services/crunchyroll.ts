@@ -145,7 +145,7 @@ export class CrunchyrollService {
         if (meta.episode) {
             title += ` - Episode ${meta.episode}`;
         }
-        if (ep.title) {
+        if (ep.title && ep.title !== `Episode ${meta.episode}`) {
             title += ` - ${ep.title}`;
         }
 

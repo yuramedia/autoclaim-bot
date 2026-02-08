@@ -46,6 +46,16 @@ export async function execute(interaction: any) {
             description += "Tidak ada definisi ditemukan.";
         }
 
+        if (result.synonyms && result.synonyms.length > 0) {
+            const maxSynonyms = 15;
+            const shownSynonyms = result.synonyms.slice(0, maxSynonyms);
+            let synonymText = shownSynonyms.join(", ");
+            if (result.synonyms.length > maxSynonyms) {
+                synonymText += `, dan ${result.synonyms.length - maxSynonyms} lainnya...`;
+            }
+            description += `\n\n**Sinonim**: ${synonymText}`;
+        }
+
         embed.setDescription(description);
 
         await interaction.editReply({ embeds: [embed] });

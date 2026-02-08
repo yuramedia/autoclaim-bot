@@ -91,6 +91,25 @@ const extractDefinitions = ($: cheerio.CheerioAPI, selector: string): string[] =
     return definitions;
 };
 
+const searchThesaurus = async (url: string): Promise<string[]> => {
+    try {
+        const response = await axios.get(url, {
+            headers: { "User-Agent": KBBI_USER_AGENT }
+        });
+        const $ = cheerio.load(response.data);
+        const synonyms: string[] = [];
+
+        $(".one-par-content a.lemma-ordinary").each((_, el) => {
+            synonyms.push($(el).text().trim());
+        });
+
+        return [...new Set(synonyms)]; // Unique
+    } catch (error) {
+        console.error(`Error fetching Thesaurus from ${url}:`, error);
+        return [];
+    }
+};
+
 export const searchKbbi = async (word: string): Promise<KbbiResult | null> => {
     try {
         const url = `${KBBI_BASE_URL}${encodeURIComponent(word)}`;
@@ -130,6 +149,23 @@ export const searchKbbi = async (word: string): Promise<KbbiResult | null> => {
             return null;
         }
 
+        // Check for Thesaurus link
+        let thesaurusUrl = "";
+        $("p a").each((_, el) => {
+            const text = $(el).text();
+            if (text.includes("Tesaurus")) {
+                const href = $(el).attr("href");
+                if (href) {
+                    thesaurusUrl = href;
+                }
+            }
+        });
+
+        let synonyms: string[] = [];
+        if (thesaurusUrl) {
+            synonyms = await searchThesaurus(thesaurusUrl);
+        }
+
         const definitions: string[] = [];
 
         definitions.push(...extractDefinitions($, "ol li"));
@@ -140,6 +176,7 @@ export const searchKbbi = async (word: string): Promise<KbbiResult | null> => {
         return {
             lemma,
             otherDetails,
+            synonyms: synonyms.length > 0 ? synonyms : undefined,
             definitions: cleanedDefinitions
         };
     } catch (error) {

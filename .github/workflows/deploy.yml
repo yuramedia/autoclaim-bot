@@ -1,0 +1,90 @@
+name: Deploy
+
+on:
+    push:
+        branches: [main]
+
+env:
+    REGISTRY: ghcr.io
+    IMAGE_NAME: aruh1/autoclaim-bot
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v6
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Log in to Container Registry
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Build and Push Docker Image
+              uses: docker/build-push-action@v6
+              with:
+                  context: .
+                  push: true
+                  tags: |
+                      ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+                      ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+    deploy:
+        needs: build
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Deploy to Server
+              uses: appleboy/ssh-action@master
+              env:
+                  DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+                  DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+                  MONGODB_URI: ${{ secrets.MONGODB_URI }}
+                  CLAIM_HOUR: ${{ vars.CLAIM_HOUR || '0' }}
+                  CLAIM_MINUTE: ${{ vars.CLAIM_MINUTE || '0' }}
+              with:
+                  host: ${{ secrets.DEPLOY_SSH_HOST }}
+                  username: ${{ secrets.DEPLOY_SSH_USERNAME }}
+                  key: ${{ secrets.DEPLOY_SSH_KEY }}
+                  port: ${{ secrets.DEPLOY_SSH_PORT }}
+                  password: ${{ secrets.DEPLOY_SSH_PASSWORD }}
+                  envs: DISCORD_TOKEN,DISCORD_CLIENT_ID,MONGODB_URI,CLAIM_HOUR,CLAIM_MINUTE
+                  script: |
+                      cd ${{ secrets.DEPLOY_SSH_PATH }}
+                      
+                      # Create .env.production from GitHub secrets
+                      cat > .env.production << EOF
+                      DISCORD_TOKEN=${DISCORD_TOKEN}
+                      DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+                      MONGODB_URI=${MONGODB_URI}
+                      CLAIM_HOUR=${CLAIM_HOUR}
+                      CLAIM_MINUTE=${CLAIM_MINUTE}
+                      EOF
+                      chmod 600 .env.production
+
+                      # Pull latest image
+                      docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+                      # Stop old container
+                      docker compose down || true
+
+                      # Start new container
+                      docker compose up -d
+
+                      # Wait for startup
+                      sleep 5
+
+                      # Verify deployment
+                      docker compose ps
+                      echo "✓ Deployment completed"

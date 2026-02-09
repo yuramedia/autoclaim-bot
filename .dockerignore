@@ -1,0 +1,35 @@
+# Dependencies
+node_modules
+
+# Git
+.git
+.gitignore
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode
+.idea
+
+# Logs
+logs
+*.log
+
+# Data directory (runtime files)
+data
+
+# Test files
+test-*.ts
+*.test.ts
+*.spec.ts
+
+# Development files
+.agent
+ecosystem.config.cjs
+
+# Documentation
+README.md
+CLAUDE.md

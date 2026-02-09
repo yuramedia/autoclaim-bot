@@ -61,8 +61,9 @@ jobs:
                   password: ${{ secrets.DEPLOY_SSH_PASSWORD }}
                   envs: DISCORD_TOKEN,DISCORD_CLIENT_ID,MONGODB_URI,CLAIM_HOUR,CLAIM_MINUTE
                   script: |
+                      mkdir -p ${{ secrets.DEPLOY_SSH_PATH }}
                       cd ${{ secrets.DEPLOY_SSH_PATH }}
-                      
+
                       # Create .env.production from GitHub secrets
                       cat > .env.production << EOF
                       DISCORD_TOKEN=${DISCORD_TOKEN}

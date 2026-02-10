@@ -18,13 +18,13 @@ services:
             NODE_ENV: production
 
         # Resource limits
-        # deploy:   
-        #     resources:
-        #         limits:
-        #             memory: 256M
-        #             cpus: 1
-        #         reservations:
-        #             memory: 128M
+        deploy:
+            resources:
+                limits:
+                    memory: 256M
+                    cpus: 2
+                reservations:
+                    memory: 128M
 
         # Volumes untuk persistent data
         volumes:

@@ -6,7 +6,7 @@ on:
 
 env:
     REGISTRY: ghcr.io
-    IMAGE_NAME: aruh1/autoclaim-bot
+    IMAGE_NAME: yuramedia/autoclaim-bot
 
 jobs:
     build:
@@ -68,13 +68,14 @@ jobs:
                   CLAIM_MINUTE: ${{ vars.CLAIM_MINUTE || '0' }}
                   CR_EMAIL: ${{ secrets.CR_EMAIL }}
                   CR_PASSWORD: ${{ secrets.CR_PASSWORD }}
+                  CR_ETP_RT: ${{ secrets.CR_ETP_RT }}
               with:
                   host: ${{ secrets.DEPLOY_SSH_HOST }}
                   username: ${{ secrets.DEPLOY_SSH_USERNAME }}
                   key: ${{ secrets.DEPLOY_SSH_KEY }}
                   port: ${{ secrets.DEPLOY_SSH_PORT }}
                   password: ${{ secrets.DEPLOY_SSH_PASSWORD }}
-                  envs: DISCORD_TOKEN,DISCORD_CLIENT_ID,MONGODB_URI,CLAIM_HOUR,CLAIM_MINUTE,CR_EMAIL,CR_PASSWORD
+                  envs: DISCORD_TOKEN,DISCORD_CLIENT_ID,MONGODB_URI,CLAIM_HOUR,CLAIM_MINUTE,CR_EMAIL,CR_PASSWORD,CR_ETP_RT
                   script: |
                       mkdir -p ${{ secrets.DEPLOY_SSH_PATH }}
                       cd ${{ secrets.DEPLOY_SSH_PATH }}
@@ -88,6 +89,7 @@ jobs:
                       CLAIM_MINUTE=${CLAIM_MINUTE}
                       CR_EMAIL=${CR_EMAIL}
                       CR_PASSWORD=${CR_PASSWORD}
+                      CR_ETP_RT=${CR_ETP_RT}
                       EOF
                       chmod 600 .env.production
 

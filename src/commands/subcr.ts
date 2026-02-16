@@ -36,24 +36,10 @@ function parseEpisodeId(input: string): string | null {
 export const data = new SlashCommandBuilder()
     .setName("subcr")
     .setDescription("Download subtitle dari episode Crunchyroll")
-    .addStringOption(opt =>
-        opt
-            .setName("url")
-            .setDescription("URL atau ID episode Crunchyroll")
-            .setRequired(false)
-    )
-    .addStringOption(opt =>
-        opt
-            .setName("anime")
-            .setDescription("Judul anime (romaji atau English)")
-            .setRequired(false)
-    )
+    .addStringOption(opt => opt.setName("url").setDescription("URL atau ID episode Crunchyroll").setRequired(false))
+    .addStringOption(opt => opt.setName("anime").setDescription("Judul anime (romaji atau English)").setRequired(false))
     .addIntegerOption(opt =>
-        opt
-            .setName("episode")
-            .setDescription("Pilih Nomor episode")
-            .setRequired(false)
-            .setMinValue(1)
+        opt.setName("episode").setDescription("Pilih Nomor episode").setRequired(false).setMinValue(1)
     )
     .addStringOption(opt =>
         opt
@@ -96,7 +82,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             episodeId = parseEpisodeId(urlInput);
             if (!episodeId) {
                 await interaction.editReply({
-                    content: "❌ URL/ID tidak valid. Contoh: `https://www.crunchyroll.com/watch/GEXH3WP91/...` atau `GEXH3WP91`"
+                    content:
+                        "❌ URL/ID tidak valid. Contoh: `https://www.crunchyroll.com/watch/GEXH3WP91/...` atau `GEXH3WP91`"
                 });
                 return;
             }
@@ -135,7 +122,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         const subtitles = await service.fetchSubtitles(episodeId);
         if (!subtitles || Object.keys(subtitles).length === 0) {
             await interaction.editReply({
-                content: "❌ Tidak ada subtitle yang tersedia untuk episode ini. Pastikan akun Crunchyroll sudah dikonfigurasi."
+                content:
+                    "❌ Tidak ada subtitle yang tersedia untuk episode ini. Pastikan akun Crunchyroll sudah dikonfigurasi."
             });
             return;
         }
@@ -177,8 +165,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             .setTitle("📝 Pilih Bahasa Subtitle")
             .setDescription(
                 `**${episodeTitle}**\n\n` +
-                `Tersedia **${subEntries.length}** bahasa subtitle.\n` +
-                `Pilih bahasa yang ingin didownload:`
+                    `Tersedia **${subEntries.length}** bahasa subtitle.\n` +
+                    `Pilih bahasa yang ingin didownload:`
             )
             .setFooter({ text: "Pilihan berlaku selama 60 detik" });
 
@@ -254,9 +242,9 @@ async function downloadAndSend(
         .setTitle("✅ Subtitle Downloaded")
         .setDescription(
             `**${episodeTitle}**\n\n` +
-            `🌐 Bahasa: **${LANG_MAP[lang] || lang}** (\`${lang}\`)\n` +
-            `📄 Format: **${format.toUpperCase()}**\n` +
-            `📦 File: \`${filename}\``
+                `🌐 Bahasa: **${LANG_MAP[lang] || lang}** (\`${lang}\`)\n` +
+                `📄 Format: **${format.toUpperCase()}**\n` +
+                `📦 File: \`${filename}\``
         )
         .setFooter({ text: "Crunchyroll Subtitle Downloader" })
         .setTimestamp();

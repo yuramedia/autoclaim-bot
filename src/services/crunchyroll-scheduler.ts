@@ -171,17 +171,17 @@ function buildEpisodeEmbed(episode: FormattedEpisode): EmbedBuilder {
     embed.addFields(
         {
             name: "Episode ID",
-            value: episode.episodeId,
+            value: `[${episode.episodeId}](${episode.url})`,
             inline: true
         },
         {
             name: "Season ID",
-            value: episode.seasonId,
+            value: `[${episode.seasonId}](https://www.crunchyroll.com/series/${episode.seriesId})`,
             inline: true
         },
         {
             name: "Series ID",
-            value: episode.seriesId,
+            value: `[${episode.seriesId}](https://www.crunchyroll.com/series/${episode.seriesId})`,
             inline: true
         },
         {

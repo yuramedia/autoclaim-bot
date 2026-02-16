@@ -510,15 +510,12 @@ export class CrunchyrollService {
             const series = seriesResults.items[0]!;
 
             // Fetch seasons for this series
-            const seasonsRes = await fetch(
-                `${this.API_BASE}/content/v2/cms/series/${series.id}/seasons?locale=en-US`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${auth.access_token}`,
-                        "User-Agent": this.USER_AGENT
-                    }
+            const seasonsRes = await fetch(`${this.API_BASE}/content/v2/cms/series/${series.id}/seasons?locale=en-US`, {
+                headers: {
+                    Authorization: `Bearer ${auth.access_token}`,
+                    "User-Agent": this.USER_AGENT
                 }
-            );
+            });
 
             if (!seasonsRes.ok) return [];
 
@@ -529,8 +526,7 @@ export class CrunchyrollService {
             if (!seasonsData.data?.length) return [];
 
             // Find the Japanese audio season (original)
-            const jpSeason =
-                seasonsData.data.find(s => s.audio_locale === "ja-JP") || seasonsData.data[0]!;
+            const jpSeason = seasonsData.data.find(s => s.audio_locale === "ja-JP") || seasonsData.data[0]!;
 
             // Fetch episodes for this season
             const episodesRes = await fetch(
@@ -578,8 +574,7 @@ export class CrunchyrollService {
             const response = await fetch(url, {
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/118.0"
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/118.0"
                 }
             });
 

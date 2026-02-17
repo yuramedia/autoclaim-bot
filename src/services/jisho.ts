@@ -1,5 +1,5 @@
 import axios from "axios";
-import { JISHO_API_URL, JISHO_BASE_URL } from "../constants/jisho";
+import { JISHO_API_URL, JISHO_BASE_URL, JISHO_USER_AGENT } from "../constants/jisho";
 import type { JishoAPIResponse, JishoResult, JishoWord } from "../types/jisho";
 
 export class JishoService {
@@ -13,6 +13,9 @@ export class JishoService {
             const response = await axios.get<JishoAPIResponse>(JISHO_API_URL, {
                 params: {
                     keyword
+                },
+                headers: {
+                    "User-Agent": JISHO_USER_AGENT
                 }
             });
 

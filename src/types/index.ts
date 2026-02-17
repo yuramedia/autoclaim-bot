@@ -8,11 +8,9 @@ export type { ClaimResult, GameConfig, GameAccount, TokenValidation, RedeemResul
 
 // Endfield types
 export type {
-    EndfieldProfile,
     AttendanceReward,
     AttendanceResourceInfo,
     EndfieldClaimResult,
-    SignInput,
     EndfieldServiceOptions,
     EndfieldValidation
 } from "./endfield";

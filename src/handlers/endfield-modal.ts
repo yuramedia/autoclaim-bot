@@ -1,6 +1,7 @@
 /**
  * Endfield Modal Handler
  * Handles the modal submission for Endfield token setup
+ * Saves SK_OAUTH_CRED_KEY and SK_TOKEN_CACHE_KEY to database
  */
 
 import { type ModalSubmitInteraction, MessageFlags } from "discord.js";
@@ -11,7 +12,8 @@ import { ENDFIELD } from "../constants";
 export async function handleEndfieldModal(interaction: ModalSubmitInteraction): Promise<void> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const cred = interaction.fields.getTextInputValue("endfield-token").trim();
+    const cred = interaction.fields.getTextInputValue("endfield-cred").trim();
+    const skTokenCacheKey = interaction.fields.getTextInputValue("endfield-token-cache").trim();
     const gameId = interaction.fields.getTextInputValue("endfield-game-id").trim();
     const server = interaction.fields.getTextInputValue("endfield-server").trim() || "2";
     const nickname = interaction.fields.getTextInputValue("endfield-nickname")?.trim() || "Unknown";
@@ -27,7 +29,7 @@ export async function handleEndfieldModal(interaction: ModalSubmitInteraction): 
     }
 
     // Validate params using service
-    const validation = EndfieldService.validateParams(decodedCred, gameId, server);
+    const validation = EndfieldService.validateParams(decodedCred, skTokenCacheKey, gameId, server);
     if (!validation.valid) {
         await interaction.editReply({
             content: validation.message || "❌ Invalid parameters."
@@ -43,6 +45,7 @@ export async function handleEndfieldModal(interaction: ModalSubmitInteraction): 
                 username: interaction.user.username,
                 endfield: {
                     skOAuthCredKey: decodedCred,
+                    skTokenCacheKey,
                     gameId,
                     server,
                     accountName: nickname

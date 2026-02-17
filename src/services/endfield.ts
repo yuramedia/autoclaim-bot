@@ -1,107 +1,74 @@
 /**
  * Endfield Service
  * Handles daily check-in for Arknights: Endfield via SKPORT API
+ * Based on: https://github.com/canaria3406/skport-auto-sign
  */
 
 import crypto from "crypto";
 import axios from "axios";
 import type {
-    EndfieldProfile,
     AttendanceReward,
     AttendanceResourceInfo,
     EndfieldClaimResult,
-    SignInput,
     EndfieldServiceOptions,
     EndfieldValidation
 } from "../types";
 import {
     ENDFIELD,
     ENDFIELD_ATTENDANCE_URL,
+    ENDFIELD_ATTENDANCE_PATH,
     ENDFIELD_HEADERS,
     ENDFIELD_VALID_SERVERS,
     ENDFIELD_PLATFORM,
-    ENDFIELD_VERSION
+    ENDFIELD_TOKEN_EXPIRED_CODE
 } from "../constants";
 
 // Re-export types for backwards compatibility
 export type { EndfieldClaimResult, EndfieldServiceOptions };
 
 /**
- * Build sign payload according to FlamingFox911 logic
+ * Generate sign for SKPORT API requests
+ * Matches the reference implementation from canaria3406/skport-auto-sign:
+ * 1. Build string: path + body + timestamp + JSON({platform, timestamp, dId, vName})
+ * 2. HMAC-SHA256 with SK_TOKEN_CACHE_KEY
+ * 3. MD5 the HMAC result
+ *
+ * @param path - API endpoint path
+ * @param method - HTTP method
+ * @param headers - Request headers (must include timestamp, platform, dId, vName)
+ * @param body - Request body (empty string for GET)
+ * @param token - SK_TOKEN_CACHE_KEY for signing
+ * @returns MD5 hex string of HMAC-SHA256 signature
  */
-function buildSignPayload(input: SignInput): string {
-    const url = new URL(input.url);
-    const path = url.pathname;
-    const query = url.search ? url.search.slice(1) : "";
-    const method = input.method.toUpperCase();
-    const body = input.body ?? "";
-
-    let source = "";
-    source += path;
-    source += method === "GET" ? query : body;
-    source += input.timestamp;
-
-    const payload = {
-        platform: input.platform,
-        timestamp: input.timestamp,
-        dId: input.deviceId ?? "",
-        vName: input.vName
-    };
-
-    source += JSON.stringify(payload);
-
-    return source;
-}
-
-/**
- * Build signing headers (HMAC-SHA256 + MD5)
- */
-function buildSignHeaders(
-    profile: EndfieldProfile,
-    url: string,
+function generateSign(
+    path: string,
     method: string,
-    body?: string
-): Record<string, string> {
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const headers: Record<string, string> = {
-        platform: profile.platform,
-        vName: profile.vName,
-        timestamp
-    };
+    headers: Record<string, string>,
+    body: string,
+    token: string
+): string {
+    // Build the string to sign
+    let stringToSign = path + (method === "GET" ? "" : body);
 
-    if (profile.deviceId) {
-        headers.dId = profile.deviceId;
+    if (headers.timestamp) {
+        stringToSign += headers.timestamp;
     }
 
-    const key = profile.signToken;
-    if (key) {
-        const source = buildSignPayload({
-            url,
-            method,
-            body,
-            timestamp,
-            platform: profile.platform,
-            vName: profile.vName,
-            deviceId: profile.deviceId,
-            key
-        });
-        const hmacHex = crypto.createHmac("sha256", key).update(source).digest("hex");
-        headers.sign = crypto.createHash("md5").update(hmacHex).digest("hex");
+    // Build header object in exact order as reference
+    const headerObj: Record<string, string> = {};
+    for (const key of ["platform", "timestamp", "dId", "vName"]) {
+        if (headers[key]) {
+            headerObj[key] = headers[key];
+        } else if (key === "dId") {
+            headerObj[key] = "";
+        }
     }
 
-    return headers;
-}
+    stringToSign += JSON.stringify(headerObj);
 
-/**
- * Build full request headers
- */
-function buildHeaders(profile: EndfieldProfile, signHeaders: Record<string, string>): Record<string, string> {
-    return {
-        cred: profile.cred,
-        "sk-game-role": profile.skGameRole,
-        ...signHeaders,
-        ...ENDFIELD_HEADERS
-    };
+    // HMAC-SHA256 then MD5
+    const hmacHex = crypto.createHmac("sha256", token).update(stringToSign).digest("hex");
+    return crypto.createHash("md5").update(hmacHex).digest("hex");
 }
 
 /**
@@ -131,36 +98,40 @@ function parseRewards(
 
 /**
  * Service class for interacting with SKPORT/Endfield API
- * Handles authentication and daily check-in
+ * Uses SK_OAUTH_CRED_KEY (cookie) and SK_TOKEN_CACHE_KEY (localStorage) directly
  */
 export class EndfieldService {
-    private profile: EndfieldProfile;
+    private cred: string;
+    private skTokenCacheKey: string;
+    private skGameRole: string;
+    private language: string;
 
     /**
      * Create a new EndfieldService instance
-     * @param options - Configuration options including cred, gameId, server
+     * @param options - Configuration options
      */
     constructor(options: EndfieldServiceOptions) {
-        this.profile = {
-            cred: options.cred,
-            skGameRole: `${ENDFIELD_PLATFORM}_${options.gameId}_${options.server || "2"}`,
-            platform: ENDFIELD_PLATFORM,
-            vName: ENDFIELD_VERSION,
-            signToken: options.signToken,
-            deviceId: undefined
-        };
+        this.cred = options.cred;
+        this.skTokenCacheKey = options.skTokenCacheKey;
+        this.skGameRole = `${ENDFIELD_PLATFORM}_${options.gameId}_${options.server || "2"}`;
+        this.language = options.language || "en";
     }
 
     /**
      * Validates if the provided parameters are in correct format
-     * @param cred - OAuth credential token
+     * @param cred - SK_OAUTH_CRED_KEY from cookie
+     * @param skTokenCacheKey - SK_TOKEN_CACHE_KEY from localStorage
      * @param id - Game UID
      * @param server - Server ID (2 or 3)
      * @returns Validation result
      */
-    static validateParams(cred: string, id: string, server: string): EndfieldValidation {
+    static validateParams(cred: string, skTokenCacheKey: string, id: string, server: string): EndfieldValidation {
         if (!cred || cred.length < 10) {
-            return { valid: false, message: "❌ Invalid cred token (too short)" };
+            return { valid: false, message: "❌ Invalid SK_OAUTH_CRED_KEY (too short)" };
+        }
+
+        if (!skTokenCacheKey || skTokenCacheKey.length < 10) {
+            return { valid: false, message: "❌ Invalid SK_TOKEN_CACHE_KEY (too short)" };
         }
 
         if (!id || !/^\d+$/.test(id)) {
@@ -182,18 +153,32 @@ export class EndfieldService {
      * @returns Claim result with rewards if successful
      */
     async claim(): Promise<EndfieldClaimResult> {
-        const body = "{}";
-        const signHeaders = buildSignHeaders(this.profile, ENDFIELD_ATTENDANCE_URL, "POST", body);
-        const headers = buildHeaders(this.profile, signHeaders);
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+
+        // Build headers matching reference exactly
+        const headers: Record<string, string> = {
+            ...ENDFIELD_HEADERS,
+            cred: this.cred,
+            "sk-game-role": this.skGameRole,
+            "sk-language": this.language,
+            timestamp
+        };
+
+        // Generate sign using SK_TOKEN_CACHE_KEY
+        headers.sign = generateSign(ENDFIELD_ATTENDANCE_PATH, "POST", headers, "", this.skTokenCacheKey);
 
         console.log("[Endfield] Sending attendance request...");
-        console.log("[Endfield] sk-game-role:", this.profile.skGameRole);
+        console.log("[Endfield] sk-game-role:", this.skGameRole);
 
         try {
-            const response = await axios.post(ENDFIELD_ATTENDANCE_URL, body, {
-                headers,
-                validateStatus: () => true
-            });
+            const response = await axios.post(
+                ENDFIELD_ATTENDANCE_URL,
+                {},
+                {
+                    headers,
+                    validateStatus: () => true
+                }
+            );
 
             console.log("[Endfield] Response status:", response.status);
             console.log("[Endfield] Response data:", JSON.stringify(response.data));
@@ -209,6 +194,16 @@ export class EndfieldService {
 
             const code = data?.code ?? data?.retcode;
             const msg = data?.msg ?? data?.message ?? "Attendance response received";
+
+            // Handle token expired (code 10000)
+            if (code === ENDFIELD_TOKEN_EXPIRED_CODE) {
+                return {
+                    success: false,
+                    message:
+                        "⚠️ Token expired! Please update SK_OAUTH_CRED_KEY and SK_TOKEN_CACHE_KEY via `/setup-endfield`.",
+                    tokenExpired: true
+                };
+            }
 
             if (code === 0) {
                 const rewards = parseRewards(data?.data?.awardIds, data?.data?.resourceInfoMap);
@@ -254,6 +249,10 @@ export class EndfieldService {
  */
 export function formatEndfieldResult(result: EndfieldClaimResult): string {
     const gameName = ENDFIELD.name;
+
+    if (result.tokenExpired) {
+        return `⚠️ **${gameName}**: ${result.message}`;
+    }
 
     if (!result.success && !result.already) {
         return `❌ **${gameName}**: ${result.message}`;

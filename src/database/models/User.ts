@@ -15,12 +15,15 @@ export interface IHoyolabData {
 }
 
 export interface IEndfieldData {
-    skOAuthCredKey?: string; // Legacy: SK_OAUTH_CRED_KEY from cookies
-    accountToken?: string; // New: account_token from Gryphline for OAuth refresh
-    salt?: string; // Cached salt for v2 signing
-    credExpiry?: Date; // When cached credentials expire
-    gameId: string; // Endfield game UID
-    server: string; // Server: "2" for Asia, "3" for Americas/Europe
+    /** SK_OAUTH_CRED_KEY from cookies */
+    skOAuthCredKey: string;
+    /** SK_TOKEN_CACHE_KEY from localStorage (used for signing) */
+    skTokenCacheKey: string;
+    /** Endfield game UID */
+    gameId: string;
+    /** Server: "2" for Asia, "3" for Americas/Europe */
+    server: string;
+    /** Display name */
     accountName: string;
     lastClaim?: Date;
     lastClaimResult?: string;
@@ -53,10 +56,8 @@ const HoyolabSchema = new Schema<IHoyolabData>({
 });
 
 const EndfieldSchema = new Schema<IEndfieldData>({
-    skOAuthCredKey: { type: String }, // Legacy field, optional now
-    accountToken: { type: String }, // New OAuth token field
-    salt: { type: String }, // Cached salt for v2 signing
-    credExpiry: { type: Date }, // Credential expiration time
+    skOAuthCredKey: { type: String, required: true },
+    skTokenCacheKey: { type: String, required: true },
     gameId: { type: String, required: true },
     server: { type: String, default: "2" },
     accountName: { type: String, default: "Unknown" },

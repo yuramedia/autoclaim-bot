@@ -53,7 +53,10 @@ export async function runDailyClaims(client: Client): Promise<void> {
         const cursor = User.find({
             $or: [
                 { "hoyolab.token": { $exists: true, $ne: "" } },
-                { "endfield.skOAuthCredKey": { $exists: true, $ne: "" } }
+                {
+                    "endfield.skOAuthCredKey": { $exists: true, $ne: "" },
+                    "endfield.skTokenCacheKey": { $exists: true, $ne: "" }
+                }
             ]
         }).cursor();
 
@@ -110,10 +113,11 @@ async function processUserClaim(client: Client, user: any): Promise<void> {
     }
 
     // Claim Endfield
-    if (user.endfield?.skOAuthCredKey) {
+    if (user.endfield?.skOAuthCredKey && user.endfield?.skTokenCacheKey) {
         try {
             const endfield = new EndfieldService({
                 cred: user.endfield.skOAuthCredKey,
+                skTokenCacheKey: user.endfield.skTokenCacheKey,
                 gameId: user.endfield.gameId,
                 server: user.endfield.server
             });

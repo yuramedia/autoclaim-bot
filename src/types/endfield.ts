@@ -3,16 +3,6 @@
  * Type definitions for Endfield service interactions
  */
 
-/** Internal profile for Endfield API requests */
-export interface EndfieldProfile {
-    cred: string;
-    skGameRole: string;
-    platform: string;
-    vName: string;
-    signToken?: string;
-    deviceId?: string;
-}
-
 /** Reward from attendance check-in */
 export interface AttendanceReward {
     id?: string;
@@ -35,26 +25,21 @@ export interface EndfieldClaimResult {
     message: string;
     rewards?: AttendanceReward[];
     already?: boolean;
-}
-
-/** Input for signing API requests */
-export interface SignInput {
-    url: string;
-    method: string;
-    body?: string;
-    timestamp: string;
-    platform: string;
-    vName: string;
-    deviceId?: string;
-    key: string;
+    tokenExpired?: boolean;
 }
 
 /** Options for creating EndfieldService */
 export interface EndfieldServiceOptions {
+    /** SK_OAUTH_CRED_KEY from cookie */
     cred: string;
+    /** SK_TOKEN_CACHE_KEY from localStorage (used for signing) */
+    skTokenCacheKey: string;
+    /** Endfield game UID */
     gameId: string;
+    /** Server: "2" for Asia, "3" for Americas/Europe */
     server?: string;
-    signToken?: string;
+    /** Language code (default: "en") */
+    language?: string;
 }
 
 /** Validation result for Endfield parameters */

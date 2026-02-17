@@ -25,7 +25,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const credInput = new TextInputBuilder()
         .setCustomId("endfield-cred")
         .setLabel("SK_OAUTH_CRED_KEY (from Cookie)")
-        .setPlaceholder("F12 > Application > Cookies > game.skport.com > SK_OAUTH_CRED_KEY")
+        .setPlaceholder("Lihat /help untuk script | F12 > Application > Cookies > SK_OAUTH_CRED_KEY")
         .setStyle(TextInputStyle.Paragraph)
         .setRequired(true)
         .setMinLength(20);
@@ -33,7 +33,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const tokenInput = new TextInputBuilder()
         .setCustomId("endfield-token-cache")
         .setLabel("SK_TOKEN_CACHE_KEY (from LocalStorage)")
-        .setPlaceholder("F12 > Application > Local Storage > game.skport.com > SK_TOKEN_CACHE_KEY")
+        .setPlaceholder("Lihat /help untuk script | F12 > Application > Local Storage > SK_TOKEN_CACHE_KEY")
         .setStyle(TextInputStyle.Paragraph)
         .setRequired(true)
         .setMinLength(10);

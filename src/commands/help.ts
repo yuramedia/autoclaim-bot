@@ -78,11 +78,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 inline: false
             },
             {
-                name: "🎮 Endfield Token",
+                name: "🎮 Endfield Token (2 token diperlukan)",
                 value: [
-                    "1. Buka https://game.skport.com/endfield/sign-in dan login",
-                    "2. Tekan F12 → **Console**",
-                    "3. Paste dan jalankan script berikut:"
+                    "Buka https://game.skport.com/endfield/sign-in dan login",
+                    "",
+                    "**Cara 1: Pakai Script (Recommended)**",
+                    "1. Tekan F12 → tab **Console**",
+                    "2. Paste dan jalankan script di bawah",
+                    "3. Copy kedua nilai yang muncul"
                 ].join("\n"),
                 inline: false
             },
@@ -92,7 +95,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     "```js\n" +
                     "// Jalankan di console game.skport.com/endfield/sign-in\n" +
                     'function gc(n){const v=`; ${document.cookie}`;const p=v.split(`; ${n}=`);if(p.length===2)return p.pop().split(";").shift()}\n' +
+                    "// Token 1: dari Cookie\n" +
                     'let cred=gc("SK_OAUTH_CRED_KEY")||"Not found";\n' +
+                    "// Token 2: dari Local Storage\n" +
                     'let token=localStorage.getItem("SK_TOKEN_CACHE_KEY")||"Not found";\n' +
                     'console.log("SK_OAUTH_CRED_KEY:",cred);\n' +
                     'console.log("SK_TOKEN_CACHE_KEY:",token);\n' +
@@ -100,14 +105,25 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 inline: false
             },
             {
+                name: "📋 Cara 2: Manual",
+                value: [
+                    "**SK_OAUTH_CRED_KEY:**",
+                    "F12 → **Application** → **Cookies** → `game.skport.com` → copy `SK_OAUTH_CRED_KEY`",
+                    "",
+                    "**SK_TOKEN_CACHE_KEY:**",
+                    "F12 → **Application** → **Local Storage** → `game.skport.com` → copy `SK_TOKEN_CACHE_KEY`"
+                ].join("\n"),
+                inline: false
+            },
+            {
                 name: "📝 Endfield Setup Info",
                 value: [
-                    "• **SK_OAUTH_CRED_KEY**: Cookie dari script di atas",
-                    "• **SK_TOKEN_CACHE_KEY**: Token dari localStorage (untuk signing)",
+                    "• **SK_OAUTH_CRED_KEY**: Token dari Cookie (autentikasi)",
+                    "• **SK_TOKEN_CACHE_KEY**: Token dari Local Storage (untuk signing)",
                     "• **Game UID**: UID dari profil in-game",
                     `• **Server**: 2 = ${ENDFIELD.servers["2"]}, 3 = ${ENDFIELD.servers["3"]}`,
                     "",
-                    "⚠️ *Token bisa expired, jika claim gagal dengan kode 10000, jalankan ulang script dan update via `/setup-endfield`*"
+                    "⚠️ *Token bisa expired (kode 10000), jalankan ulang script dan update via `/setup-endfield`*"
                 ].join("\n"),
                 inline: false
             },

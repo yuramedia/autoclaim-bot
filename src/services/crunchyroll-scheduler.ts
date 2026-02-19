@@ -12,17 +12,18 @@ import type { FormattedEpisode } from "../types/crunchyroll";
 
 // Cache of last seen episode IDs (in-memory, capped to prevent memory leak)
 const MAX_SEEN_EPISODES = 500;
-const seenEpisodes = new Set<string>();
+/** Map of episode id -> title for tracking edits */
+const seenEpisodes = new Map<string, string>();
 let isFirstRun = true;
 
-/** Prune oldest entries when the set exceeds MAX_SEEN_EPISODES */
+/** Prune oldest entries when the map exceeds MAX_SEEN_EPISODES */
 function pruneSeenEpisodes(): void {
     if (seenEpisodes.size <= MAX_SEEN_EPISODES) return;
     const excess = seenEpisodes.size - MAX_SEEN_EPISODES;
     let removed = 0;
-    for (const id of seenEpisodes) {
+    for (const key of seenEpisodes.keys()) {
         if (removed >= excess) break;
-        seenEpisodes.delete(id);
+        seenEpisodes.delete(key);
         removed++;
     }
 }
@@ -52,7 +53,7 @@ async function initializeCache(service: CrunchyrollService): Promise<void> {
         const episodes = await service.fetchLatestEpisodes("en-US", 100);
 
         for (const ep of episodes) {
-            seenEpisodes.add(ep.id);
+            seenEpisodes.set(ep.id, ep.title);
         }
         pruneSeenEpisodes();
 
@@ -71,16 +72,27 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
         // Fetch RSS publishers for enrichment
         await service.fetchRssPublishers();
 
-        // Find new episodes
-        const newEpisodes: FormattedEpisode[] = [];
+        // Find new or edited episodes
+        const newEpisodes: { episode: FormattedEpisode; isEdited: boolean }[] = [];
         for (const ep of episodes) {
-            if (!seenEpisodes.has(ep.id)) {
-                seenEpisodes.add(ep.id);
+            const prevTitle = seenEpisodes.get(ep.id);
+
+            if (prevTitle === undefined) {
+                // New episode
+                seenEpisodes.set(ep.id, ep.title);
                 if (!isFirstRun) {
                     const formatted = service.formatEpisode(ep);
-                    // Add publisher from RSS cache
                     formatted.publisher = service.getPublisher(ep.external_id);
-                    newEpisodes.push(formatted);
+                    newEpisodes.push({ episode: formatted, isEdited: false });
+                }
+            } else if (prevTitle !== ep.title) {
+                // Edited episode (title changed)
+                seenEpisodes.set(ep.id, ep.title);
+                if (!isFirstRun) {
+                    console.log(`📺 Detected edit on ${ep.id}`);
+                    const formatted = service.formatEpisode(ep);
+                    formatted.publisher = service.getPublisher(ep.external_id);
+                    newEpisodes.push({ episode: formatted, isEdited: true });
                 }
             }
         }
@@ -89,9 +101,10 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
         if (newEpisodes.length === 0) return;
 
         // Enrich with series posters
-        const enrichedEpisodes = await service.enrichWithSeriesPoster(newEpisodes);
+        const rawEpisodes = newEpisodes.map(e => e.episode);
+        const enrichedEpisodes = await service.enrichWithSeriesPoster(rawEpisodes);
 
-        console.log(`📺 Found ${enrichedEpisodes.length} new Crunchyroll episode(s)`);
+        console.log(`📺 Found ${enrichedEpisodes.length} new/edited Crunchyroll episode(s)`);
 
         // Enrich with Metadata (MAL/Anilist/AniDB)
         for (const ep of enrichedEpisodes) {
@@ -103,7 +116,6 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
                         mal: metadata.idMal ? `https://myanimelist.net/anime/${metadata.idMal}` : undefined
                     };
                 } else {
-                    // Search fallback
                     ep.externalLinks = {
                         anilist: `https://anilist.co/search/anime?search=${encodeURIComponent(ep.seriesTitle)}`,
                         mal: `https://myanimelist.net/anime.php?q=${encodeURIComponent(ep.seriesTitle)}`
@@ -113,6 +125,9 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
                 console.error(`Error enriching metadata for ${ep.seriesTitle}:`, e);
             }
         }
+
+        // Build edit lookup from newEpisodes
+        const editedSet = new Set(newEpisodes.filter(e => e.isEdited).map(e => e.episode.episodeId));
 
         // Get all guilds with Crunchyroll feed enabled
         const guilds = await GuildSettings.find({
@@ -130,7 +145,8 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
 
                 // Send each new episode (limit to 10 per cycle to avoid spam)
                 for (const episode of enrichedEpisodes.slice(0, 10)) {
-                    const embed = buildEpisodeEmbed(episode);
+                    const isEdited = editedSet.has(episode.episodeId);
+                    const embed = buildEpisodeEmbed(episode, isEdited);
                     await channel.send({ embeds: [embed] });
 
                     // Small delay between messages
@@ -145,7 +161,7 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
     }
 }
 
-function buildEpisodeEmbed(episode: FormattedEpisode): EmbedBuilder {
+function buildEpisodeEmbed(episode: FormattedEpisode, isEdited: boolean): EmbedBuilder {
     const authorName = episode.publisher ? `${episode.publisher}` : "Crunchyroll New Video";
 
     const embed = new EmbedBuilder()
@@ -232,7 +248,7 @@ function buildEpisodeEmbed(episode: FormattedEpisode): EmbedBuilder {
 
     // Footer
     embed.setFooter({
-        text: "Hidup CR!"
+        text: isEdited ? "📝 Edited · Hidup CR!" : "Hidup CR!"
     });
 
     return embed;

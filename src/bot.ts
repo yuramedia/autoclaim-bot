@@ -3,6 +3,7 @@ import { config } from "./config";
 import { connectDatabase } from "./database/connection";
 import { startScheduler } from "./services/scheduler";
 import { startCrunchyrollFeed } from "./services/crunchyroll-scheduler";
+import { startU2Feed } from "./services/u2-feed-scheduler";
 import { handleInteraction } from "./handlers/interaction";
 import { handleMessage } from "./handlers/message";
 import { startPresenceUpdater } from "./utils/presence";
@@ -27,6 +28,9 @@ client.once(Events.ClientReady, readyClient => {
 
     // Start Crunchyroll feed
     startCrunchyrollFeed(client);
+
+    // Start U2 BDMV feed
+    startU2Feed(client);
 
     // Start presence updater
     startPresenceUpdater(readyClient);

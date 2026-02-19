@@ -49,3 +49,6 @@ export type { AnilistMedia, AnilistResponse } from "./anime-metadata";
 
 // Jisho types
 export type { JishoResult, JishoAPIResponse, JishoWord } from "./jisho";
+
+// U2 Feed types
+export type { U2FeedItem, FormattedU2Item, IU2FeedSettings } from "./u2-feed";

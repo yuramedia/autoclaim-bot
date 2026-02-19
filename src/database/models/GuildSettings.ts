@@ -32,10 +32,17 @@ export interface ICrunchyrollFeedSettings {
     channelId: string | null;
 }
 
+export interface IU2FeedSettings {
+    enabled: boolean;
+    channelId: string | null;
+    filter: string;
+}
+
 export interface IGuildSettings extends Document {
     guildId: string;
     embedFix: IEmbedFixSettings;
     crunchyrollFeed: ICrunchyrollFeedSettings;
+    u2Feed: IU2FeedSettings;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -53,11 +60,18 @@ const CrunchyrollFeedSettingsSchema = new Schema<ICrunchyrollFeedSettings>({
     channelId: { type: String, default: null }
 });
 
+const U2FeedSettingsSchema = new Schema<IU2FeedSettings>({
+    enabled: { type: Boolean, default: false },
+    channelId: { type: String, default: null },
+    filter: { type: String, default: "BDMV|Blu-ray|BD-BOX" }
+});
+
 const GuildSettingsSchema = new Schema<IGuildSettings>(
     {
         guildId: { type: String, required: true, unique: true, index: true },
         embedFix: { type: EmbedFixSettingsSchema, default: () => ({}) },
-        crunchyrollFeed: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) }
+        crunchyrollFeed: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) },
+        u2Feed: { type: U2FeedSettingsSchema, default: () => ({}) }
     },
     {
         timestamps: true

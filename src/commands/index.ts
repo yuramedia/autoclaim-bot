@@ -15,6 +15,7 @@ import * as crunchyrollFeed from "./crunchyroll-feed";
 import * as kbbi from "./kbbi";
 import * as subcr from "./subcr";
 import * as jisho from "./jisho";
+import * as u2Feed from "./u2-feed";
 
 export const commands = [
     setupHoyolab,
@@ -33,7 +34,8 @@ export const commands = [
     crunchyrollFeed,
     kbbi,
     subcr,
-    jisho
+    jisho,
+    u2Feed
 ];
 
 export const commandsData = commands.map(cmd => cmd.data);

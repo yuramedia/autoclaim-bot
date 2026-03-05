@@ -143,14 +143,14 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
                 const channel = await client.channels.fetch(guild.crunchyrollFeed.channelId!);
                 if (!channel || !(channel instanceof TextChannel)) continue;
 
-                // Send each new episode (limit to 10 per cycle to avoid spam)
-                for (const episode of enrichedEpisodes.slice(0, 10)) {
+                // Send each new episode (limit to 100 per cycle to avoid spam)
+                for (const episode of enrichedEpisodes.slice(0, 100)) {
                     const isEdited = editedSet.has(episode.episodeId);
                     const embed = buildEpisodeEmbed(episode, isEdited);
                     await channel.send({ embeds: [embed] });
 
                     // Small delay between messages
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                 }
             } catch (error) {
                 console.error(`Failed to send to guild ${guild.guildId}:`, error);

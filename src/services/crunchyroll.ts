@@ -10,7 +10,9 @@ import type {
     CrunchyrollEpisode,
     FormattedEpisode,
     CrunchyrollSubtitle,
-    CrunchyrollPlayResponse
+    CrunchyrollPlayResponse,
+    CrunchyrollBrowseItem,
+    CrunchyrollBrowseResponse
 } from "../types/crunchyroll";
 import { LANG_MAP } from "../constants";
 
@@ -603,6 +605,60 @@ export class CrunchyrollService {
         } catch (error) {
             console.error("Subtitle download error:", error);
             return null;
+        }
+    }
+
+    /**
+     * Fetch seasonal series from Browse API with pagination
+     * @param seasonTag - e.g. "spring-2026", "winter-2026"
+     * @param locale - content locale
+     * @returns Array of all series for the given season
+     */
+    async fetchSeasonalSeries(seasonTag: string, locale = "en-US"): Promise<CrunchyrollBrowseItem[]> {
+        const auth = await this.getAuth();
+        if (!auth) return [];
+
+        const allSeries: CrunchyrollBrowseItem[] = [];
+        const pageSize = 100;
+        let start = 0;
+
+        try {
+            while (true) {
+                const params = new URLSearchParams({
+                    seasonal_tag: seasonTag,
+                    n: String(pageSize),
+                    start: String(start),
+                    locale
+                });
+
+                const response = await fetch(`${this.API_BASE}/content/v2/discover/browse?${params}`, {
+                    headers: {
+                        Authorization: `Bearer ${auth.access_token}`,
+                        "User-Agent": this.USER_AGENT
+                    }
+                });
+
+                if (!response.ok) {
+                    console.error(`Crunchyroll seasonal fetch failed with status: ${response.status}`);
+                    return allSeries;
+                }
+
+                const data = (await response.json()) as CrunchyrollBrowseResponse;
+                const items = data.data ?? [];
+                allSeries.push(...items);
+
+                // Stop if we've fetched all items or got fewer than requested
+                if (allSeries.length >= data.total || items.length < pageSize) {
+                    break;
+                }
+
+                start += pageSize;
+            }
+
+            return allSeries;
+        } catch (error) {
+            console.error("Crunchyroll seasonal fetch error:", error);
+            return allSeries;
         }
     }
 }

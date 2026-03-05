@@ -3,7 +3,13 @@
  * Handles commands, modals, and select menus
  */
 
-import { ChatInputCommandInteraction, type Interaction, Collection, StringSelectMenuInteraction } from "discord.js";
+import {
+    ChatInputCommandInteraction,
+    AutocompleteInteraction,
+    type Interaction,
+    Collection,
+    StringSelectMenuInteraction
+} from "discord.js";
 import { commands } from "../commands";
 import { handleHoyolabModal } from "./hoyolab-modal";
 import { handleEndfieldModal } from "./endfield-modal";
@@ -24,6 +30,12 @@ export async function handleInteraction(interaction: Interaction): Promise<void>
     // Handle slash commands
     if (interaction.isChatInputCommand()) {
         await handleCommand(interaction);
+        return;
+    }
+
+    // Handle autocomplete
+    if (interaction.isAutocomplete()) {
+        await handleAutocomplete(interaction);
         return;
     }
 
@@ -94,5 +106,22 @@ async function handleSelectMenu(interaction: StringSelectMenuInteraction): Promi
         }
     } catch (error) {
         await handleInteractionError(interaction, error, "❌ Error processing selection.");
+    }
+}
+
+/**
+ * Handle autocomplete interactions
+ */
+async function handleAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
+    const command = commandCollection.get(interaction.commandName) as (typeof commands)[0] & {
+        autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
+    };
+
+    if (!command?.autocomplete) return;
+
+    try {
+        await command.autocomplete(interaction);
+    } catch (error) {
+        console.error(`[Autocomplete] Error for ${interaction.commandName}:`, error);
     }
 }

@@ -133,3 +133,32 @@ export interface CrunchyrollPlayResponse {
     subtitles: Record<string, CrunchyrollSubtitle>;
     [key: string]: unknown;
 }
+
+/** A single series item from the Browse API (seasonal_tag queries) */
+export interface CrunchyrollBrowseItem {
+    id: string;
+    title: string;
+    slug_title: string;
+    description: string;
+    type: string;
+    images: {
+        poster_tall?: { height: number; width: number; source: string; type: string }[][];
+        poster_wide?: { height: number; width: number; source: string; type: string }[][];
+    };
+    series_metadata?: {
+        audio_locales: string[];
+        subtitle_locales: string[];
+        series_launch_year: number;
+        season_tags: string[];
+        episode_count: number;
+        is_simulcast: boolean;
+    };
+    last_public: string;
+    new: boolean;
+}
+
+/** Response from the Browse API */
+export interface CrunchyrollBrowseResponse {
+    total: number;
+    data: CrunchyrollBrowseItem[];
+}

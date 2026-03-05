@@ -16,6 +16,7 @@ import * as kbbi from "./kbbi";
 import * as subcr from "./subcr";
 import * as jisho from "./jisho";
 import * as u2Feed from "./u2-feed";
+import * as crrelease from "./crrelease";
 
 export const commands = [
     setupHoyolab,
@@ -35,7 +36,8 @@ export const commands = [
     kbbi,
     subcr,
     jisho,
-    u2Feed
+    u2Feed,
+    crrelease
 ];
 
 export const commandsData = commands.map(cmd => cmd.data);

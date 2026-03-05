@@ -609,38 +609,56 @@ export class CrunchyrollService {
     }
 
     /**
-     * Fetch seasonal series from Browse API
+     * Fetch seasonal series from Browse API with pagination
      * @param seasonTag - e.g. "spring-2026", "winter-2026"
      * @param locale - content locale
-     * @returns Array of series for the given season
+     * @returns Array of all series for the given season
      */
     async fetchSeasonalSeries(seasonTag: string, locale = "en-US"): Promise<CrunchyrollBrowseItem[]> {
         const auth = await this.getAuth();
         if (!auth) return [];
 
+        const allSeries: CrunchyrollBrowseItem[] = [];
+        const pageSize = 100;
+        let start = 0;
+
         try {
-            const params = new URLSearchParams({
-                seasonal_tag: seasonTag,
-                n: "100",
-                type: "series",
-                locale,
-                force_locale: crypto.randomUUID()
-            });
+            while (true) {
+                const params = new URLSearchParams({
+                    seasonal_tag: seasonTag,
+                    n: String(pageSize),
+                    start: String(start),
+                    locale
+                });
 
-            const response = await fetch(`${this.API_BASE}/content/v2/discover/browse?${params}`, {
-                headers: {
-                    Authorization: `Bearer ${auth.access_token}`,
-                    "User-Agent": this.USER_AGENT
+                const response = await fetch(`${this.API_BASE}/content/v2/discover/browse?${params}`, {
+                    headers: {
+                        Authorization: `Bearer ${auth.access_token}`,
+                        "User-Agent": this.USER_AGENT
+                    }
+                });
+
+                if (!response.ok) {
+                    console.error(`Crunchyroll seasonal fetch failed with status: ${response.status}`);
+                    return allSeries;
                 }
-            });
 
-            if (!response.ok) return [];
+                const data = (await response.json()) as CrunchyrollBrowseResponse;
+                const items = data.data ?? [];
+                allSeries.push(...items);
 
-            const data = (await response.json()) as CrunchyrollBrowseResponse;
-            return data.data ?? [];
+                // Stop if we've fetched all items or got fewer than requested
+                if (allSeries.length >= data.total || items.length < pageSize) {
+                    break;
+                }
+
+                start += pageSize;
+            }
+
+            return allSeries;
         } catch (error) {
             console.error("Crunchyroll seasonal fetch error:", error);
-            return [];
+            return allSeries;
         }
     }
 }

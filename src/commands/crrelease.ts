@@ -83,7 +83,6 @@ async function getValidSeasons(): Promise<{ tag: string; label: string }[]> {
     }
 
     const candidates = generateCandidateSeasons();
-    const validSeasons: string[] = [];
 
     // Check each candidate concurrently
     const results = await Promise.all(
@@ -93,11 +92,7 @@ async function getValidSeasons(): Promise<{ tag: string; label: string }[]> {
         })
     );
 
-    for (const result of results) {
-        if (result.hasData) {
-            validSeasons.push(result.tag);
-        }
-    }
+    const validSeasons = results.filter(r => r.hasData).map(r => r.tag);
 
     // Update cache
     VALID_SEASONS_CACHE.seasons = validSeasons;
@@ -209,7 +204,9 @@ export async function autocomplete(interaction: AutocompleteInteraction): Promis
         console.error("Crrelease autocomplete error:", error);
         // Fallback: show candidates without validation
         const candidates = generateCandidateSeasons();
-        const filtered = candidates.filter(s => s.label.toLowerCase().includes(focused)).slice(0, 25);
+        const filtered = candidates
+            .filter(s => s.label.toLowerCase().includes(focused) || s.tag.includes(focused))
+            .slice(0, 25);
         await interaction.respond(filtered.map(s => ({ name: s.label, value: s.tag })));
     }
 }

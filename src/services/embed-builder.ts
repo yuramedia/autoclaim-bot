@@ -31,17 +31,12 @@ export function buildRichEmbed(info: PostInfo, platform: PlatformConfig): EmbedB
     const embed = new EmbedBuilder().setColor(platform.color);
 
     // Author
-    if (info.author.name) {
+    if (info.author.name && info.author.username) {
         embed.setAuthor({
-            name: `@${info.author.username}`,
+            name: `${info.author.name} (@${info.author.username})`,
             iconURL: info.author.avatar,
             url: info.author.url
         });
-    }
-
-    // Title (author display name)
-    if (info.author.name !== info.author.username) {
-        embed.setTitle(info.author.name);
     }
 
     // Description (post content)

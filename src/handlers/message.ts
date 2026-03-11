@@ -48,6 +48,19 @@ export async function handleMessage(message: Message): Promise<void> {
         for (const processed of processedUrls) {
             await processUrl(message, processed, settings);
         }
+
+        // Suppress original embeds after bot has replied
+        // Wait briefly for Discord to generate the original embed
+        setTimeout(async () => {
+            try {
+                const updatedMessage = await message.fetch();
+                if (updatedMessage.embeds.length > 0) {
+                    await updatedMessage.suppressEmbeds(true);
+                }
+            } catch {
+                // Ignore if we don't have permission (Manage Messages required)
+            }
+        }, 2000);
     } catch (error) {
         console.error("Error processing embed fix:", error);
     }
@@ -126,16 +139,4 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
         files,
         allowedMentions: { repliedUser: false }
     });
-
-    // Suppress original embeds
-    try {
-        if (message.embeds.length > 0 || processedUrls.length > 0) {
-            await message.suppressEmbeds(true);
-        }
-    } catch (error) {
-        // Ignore if we don't have permission
-    }
 }
-
-// Store processedUrls in module scope for suppressEmbeds check
-let processedUrls: ProcessedUrl[] = [];

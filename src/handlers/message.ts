@@ -91,8 +91,8 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
         const postInfo = await fetchPostInfo(processed.originalUrl, processed.platform, processed.postId);
 
         if (postInfo) {
-            const richEmbed = buildRichEmbed(postInfo, processed.platform);
-            embeds.push(richEmbed);
+            const richEmbeds = buildRichEmbed(postInfo, processed.platform, processed.originalUrl);
+            embeds.push(...richEmbeds);
 
             // Try to download and upload media if enabled (only for supported platforms)
             if (settings.embedFix.autoUpload && postInfo.video && canDownload) {

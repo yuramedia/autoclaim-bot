@@ -27,8 +27,13 @@ function formatNumber(num: number): string {
  * @param platform - Platform configuration
  * @returns Configured EmbedBuilder
  */
-export function buildRichEmbed(info: PostInfo, platform: PlatformConfig): EmbedBuilder {
+export function buildRichEmbed(info: PostInfo, platform: PlatformConfig, postUrl?: string): EmbedBuilder[] {
     const embed = new EmbedBuilder().setColor(platform.color);
+
+    // Set URL on main embed (required for Discord multi-image gallery grouping)
+    if (postUrl) {
+        embed.setURL(postUrl);
+    }
 
     // Author
     if (info.author.name && info.author.username) {
@@ -64,7 +69,18 @@ export function buildRichEmbed(info: PostInfo, platform: PlatformConfig): EmbedB
         embed.setTimestamp(info.timestamp);
     }
 
-    return embed;
+    const embeds: EmbedBuilder[] = [embed];
+
+    // Create additional embeds for extra images (2nd, 3rd, 4th, etc.)
+    // Discord groups embeds with the same URL into a multi-image gallery
+    if (postUrl && info.images.length > 1) {
+        for (let i = 1; i < info.images.length; i++) {
+            const imageEmbed = new EmbedBuilder().setURL(postUrl).setImage(info.images[i]!).setColor(platform.color);
+            embeds.push(imageEmbed);
+        }
+    }
+
+    return embeds;
 }
 
 /**

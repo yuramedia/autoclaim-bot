@@ -35,7 +35,7 @@ function findBestFormat(formats: VKRFormat[]): VKRFormat | null {
     // Sort by size descending (prefer higher quality)
     const validFormats = formats
         .filter(f => parseSizeToBytes(f.size) <= MAX_DOWNLOAD_SIZE)
-        .sort((a, b) => parseSizeToBytes(b.size) - parseSizeToBytes(a.size));
+        .toSorted((a, b) => parseSizeToBytes(b.size) - parseSizeToBytes(a.size));
 
     return validFormats[0] ?? null;
 }

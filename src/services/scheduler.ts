@@ -4,7 +4,7 @@
  */
 
 import cron from "node-cron";
-import { Client, TextChannel } from "discord.js";
+import { Client } from "discord.js";
 import { User } from "../database/models/User";
 import { HoyolabService, formatHoyolabResults } from "./hoyolab";
 import { EndfieldService, formatEndfieldResult } from "./endfield";
@@ -160,7 +160,7 @@ async function sendClaimNotification(client: Client, discordId: string, results:
                 }
             ]
         });
-    } catch (error) {
+    } catch {
         // User might have DMs disabled or bot is blocked
         console.warn(`[Scheduler] Could not DM user ${discordId} (might have DMs off)`);
     }

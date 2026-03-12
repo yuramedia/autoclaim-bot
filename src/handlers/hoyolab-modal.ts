@@ -12,7 +12,7 @@ import {
 } from "discord.js";
 import { User } from "../database/models/User";
 import { HoyolabService } from "../services/hoyolab";
-import { GAME_DISPLAY_NAMES, GAME_ICONS, type HoyolabGameKey } from "../constants";
+import { GAME_DISPLAY_NAMES, type HoyolabGameKey } from "../constants";
 
 /** Default game options for select menu */
 const GAME_SELECT_OPTIONS: Array<{ key: HoyolabGameKey; emoji: string }> = [

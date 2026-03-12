@@ -115,7 +115,7 @@ export class CrunchyrollService {
             }
 
             // Sort by release date (newest first)
-            return data.data.sort((a, b) => {
+            return data.data.toSorted((a, b) => {
                 const dateA = new Date(
                     a.episode_metadata.premium_available_date ?? a.episode_metadata.availability_starts ?? a.last_public
                 ).getTime();
@@ -168,7 +168,8 @@ export class CrunchyrollService {
 
         // Get best thumbnail
         const thumbs = ep.images?.thumbnail?.flat() ?? [];
-        const sortedThumbs = thumbs.length > 0 ? thumbs.sort((a, b) => b.width * b.height - a.width * a.height) : [];
+        const sortedThumbs =
+            thumbs.length > 0 ? thumbs.toSorted((a, b) => b.width * b.height - a.width * a.height) : [];
         const thumbnail = sortedThumbs.length > 0 ? sortedThumbs[0]!.source : "";
 
         // Format duration
@@ -377,7 +378,7 @@ export class CrunchyrollService {
                 const imageGroup = images[images.length - 1];
                 if (imageGroup && imageGroup.length > 0) {
                     // Sort by height descending just to be sure
-                    const sorted = imageGroup.sort((a: any, b: any) => b.height - a.height);
+                    const sorted = imageGroup.toSorted((a: any, b: any) => b.height - a.height);
                     // Prefer height around 400-800 for Discord thumbnail, but largest is usually fine
                     const poster = sorted[0]?.source;
                     if (poster) {

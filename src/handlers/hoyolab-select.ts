@@ -1,6 +1,26 @@
 import { StringSelectMenuInteraction, MessageFlags } from "discord.js";
 import { User } from "../database/models/User";
 
+/**
+ * Format a Hoyolab game key into a display name
+ */
+function formatGameName(key: string): string {
+    switch (key) {
+        case "genshin":
+            return "Genshin Impact";
+        case "starRail":
+            return "Honkai: Star Rail";
+        case "honkai3":
+            return "Honkai Impact 3rd";
+        case "tearsOfThemis":
+            return "Tears of Themis";
+        case "zenlessZoneZero":
+            return "Zenless Zone Zero";
+        default:
+            return key;
+    }
+}
+
 export async function handleHoyolabSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -24,26 +44,9 @@ export async function handleHoyolabSelect(interaction: StringSelectMenuInteracti
         }
     );
 
-    const formatGameName = (key: string) => {
-        switch (key) {
-            case "genshin":
-                return "Genshin Impact";
-            case "starRail":
-                return "Honkai: Star Rail";
-            case "honkai3":
-                return "Honkai Impact 3rd";
-            case "tearsOfThemis":
-                return "Tears of Themis";
-            case "zenlessZoneZero":
-                return "Zenless Zone Zero";
-            default:
-                return key;
-        }
-    };
-
     const enabledGamesList = Object.entries(games)
-        .filter(([_, enabled]) => enabled)
-        .map(([key, _]) => `• ${formatGameName(key)}`)
+        .filter(([, enabled]) => enabled)
+        .map(([key]) => `• ${formatGameName(key)}`)
         .join("\n");
 
     await interaction.editReply({

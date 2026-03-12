@@ -141,7 +141,7 @@ function buildEmbed(
     if (poster && poster.length > 0) {
         const imageGroup = poster[poster.length - 1];
         if (imageGroup && imageGroup.length > 0) {
-            const sorted = [...imageGroup].sort((a, b) => b.height - a.height);
+            const sorted = [...imageGroup].toSorted((a, b) => b.height - a.height);
             if (sorted[0]?.source) {
                 embed.setThumbnail(sorted[0].source);
             }

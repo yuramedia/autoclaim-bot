@@ -7,13 +7,17 @@
         "start": "bun run deploy && bun run src/index.ts",
         "dev": "bun --watch run src/index.ts",
         "deploy": "bun run src/deploy-commands.ts",
-        "format": "prettier --write ."
+        "format": "bunx oxfmt",
+        "format:check": "bunx oxfmt --check",
+        "lint": "bunx oxlint",
+        "lint:fix": "bunx oxlint --fix"
     },
     "devDependencies": {
         "@types/bun": "latest",
         "@types/he": "^1.2.3",
         "@types/node-cron": "^3.0.11",
-        "prettier": "^3.8.1"
+        "oxfmt": "^0.38.0",
+        "oxlint": "^1.53.0"
     },
     "peerDependencies": {
         "typescript": "^5.9.3"
@@ -29,11 +33,5 @@
         "node-cron": "^4.2.1",
         "rss-parser": "^3.13.0",
         "universal-speedtest": "^3.0.0"
-    },
-    "prettier": {
-        "tabWidth": 4,
-        "trailingComma": "none",
-        "arrowParens": "avoid",
-        "printWidth": 120
     }
 }

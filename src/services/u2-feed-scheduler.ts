@@ -119,7 +119,7 @@ async function checkFeed(client: Client, service: U2FeedService, feedUrl: string
  * Post unposted items to subscribed channels
  * Matches Rimuru-Bot's Feed.postNew()
  */
-async function postNewItems(client: Client, service: U2FeedService): Promise<void> {
+async function postNewItems(client: Client, _service: U2FeedService): Promise<void> {
     // Get all guilds with U2 feed enabled
     const guilds = await GuildSettings.find({
         "u2Feed.enabled": true,

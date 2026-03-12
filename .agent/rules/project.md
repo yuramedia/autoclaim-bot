@@ -15,6 +15,8 @@ This is a Discord bot that provides auto-claim functionality for Hoyolab and End
 - **Framework**: Discord.js
 - **Database**: MongoDB
 - **Language**: TypeScript
+- **Formatter**: Oxfmt (config: `.oxfmtrc.json`)
+- **Linter**: Oxlint (config: `.oxlintrc.json`)
 
 ## Code Conventions
 
@@ -49,7 +51,10 @@ This is a Discord bot that provides auto-claim functionality for Hoyolab and End
 - `bun run dev` - Start development server
 - `bun run build` - Build for production
 - `bun run deploy` - Deploy slash commands to Discord
-- `bun run test` - Run tests
+- `bun run format` - Format all files with Oxfmt
+- `bun run format:check` - Check formatting without writing
+- `bun run lint` - Lint `src/` with Oxlint
+- `bun run lint:fix` - Auto-fix lint issues
 
 ## Best Practices
 

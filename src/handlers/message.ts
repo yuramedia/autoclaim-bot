@@ -3,7 +3,7 @@
  * Handles messageCreate events to fix social media embeds
  */
 
-import { Message, EmbedBuilder, AttachmentBuilder, MessageFlags } from "discord.js";
+import { Message, EmbedBuilder, AttachmentBuilder } from "discord.js";
 import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fix";
 import { downloadMedia } from "../services/media-downloader";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";

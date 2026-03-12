@@ -5,7 +5,7 @@ import { KBBI_BASE_URL, KBBI_USER_AGENT } from "../constants/kbbi";
 
 const extractDefinitions = ($: cheerio.CheerioAPI, selector: string): string[] => {
     const definitions: string[] = [];
-    $(selector).each((_, el) => {
+    $(selector).each((_i, el) => {
         const $el = $(el);
         let label = "";
         let example = "";
@@ -14,7 +14,7 @@ const extractDefinitions = ($: cheerio.CheerioAPI, selector: string): string[] =
         const redFonts = $el.find("font[color='red']");
         if (redFonts.length > 0) {
             label = redFonts
-                .map((_, f) => $(f).text().trim())
+                .map((_j, f) => $(f).text().trim())
                 .get()
                 .filter(t => t.length > 0)
                 .join(" ");
@@ -24,7 +24,7 @@ const extractDefinitions = ($: cheerio.CheerioAPI, selector: string): string[] =
         const spanTags = $el.find("span.kelas");
         if (spanTags.length > 0) {
             const spanLabel = spanTags
-                .map((_, s) => $(s).text().trim())
+                .map((_j, s) => $(s).text().trim())
                 .get()
                 .filter(t => t.length > 0)
                 .join(" ");
@@ -35,7 +35,7 @@ const extractDefinitions = ($: cheerio.CheerioAPI, selector: string): string[] =
         const greyFonts = $el.find("font[color='grey']");
         if (greyFonts.length > 0) {
             example = greyFonts
-                .map((_, f) => $(f).text().trim())
+                .map((_j, f) => $(f).text().trim())
                 .get()
                 .filter(t => t.length > 0)
                 .join(" "); // Sometimes there are multiple parts?
@@ -47,7 +47,7 @@ const extractDefinitions = ($: cheerio.CheerioAPI, selector: string): string[] =
 
         // Check for links (<a> tags) and convert to markdown
         // e.g. <a href="../../entri/bagaimana">bagaimana</a> -> [bagaimana](https://kbbi.kemendikdasmen.go.id/entri/bagaimana)
-        $el.find("a").each((_, a) => {
+        $el.find("a").each((_j, a) => {
             const $a = $(a);
             const href = $a.attr("href");
             const text = $a.text().trim();
@@ -106,7 +106,7 @@ const searchThesaurus = async (url: string): Promise<{ class: string; words: str
         // Structure is usually: postag -> result-set(s) -> postag -> result-set(s)
         const container = $(".contain");
 
-        container.children().each((_, el) => {
+        container.children().each((_i, el) => {
             const $el = $(el);
 
             if ($el.hasClass("result-postag")) {
@@ -128,7 +128,7 @@ const searchThesaurus = async (url: string): Promise<{ class: string; words: str
                 }
             } else if ($el.hasClass("result-set")) {
                 const words: string[] = [];
-                $el.find(".one-par-content a").each((_, a) => {
+                $el.find(".one-par-content a").each((_j, a) => {
                     words.push($(a).text().trim());
                 });
                 if (words.length > 0) {
@@ -178,7 +178,7 @@ export const searchKbbi = async (word: string): Promise<KbbiResult | null> => {
         const otherDetails: string[] = [];
 
         // Check for small tags inside h2 (e.g., "bentuk tidak baku: ...")
-        $h2.find("small").each((_, el) => {
+        $h2.find("small").each((_i, el) => {
             otherDetails.push($(el).text().trim());
         });
 
@@ -200,7 +200,7 @@ export const searchKbbi = async (word: string): Promise<KbbiResult | null> => {
 
         // Check for Thesaurus link
         let thesaurusUrl = "";
-        $("p a").each((_, el) => {
+        $("p a").each((_i, el) => {
             const text = $(el).text();
             if (text.includes("Tesaurus")) {
                 const href = $(el).attr("href");

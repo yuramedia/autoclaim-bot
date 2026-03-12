@@ -6,7 +6,7 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
 import { User } from "../database/models/User";
 import { HoyolabService, type GameAccount } from "../services/hoyolab";
-import { CodeSourceService, type RedeemCode } from "../services/code-source";
+import { CodeSourceService } from "../services/code-source";
 import { getGameDisplayName } from "../constants";
 
 export const data = new SlashCommandBuilder()

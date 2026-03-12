@@ -111,26 +111,26 @@ function parseApiData(json: { nodes?: { data?: unknown[] }[] }): AnimeEntry[] {
         const node = json.nodes?.[1];
         if (!node?.data) return [];
 
-        const data = node.data as unknown[];
+        const nodeData = node.data as unknown[];
 
         // Find the anime array indices (second element in data array)
-        const animeIndices = data[1] as number[];
+        const animeIndices = nodeData[1] as number[];
         if (!Array.isArray(animeIndices)) return [];
 
         for (const idx of animeIndices) {
-            const entry = data[idx] as Record<string, number>;
+            const entry = nodeData[idx] as Record<string, number>;
             if (!entry) continue;
 
             const anime: AnimeEntry = {
-                id: resolveValue(data, entry.id) as number,
-                mal_id: resolveValue(data, entry.mal_id) as number,
-                title: resolveValue(data, entry.title) as string,
-                title_english: resolveValue(data, entry.title_english) as string | null,
-                title_japanese: resolveValue(data, entry.title_japanese) as string | null,
-                image_url: resolveValue(data, entry.image_url) as string,
-                notes: resolveValue(data, entry.notes) as string | null,
-                created_at: resolveValue(data, entry.created_at) as string,
-                updated_at: resolveValue(data, entry.updated_at) as string,
+                id: resolveValue(nodeData, entry.id) as number,
+                mal_id: resolveValue(nodeData, entry.mal_id) as number,
+                title: resolveValue(nodeData, entry.title) as string,
+                title_english: resolveValue(nodeData, entry.title_english) as string | null,
+                title_japanese: resolveValue(nodeData, entry.title_japanese) as string | null,
+                image_url: resolveValue(nodeData, entry.image_url) as string,
+                notes: resolveValue(nodeData, entry.notes) as string | null,
+                created_at: resolveValue(nodeData, entry.created_at) as string,
+                updated_at: resolveValue(nodeData, entry.updated_at) as string,
                 releases: [],
                 alternatives: [],
                 unmuxed: [],
@@ -138,28 +138,28 @@ function parseApiData(json: { nodes?: { data?: unknown[] }[] }): AnimeEntry[] {
             };
 
             // Parse releases
-            const releaseIndices = resolveValue(data, entry.releases);
+            const releaseIndices = resolveValue(nodeData, entry.releases);
             if (Array.isArray(releaseIndices)) {
                 for (const relIdx of releaseIndices) {
-                    const relEntry = data[relIdx as number] as Record<string, number>;
+                    const relEntry = nodeData[relIdx as number] as Record<string, number>;
                     if (!relEntry) continue;
 
                     // Get download_links - it's an array of indices pointing to actual URLs
-                    const downloadLinksIndices = resolveValue(data, relEntry.download_links);
+                    const downloadLinksIndices = resolveValue(nodeData, relEntry.download_links);
                     let downloadLinks: string[] | null = null;
 
                     if (Array.isArray(downloadLinksIndices)) {
                         downloadLinks = downloadLinksIndices
-                            .map(linkIdx => resolveValue(data, linkIdx as number))
+                            .map(linkIdx => resolveValue(nodeData, linkIdx as number))
                             .filter((link): link is string => typeof link === "string");
                     }
 
                     const release: AnimeRelease = {
-                        id: resolveValue(data, relEntry.id) as number,
-                        name: resolveValue(data, relEntry.name) as string,
-                        anime_id: resolveValue(data, relEntry.anime_id) as number,
-                        created_at: resolveValue(data, relEntry.created_at) as string,
-                        description: resolveValue(data, relEntry.description) as string | null,
+                        id: resolveValue(nodeData, relEntry.id) as number,
+                        name: resolveValue(nodeData, relEntry.name) as string,
+                        anime_id: resolveValue(nodeData, relEntry.anime_id) as number,
+                        created_at: resolveValue(nodeData, relEntry.created_at) as string,
+                        description: resolveValue(nodeData, relEntry.description) as string | null,
                         download_links: downloadLinks
                     };
                     anime.releases.push(release);
@@ -175,8 +175,7 @@ function parseApiData(json: { nodes?: { data?: unknown[] }[] }): AnimeEntry[] {
     return animeList;
 }
 
-function resolveValue(data: unknown[], index: number | undefined): unknown {
+function resolveValue(nodeData: unknown[], index: number | undefined): unknown {
     if (index === undefined || index === null) return null;
-    const value = data[index];
-    return value;
+    return nodeData[index];
 }

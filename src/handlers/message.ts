@@ -7,7 +7,7 @@ import { Message, EmbedBuilder, AttachmentBuilder } from "discord.js";
 import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fix";
 import { downloadMedia } from "../services/media-downloader";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
-import { fetchNyaaInfo, buildNyaaEmbed } from "../services/nyaa";
+import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
 import { getGuildSettings } from "../database/models/GuildSettings";
 
 // Cache to avoid processing same message twice
@@ -89,10 +89,32 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
 
     // Custom flow for Nyaa.si
     if (processed.platform.id === PlatformId.NYAA && processed.postId) {
-        const nyaaInfo = await fetchNyaaInfo(processed.postId);
-        if (nyaaInfo) {
-            const nyaaEmbeds = buildNyaaEmbed(nyaaInfo, processed.originalUrl);
-            embeds.push(...nyaaEmbeds);
+        // postId format: "nyaa:1273100" or "sukebei:4181966#com-15"
+        const match = processed.postId.match(/^(nyaa|sukebei):(\d+)(?:(#com-\d+))?$/);
+        if (match) {
+            const provider = match[1] as "nyaa" | "sukebei";
+            const viewId = match[2]!;
+            const commentIdKey = match[3];
+
+            if (commentIdKey) {
+                const commentId = commentIdKey.replace("#com-", "");
+                const commentData = await fetchNyaaComment(viewId, commentId, provider);
+                if (commentData) {
+                    const commentEmbeds = buildNyaaCommentEmbed(
+                        commentData.comment,
+                        commentData.torrentTitle,
+                        processed.originalUrl,
+                        provider
+                    );
+                    embeds.push(...commentEmbeds);
+                }
+            } else {
+                const nyaaInfo = await fetchNyaaInfo(viewId, provider);
+                if (nyaaInfo) {
+                    const nyaaEmbeds = buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider);
+                    embeds.push(...nyaaEmbeds);
+                }
+            }
         }
     }
     // Try to fetch rich post info for other platforms

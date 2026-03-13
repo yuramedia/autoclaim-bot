@@ -125,7 +125,7 @@ export const PLATFORMS: PlatformConfig[] = [
         id: PlatformId.NYAA,
         name: "Nyaa.si",
         color: 0x0089ff,
-        patterns: [/https?:\/\/(www\.)?nyaa\.si\/view\/\d+/i],
+        patterns: [/https?:\/\/(www\.)?nyaa\.si\/view\/\d+/i, /https?:\/\/(www\.)?sukebei\.nyaa\.si\/view\/\d+/i],
         fixes: [] // Rich embed only, data fetched via cheerio
     }
 ];

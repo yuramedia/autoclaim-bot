@@ -96,8 +96,15 @@ export function extractPostId(url: string, platform: PlatformConfig): string | n
             return pixivMatch?.[1] ?? null;
         }
         case PlatformId.NYAA: {
-            const nyaaMatch = url.match(/\/view\/(\d+)/);
-            return nyaaMatch?.[1] ?? null;
+            const isSukebei = url.includes("sukebei.nyaa.si");
+            const provider = isSukebei ? "sukebei" : "nyaa";
+            // Match the view ID and optional comment hash
+            const nyaaMatch = url.match(/\/view\/(\d+)(?:(#com-\d+))?/);
+            if (nyaaMatch) {
+                const idPart = nyaaMatch[2] ? `${nyaaMatch[1]}${nyaaMatch[2]}` : nyaaMatch[1]!;
+                return `${provider}:${idPart}`;
+            }
+            return null;
         }
         default:
             return null;

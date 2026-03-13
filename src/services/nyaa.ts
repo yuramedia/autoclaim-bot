@@ -4,122 +4,139 @@
  */
 
 import axios from "axios";
-import * as cheerio from "cheerio";
 import { EmbedBuilder } from "discord.js";
-import type { NyaaTorrentInfo } from "../types/nyaa";
+import type { NyaaTorrentInfo, NyaaComment, NyaaApiResponse } from "../types/nyaa";
 import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
 
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
 
 /**
- * Fetch and extract torrent information from a nyaa.si view page
+ * Fetch and extract torrent information from a nyaa.si view page via NyaaAPI
  * @param viewId - The ID of the torrent page
+ * @param provider - 'nyaa' or 'sukebei'
  * @returns Parsed torrent information or null if failed
  */
-export async function fetchNyaaInfo(viewId: string): Promise<NyaaTorrentInfo | null> {
+export async function fetchNyaaInfo(
+    viewId: string,
+    provider: "nyaa" | "sukebei" = "nyaa"
+): Promise<NyaaTorrentInfo | null> {
     try {
-        const url = `https://nyaa.si/view/${viewId}`;
-        const response = await axios.get(url, {
-            timeout: 15000,
-            headers: {
-                "User-Agent":
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
+        const url = `https://nyaaapi.onrender.com/${provider}/id/${viewId}`;
+        const response = await axios.get<NyaaApiResponse>(url, {
+            timeout: 15000
         });
 
-        const $ = cheerio.load(response.data);
-
-        // Extract title
-        const title = $("h3.panel-title").first().text().trim();
-        if (!title) return null;
-
-        // Extract metadata from the rows
-        let category = "Unknown";
-        let uploader = "Anonymous";
-        let information: string | null = null;
-        let size = "Unknown";
-        let date = "Unknown";
-        let seeds = 0;
-        let leechers = 0;
-        let completed = 0;
-        let infoHash = "Unknown";
-
-        // Helper to get text from the adjacent column
-        const getTextNextTo = (label: string) => {
-            const el = $(`div.col-md-1:contains('${label}')`).first();
-            return el.length ? el.next("div.col-md-5").text().trim() : "";
-        };
-
-        // Category
-        const catText = getTextNextTo("Category:");
-        if (catText) category = catText.replace(/\s+/g, " ").trim();
-
-        // Uploader
-        const uplText = getTextNextTo("Submitter:");
-        if (uplText) uploader = uplText;
-
-        // Information
-        const infoEl = $(`div.col-md-1:contains('Information:')`).first();
-        if (infoEl.length) {
-            const nextEl = infoEl.next("div.col-md-5");
-            const link = nextEl.find("a").attr("href");
-            information = link ? link.trim() : nextEl.text().trim();
-            if (information === "No information") information = null;
-        }
-
-        // Date
-        const dateText = getTextNextTo("Date:");
-        if (dateText) date = dateText;
-
-        // Size
-        const sizeText = getTextNextTo("File size:");
-        if (sizeText) size = sizeText;
-
-        // Seeds
-        const seedsText = getTextNextTo("Seeders:");
-        if (seedsText) seeds = parseInt(seedsText, 10) || 0;
-
-        // Leechers
-        const leechText = getTextNextTo("Leechers:");
-        if (leechText) leechers = parseInt(leechText, 10) || 0;
-
-        // Completed
-        const compText = getTextNextTo("Completed:");
-        if (compText) completed = parseInt(compText, 10) || 0;
-
-        // Info hash
-        const hashEl = $(`div.col-md-1:contains('Info hash:')`).first();
-        if (hashEl.length) {
-            const nextEl = hashEl.next("div.col-md-5");
-            infoHash = nextEl.find("kbd").text().trim() || nextEl.text().trim() || infoHash;
-        }
-
-        // Links
-        const torrentUrl =
-            $(".panel-footer a")
-                .filter((i, el) => $(el).attr("href")?.endsWith(".torrent") === true)
-                .attr("href") || null;
-        const magnetLink = $(".panel-footer a[href^='magnet:']").attr("href") || "";
+        const data = response.data;
+        if (!data || !data.title) return null;
 
         return {
-            title,
-            category,
-            uploader,
-            information,
-            seeds,
-            leechers,
-            completed,
-            size,
-            date,
-            infoHash,
-            magnetLink,
-            torrentUrl: torrentUrl ? `https://nyaa.si${torrentUrl}` : null
+            title: data.title,
+            category: data.category || "Unknown",
+            uploader: data.uploader || "Anonymous",
+            information: data.information || null,
+            seeds: data.seeds || 0,
+            leechers: data.leechers || 0,
+            completed: data.completed || 0,
+            size: data.size || "Unknown",
+            date: data.date || "Unknown",
+            infoHash: data.hash || "Unknown",
+            magnetLink: data.magnetLink || "",
+            torrentUrl: data.torrentUrl
+                ? `https://${provider === "sukebei" ? "sukebei." : ""}nyaa.si${data.torrentUrl}`
+                : null
         };
     } catch (error) {
-        console.error(`Failed to fetch Nyaa.si info for ${viewId}:`, error);
+        console.error(`Failed to fetch ${provider}.nyaa.si info for ${viewId}:`, error);
         return null;
     }
+}
+
+/**
+ * Fetch a specific comment from a nyaa.si view page via NyaaAPI
+ * @param viewId - The ID of the torrent page
+ * @param commentId - The ID of the comment (from `#com-XX`)
+ * @param provider - 'nyaa' or 'sukebei'
+ * @returns Parsed comment information and torrent title, or null if failed
+ */
+export async function fetchNyaaComment(
+    viewId: string,
+    commentId: string,
+    provider: "nyaa" | "sukebei" = "nyaa"
+): Promise<{ comment: NyaaComment; torrentTitle: string } | null> {
+    try {
+        const url = `https://nyaaapi.onrender.com/${provider}/id/${viewId}`;
+        const response = await axios.get<NyaaApiResponse>(url, {
+            timeout: 15000
+        });
+
+        const data = response.data;
+        if (!data || !data.comments) return null;
+
+        // The API returns links like "https://nyaa.si/view/1273100#com-24"
+        const targetLinkSuffix = `#com-${commentId}`;
+        const comment = data.comments.find(c => c.link.endsWith(targetLinkSuffix));
+
+        if (!comment) return null;
+
+        return {
+            comment,
+            torrentTitle: data.title
+        };
+    } catch (error) {
+        console.error(`Failed to fetch ${provider}.nyaa.si comment for ${viewId}#com-${commentId}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Build rich Discord embed from a Nyaa comment
+ * @param comment - Parsed Nyaa comment
+ * @param torrentTitle - Title of the torrent the comment belongs to
+ * @param url - Original Nyaa.si comment URL
+ * @returns Array of Configured EmbedBuilder (usually just one)
+ */
+export function buildNyaaCommentEmbed(
+    comment: NyaaComment,
+    torrentTitle: string,
+    url: string,
+    provider: "nyaa" | "sukebei" = "nyaa"
+): EmbedBuilder[] {
+    const domain = provider === "sukebei" ? "sukebei.nyaa.si" : "nyaa.si";
+
+    const embed = new EmbedBuilder()
+        .setColor(NYAA_COLOR)
+        .setURL(url)
+        .setTitle(`Comment on: ${torrentTitle}`.slice(0, 256))
+        .setAuthor({
+            name: comment.user || "Unknown User",
+            iconURL: comment.avatar || `https://${domain}/static/img/avatar/default.png`,
+            url: comment.profileUrl || url
+        });
+
+    let description = comment.commentBody || "*Empty comment*";
+
+    // Extract first image if any to use as embed image
+    const imageMatch = description.match(/!\[.*?\]\((.*?)\)/);
+    if (imageMatch && imageMatch[1]) {
+        embed.setImage(imageMatch[1]);
+        // Remove the first image from the description to avoid clutter, using simple replace
+        description = description.replace(imageMatch[0], "").trim();
+    }
+
+    embed.setDescription(description.slice(0, 4096) || "*Empty comment*");
+
+    // Try to parse the date as proper ISO timestamp if possible, else skip
+    try {
+        if (comment.time) {
+            const parsedDate = new Date(comment.time.replace(" UTC", "Z"));
+            if (!isNaN(parsedDate.getTime())) {
+                embed.setTimestamp(parsedDate);
+            }
+        }
+    } catch {}
+
+    return [embed];
 }
 
 /**
@@ -128,17 +145,23 @@ export async function fetchNyaaInfo(viewId: string): Promise<NyaaTorrentInfo | n
  * @param url - Original Nyaa.si url
  * @returns Configured EmbedBuilder
  */
-export function buildNyaaEmbed(info: NyaaTorrentInfo, url: string): EmbedBuilder[] {
+export function buildNyaaEmbed(
+    info: NyaaTorrentInfo,
+    url: string,
+    provider: "nyaa" | "sukebei" = "nyaa"
+): EmbedBuilder[] {
+    const domain = provider === "sukebei" ? "sukebei.nyaa.si" : "nyaa.si";
+
     const embed = new EmbedBuilder()
         .setColor(NYAA_COLOR)
         .setURL(url)
         .setTitle(info.title.slice(0, 256))
         .setAuthor({
             name: info.uploader || "nyaa",
-            iconURL: "https://nyaa.si/static/img/avatar/default.png",
-            url: "https://nyaa.si/"
+            iconURL: `https://${domain}/static/img/avatar/default.png`,
+            url: `https://${domain}/`
         })
-        .setThumbnail("https://nyaa.si/static/img/avatar/default.png");
+        .setThumbnail(`https://${domain}/static/img/avatar/default.png`);
 
     embed.addFields(
         { name: "Category", value: info.category, inline: true },

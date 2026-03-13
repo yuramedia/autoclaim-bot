@@ -5,25 +5,13 @@
 
 import mongoose, { Schema, Document } from "mongoose";
 
-// Platform IDs for configuration (matches embed-fix.ts)
-export type PlatformIdType =
-    | "twitter"
-    | "tiktok"
-    | "reddit"
-    | "instagram"
-    | "pixiv"
-    | "bluesky"
-    | "threads"
-    | "facebook"
-    | "weibo"
-    | "misskey"
-    | "plurk";
+import type { PlatformId } from "../../types/embed-fix";
 
 export interface IEmbedFixSettings {
     enabled: boolean;
     autoUpload: boolean;
     richEmbeds: boolean;
-    disabledPlatforms: PlatformIdType[];
+    disabledPlatforms: PlatformId[];
     deleteReaction: string;
 }
 

@@ -100,18 +100,19 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                 const commentId = commentIdKey.replace("#com-", "");
                 const commentData = await fetchNyaaComment(viewId, commentId, provider);
                 if (commentData) {
-                    const commentEmbeds = buildNyaaCommentEmbed(
+                    const commentEmbeds = await buildNyaaCommentEmbed(
                         commentData.comment,
                         commentData.torrentTitle,
                         processed.originalUrl,
-                        provider
+                        provider,
+                        commentData.infoHash
                     );
                     embeds.push(...commentEmbeds);
                 }
             } else {
                 const nyaaInfo = await fetchNyaaInfo(viewId, provider);
                 if (nyaaInfo) {
-                    const nyaaEmbeds = buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider);
+                    const nyaaEmbeds = await buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider);
                     embeds.push(...nyaaEmbeds);
                 }
             }

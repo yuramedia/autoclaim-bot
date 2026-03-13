@@ -8,6 +8,7 @@ import { EmbedBuilder } from "discord.js";
 import type { NyaaTorrentInfo, NyaaComment, NyaaApiResponse } from "../types/nyaa";
 import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
+import { fetchAnimeImages } from "./animetosho";
 
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
 
@@ -63,7 +64,7 @@ export async function fetchNyaaComment(
     viewId: string,
     commentId: string,
     provider: "nyaa" | "sukebei" = "nyaa"
-): Promise<{ comment: NyaaComment; torrentTitle: string } | null> {
+): Promise<{ comment: NyaaComment; torrentTitle: string; infoHash?: string } | null> {
     try {
         const url = `https://nyaaapi.onrender.com/${provider}/id/${viewId}`;
         const response = await axios.get<{ data: NyaaApiResponse }>(url, {
@@ -81,7 +82,8 @@ export async function fetchNyaaComment(
 
         return {
             comment,
-            torrentTitle: data.title
+            torrentTitle: data.title,
+            infoHash: data.infohash
         };
     } catch (error) {
         console.error(`Failed to fetch ${provider}.nyaa.si comment for ${viewId}#com-${commentId}:`, error);
@@ -96,12 +98,13 @@ export async function fetchNyaaComment(
  * @param url - Original Nyaa.si comment URL
  * @returns Array of Configured EmbedBuilder (usually just one)
  */
-export function buildNyaaCommentEmbed(
+export async function buildNyaaCommentEmbed(
     comment: NyaaComment,
     torrentTitle: string,
     url: string,
-    provider: "nyaa" | "sukebei" = "nyaa"
-): EmbedBuilder[] {
+    provider: "nyaa" | "sukebei" = "nyaa",
+    infoHash?: string
+): Promise<EmbedBuilder[]> {
     const domain = provider === "sukebei" ? "sukebei.nyaa.si" : "nyaa.si";
 
     const embed = new EmbedBuilder()
@@ -136,6 +139,25 @@ export function buildNyaaCommentEmbed(
         }
     } catch {}
 
+    // Fetch AnimeTosho images if infoHash is provided
+    if (infoHash && infoHash !== "Unknown") {
+        const images = await fetchAnimeImages(infoHash);
+
+        // Thumbnail: first screenshot
+        if (images.screenshots.length > 0) {
+            embed.setThumbnail(images.screenshots[0] || null);
+        }
+
+        // If the comment doesn't already have an image from markdown, apply cover/screenshot
+        if (!imageMatch || !imageMatch[1]) {
+            if (images.cover) {
+                embed.setImage(images.cover);
+            } else if (images.screenshots.length > 1) {
+                embed.setImage(images.screenshots[1] || null);
+            }
+        }
+    }
+
     return [embed];
 }
 
@@ -145,11 +167,11 @@ export function buildNyaaCommentEmbed(
  * @param url - Original Nyaa.si url
  * @returns Configured EmbedBuilder
  */
-export function buildNyaaEmbed(
+export async function buildNyaaEmbed(
     info: NyaaTorrentInfo,
     url: string,
     provider: "nyaa" | "sukebei" = "nyaa"
-): EmbedBuilder[] {
+): Promise<EmbedBuilder[]> {
     const domain = provider === "sukebei" ? "sukebei.nyaa.si" : "nyaa.si";
 
     const embed = new EmbedBuilder()
@@ -183,7 +205,11 @@ export function buildNyaaEmbed(
         { name: "✅ Completed", value: info.completed.toString(), inline: true },
         { name: "💾 Size", value: info.size, inline: true },
         { name: "📅 Date", value: info.date, inline: true },
-        { name: "ℹ️ Info Hash", value: `\`${info.infoHash}\``, inline: false }
+        {
+            name: "⬇️ AnimeTosho",
+            value: `[Torrent File](https://animetosho.org/view/torrent.${info.infoHash})`,
+            inline: false
+        }
     );
 
     // Try to parse the date as proper ISO timestamp if possible, else skip
@@ -195,6 +221,38 @@ export function buildNyaaEmbed(
             }
         }
     } catch {}
+
+    // Fetch AnimeTosho images for thumbnail and cover
+    if (info.infoHash && info.infoHash !== "Unknown") {
+        const images = await fetchAnimeImages(info.infoHash);
+
+        if (images.screenshots.length > 0) {
+            embed.setThumbnail(images.screenshots[0] || null);
+        }
+
+        if (images.cover) {
+            embed.setImage(images.cover);
+        } else if (images.screenshots.length > 1) {
+            embed.setImage(images.screenshots[1] || null);
+        }
+
+        if (images.directDownloads.length > 0) {
+            const ddlLinks = images.directDownloads
+                .slice(0, 5)
+                .map(dl => `[${dl.name}](${dl.url})`)
+                .join(" | ");
+
+            const fields = embed.data.fields || [];
+            const atIndex = fields.findIndex(f => f.name === "⬇️ AnimeTosho");
+            if (atIndex !== -1) {
+                fields[atIndex] = {
+                    ...fields[atIndex],
+                    name: "⬇️ Downloads",
+                    value: `${ddlLinks}\n*[View on AnimeTosho](https://animetosho.org/view/torrent.${info.infoHash})*`
+                };
+            }
+        }
+    }
 
     const embeds: EmbedBuilder[] = [embed];
     return embeds;

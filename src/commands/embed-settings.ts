@@ -113,14 +113,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
             if (enabled) {
                 // Remove from disabled list
-                const index = disabledPlatforms.indexOf(platformId);
+                const index = disabledPlatforms.indexOf(platformId as PlatformId);
                 if (index > -1) {
                     disabledPlatforms.splice(index, 1);
                 }
             } else {
                 // Add to disabled list
-                if (!disabledPlatforms.includes(platformId)) {
-                    disabledPlatforms.push(platformId);
+                if (!disabledPlatforms.includes(platformId as PlatformId)) {
+                    disabledPlatforms.push(platformId as PlatformId);
                 }
             }
 
@@ -158,7 +158,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
             // Show platforms status
             const platformStatus = PLATFORMS.map(p => {
-                const disabled = settings.embedFix.disabledPlatforms.includes(p.id);
+                const disabled = settings.embedFix.disabledPlatforms.includes(p.id as PlatformId);
                 return `${disabled ? "❌" : "✅"} ${p.name}`;
             }).join("\n");
 

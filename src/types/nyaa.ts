@@ -18,14 +18,14 @@ export interface NyaaApiResponse {
     category: string;
     uploader: string | null;
     information: string | null;
-    seeds: number;
+    seeders: number;
     leechers: number;
-    completed: number;
+    downloads: number;
     size: string;
-    date: string;
-    torrentUrl: string | null;
-    magnetLink: string;
-    hash: string;
+    time: string;
+    torrent: string | null;
+    magnet: string;
+    infohash: string;
     comments: NyaaComment[];
 }
 

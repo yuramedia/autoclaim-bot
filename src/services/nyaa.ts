@@ -23,11 +23,11 @@ export async function fetchNyaaInfo(
 ): Promise<NyaaTorrentInfo | null> {
     try {
         const url = `https://nyaaapi.onrender.com/${provider}/id/${viewId}`;
-        const response = await axios.get<NyaaApiResponse>(url, {
+        const response = await axios.get<{ data: NyaaApiResponse }>(url, {
             timeout: 15000
         });
 
-        const data = response.data;
+        const data = response.data.data;
         if (!data || !data.title) return null;
 
         return {
@@ -35,15 +35,15 @@ export async function fetchNyaaInfo(
             category: data.category || "Unknown",
             uploader: data.uploader || "Anonymous",
             information: data.information || null,
-            seeds: data.seeds || 0,
+            seeds: data.seeders || 0,
             leechers: data.leechers || 0,
-            completed: data.completed || 0,
+            completed: data.downloads || 0,
             size: data.size || "Unknown",
-            date: data.date || "Unknown",
-            infoHash: data.hash || "Unknown",
-            magnetLink: data.magnetLink || "",
-            torrentUrl: data.torrentUrl
-                ? `https://${provider === "sukebei" ? "sukebei." : ""}nyaa.si${data.torrentUrl}`
+            date: data.time || "Unknown",
+            infoHash: data.infohash || "Unknown",
+            magnetLink: data.magnet || "",
+            torrentUrl: data.torrent
+                ? `https://${provider === "sukebei" ? "sukebei." : ""}nyaa.si${data.torrent}`
                 : null
         };
     } catch (error) {
@@ -66,11 +66,11 @@ export async function fetchNyaaComment(
 ): Promise<{ comment: NyaaComment; torrentTitle: string } | null> {
     try {
         const url = `https://nyaaapi.onrender.com/${provider}/id/${viewId}`;
-        const response = await axios.get<NyaaApiResponse>(url, {
+        const response = await axios.get<{ data: NyaaApiResponse }>(url, {
             timeout: 15000
         });
 
-        const data = response.data;
+        const data = response.data.data;
         if (!data || !data.comments) return null;
 
         // The API returns links like "https://nyaa.si/view/1273100#com-24"

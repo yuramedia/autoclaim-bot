@@ -120,5 +120,12 @@ export const PLATFORMS: PlatformConfig[] = [
         color: 0xff574d,
         patterns: [/https?:\/\/(www\.)?plurk\.com\/p\/\w+/i],
         fixes: [] // Rich embed only
+    },
+    {
+        id: PlatformId.NYAA,
+        name: "Nyaa.si",
+        color: 0x0089ff,
+        patterns: [/https?:\/\/(www\.)?nyaa\.si\/view\/\d+/i],
+        fixes: [] // Rich embed only, data fetched via cheerio
     }
 ];

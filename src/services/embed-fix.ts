@@ -95,6 +95,10 @@ export function extractPostId(url: string, platform: PlatformConfig): string | n
             const pixivMatch = url.match(/\/artworks\/(\d+)/);
             return pixivMatch?.[1] ?? null;
         }
+        case PlatformId.NYAA: {
+            const nyaaMatch = url.match(/\/view\/(\d+)/);
+            return nyaaMatch?.[1] ?? null;
+        }
         default:
             return null;
     }

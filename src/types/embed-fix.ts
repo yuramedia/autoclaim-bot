@@ -15,7 +15,8 @@ export enum PlatformId {
     FACEBOOK = "facebook",
     WEIBO = "weibo",
     MISSKEY = "misskey",
-    PLURK = "plurk"
+    PLURK = "plurk",
+    NYAA = "nyaa"
 }
 
 /** Configuration for a specific platform */

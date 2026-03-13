@@ -7,6 +7,7 @@ import { Message, EmbedBuilder, AttachmentBuilder } from "discord.js";
 import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fix";
 import { downloadMedia } from "../services/media-downloader";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
+import { fetchNyaaInfo, buildNyaaEmbed } from "../services/nyaa";
 import { getGuildSettings } from "../database/models/GuildSettings";
 
 // Cache to avoid processing same message twice
@@ -86,8 +87,16 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
 
     const canDownload = DOWNLOADABLE_PLATFORMS.includes(processed.platform.id);
 
-    // Try to fetch rich post info
-    if (settings.embedFix.richEmbeds) {
+    // Custom flow for Nyaa.si
+    if (processed.platform.id === PlatformId.NYAA && processed.postId) {
+        const nyaaInfo = await fetchNyaaInfo(processed.postId);
+        if (nyaaInfo) {
+            const nyaaEmbeds = buildNyaaEmbed(nyaaInfo, processed.originalUrl);
+            embeds.push(...nyaaEmbeds);
+        }
+    }
+    // Try to fetch rich post info for other platforms
+    else if (settings.embedFix.richEmbeds) {
         const postInfo = await fetchPostInfo(processed.originalUrl, processed.platform, processed.postId);
 
         if (postInfo) {

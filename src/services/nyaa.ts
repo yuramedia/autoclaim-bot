@@ -31,7 +31,7 @@ export async function fetchNyaaInfo(viewId: string): Promise<NyaaTorrentInfo | n
         const $ = cheerio.load(response.data);
 
         // Extract title
-        const title = $("h3.panel-title").text().trim();
+        const title = $("h3.panel-title").first().text().trim();
         if (!title) return null;
 
         // Extract metadata from the rows
@@ -45,62 +45,54 @@ export async function fetchNyaaInfo(viewId: string): Promise<NyaaTorrentInfo | n
         let completed = 0;
         let infoHash = "Unknown";
 
+        // Helper to get text from the adjacent column
+        const getTextNextTo = (label: string) => {
+            const el = $(`div.col-md-1:contains('${label}')`).first();
+            return el.length ? el.next("div.col-md-5").text().trim() : "";
+        };
+
         // Category
-        const catElem = $("div.row:contains('Category:')").first();
-        if (catElem.length) {
-            category = catElem.find(".col-md-5").first().text().trim() || category;
-            // Clean up extra spaces/newlines
-            category = category.replace(/\s+/g, " ").trim();
-        }
+        const catText = getTextNextTo("Category:");
+        if (catText) category = catText.replace(/\s+/g, " ").trim();
 
         // Uploader
-        const uploaderElem = $("div.row:contains('Submitter:')").first();
-        if (uploaderElem.length) {
-            uploader = uploaderElem.find(".col-md-5").first().text().trim() || uploader;
-        }
+        const uplText = getTextNextTo("Submitter:");
+        if (uplText) uploader = uplText;
 
         // Information
-        const infoElem = $("div.row:contains('Information:')").first();
-        if (infoElem.length) {
-            const link = infoElem.find("a").attr("href");
-            information = link ? link.trim() : infoElem.find(".col-md-5").first().text().trim();
+        const infoEl = $(`div.col-md-1:contains('Information:')`).first();
+        if (infoEl.length) {
+            const nextEl = infoEl.next("div.col-md-5");
+            const link = nextEl.find("a").attr("href");
+            information = link ? link.trim() : nextEl.text().trim();
             if (information === "No information") information = null;
         }
 
         // Date
-        const dateElem = $("div.row:contains('Date:')").first();
-        if (dateElem.length) {
-            date = dateElem.find(".col-md-5").first().text().trim() || date;
-        }
+        const dateText = getTextNextTo("Date:");
+        if (dateText) date = dateText;
 
         // Size
-        const sizeElem = $("div.row:contains('File size:')").first();
-        if (sizeElem.length) {
-            size = sizeElem.find(".col-md-5").first().text().trim() || size;
-        }
+        const sizeText = getTextNextTo("File size:");
+        if (sizeText) size = sizeText;
 
         // Seeds
-        const seedsElem = $("div.row:contains('Seeders:')").first();
-        if (seedsElem.length) {
-            seeds = parseInt(seedsElem.find(".col-md-5").first().text().trim(), 10) || 0;
-        }
+        const seedsText = getTextNextTo("Seeders:");
+        if (seedsText) seeds = parseInt(seedsText, 10) || 0;
 
         // Leechers
-        const leechElem = $("div.row:contains('Leechers:')").first();
-        if (leechElem.length) {
-            leechers = parseInt(leechElem.find(".col-md-5").first().text().trim(), 10) || 0;
-        }
+        const leechText = getTextNextTo("Leechers:");
+        if (leechText) leechers = parseInt(leechText, 10) || 0;
 
         // Completed
-        const compElem = $("div.row:contains('Completed:')").first();
-        if (compElem.length) {
-            completed = parseInt(compElem.find(".col-md-5").first().text().trim(), 10) || 0;
-        }
+        const compText = getTextNextTo("Completed:");
+        if (compText) completed = parseInt(compText, 10) || 0;
 
         // Info hash
-        const hashElem = $("div.row:contains('Info hash:')").first();
-        if (hashElem.length) {
-            infoHash = hashElem.find("kbd").text().trim() || hashElem.find(".col-md-5").first().text().trim();
+        const hashEl = $(`div.col-md-1:contains('Info hash:')`).first();
+        if (hashEl.length) {
+            const nextEl = hashEl.next("div.col-md-5");
+            infoHash = nextEl.find("kbd").text().trim() || nextEl.text().trim() || infoHash;
         }
 
         // Links
@@ -142,7 +134,7 @@ export function buildNyaaEmbed(info: NyaaTorrentInfo, url: string): EmbedBuilder
         .setURL(url)
         .setTitle(info.title.slice(0, 256))
         .setAuthor({
-            name: "Nyaa",
+            name: info.uploader || "nyaa",
             iconURL: "https://nyaa.si/static/img/avatar/default.png",
             url: "https://nyaa.si/"
         })

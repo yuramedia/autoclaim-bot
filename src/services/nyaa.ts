@@ -210,8 +210,8 @@ export async function buildNyaaEmbed(
         { name: "💾 Size", value: info.size, inline: true },
         { name: "📅 Date", value: info.date, inline: true },
         {
-            name: "⬇️ AnimeTosho",
-            value: `[Torrent File](https://animetosho.org/view/${info.infoHash})`,
+            name: "ℹ️ Info Hash",
+            value: ` ${info.infoHash}`,
             inline: false
         }
     );

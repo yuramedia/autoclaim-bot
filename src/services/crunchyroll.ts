@@ -512,8 +512,68 @@ export class CrunchyrollService {
             // Get the first matching series
             const series = seriesResults.items[0]!;
 
+            // Fetch episodes using the new method
+            return await this.fetchEpisodesBySeriesId(series.id, episodeNumber);
+        } catch (error) {
+            console.error("Crunchyroll search error:", error);
+            return [];
+        }
+    }
+
+    /**
+     * Search series and return autocomplete results
+     */
+    async searchSeriesAutocomplete(query: string): Promise<{ name: string; value: string }[]> {
+        if (!query || query.length < 2) return [];
+
+        const auth = await this.getAccountAuth();
+        if (!auth) return [];
+
+        try {
+            const params = new URLSearchParams({
+                q: query,
+                n: "25",
+                type: "series"
+            });
+
+            const response = await fetch(`${this.API_BASE}/content/v2/discover/search?${params}`, {
+                headers: {
+                    Authorization: `Bearer ${auth.access_token}`,
+                    "User-Agent": this.USER_AGENT
+                }
+            });
+
+            if (!response.ok) return [];
+
+            const data = (await response.json()) as {
+                data: { type: string; items: { id: string; title: string; slug_title: string }[] }[];
+            };
+
+            const seriesResults = data.data?.find(d => d.type === "series");
+            if (!seriesResults?.items?.length) return [];
+
+            return seriesResults.items.map(s => ({
+                name: s.title.substring(0, 100),
+                // value is string option max 100 characters.
+                // We will use the exact title, because the existing `searchEpisode(animeInput)` searches by string anyway!
+                value: s.title.substring(0, 100)
+            }));
+        } catch (error) {
+            console.error("Crunchyroll autocomplete error:", error);
+            return [];
+        }
+    }
+
+    /**
+     * Fetch episodes for a series ID
+     */
+    async fetchEpisodesBySeriesId(seriesId: string, episodeNumber?: number): Promise<CrunchyrollEpisode[]> {
+        const auth = await this.getAccountAuth();
+        if (!auth) return [];
+
+        try {
             // Fetch seasons for this series
-            const seasonsRes = await fetch(`${this.API_BASE}/content/v2/cms/series/${series.id}/seasons?locale=en-US`, {
+            const seasonsRes = await fetch(`${this.API_BASE}/content/v2/cms/series/${seriesId}/seasons?locale=en-US`, {
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
                     "User-Agent": this.USER_AGENT
@@ -552,6 +612,8 @@ export class CrunchyrollService {
             if (episodeNumber !== undefined) {
                 return episodesData.data.filter(
                     ep =>
+                        ep.episode_number === episodeNumber ||
+                        ep.episode === String(episodeNumber) ||
                         ep.episode_metadata?.episode_number === episodeNumber ||
                         ep.episode_metadata?.episode === String(episodeNumber)
                 );
@@ -559,7 +621,7 @@ export class CrunchyrollService {
 
             return episodesData.data;
         } catch (error) {
-            console.error("Crunchyroll search error:", error);
+            console.error("Crunchyroll series episodes fetch error:", error);
             return [];
         }
     }

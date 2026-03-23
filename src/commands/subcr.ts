@@ -6,6 +6,7 @@
 import {
     SlashCommandBuilder,
     type ChatInputCommandInteraction,
+    type AutocompleteInteraction,
     EmbedBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
@@ -13,6 +14,7 @@ import {
     AttachmentBuilder
 } from "discord.js";
 import { CrunchyrollService } from "../services/crunchyroll";
+import type { CrunchyrollEpisode } from "../types/crunchyroll";
 import { LANG_MAP, CRUNCHYROLL_COLOR } from "../constants";
 
 const service = new CrunchyrollService();
@@ -23,21 +25,38 @@ function langNameToCode(name: string): string | null {
     return entry?.[0] || null;
 }
 
-/** Extract episode ID from Crunchyroll URL */
-function parseEpisodeId(input: string): string | null {
+interface ParsedUrl {
+    type: "episode" | "series";
+    id: string;
+}
+
+/** Extract episode or series ID from Crunchyroll URL */
+function parseCrunchyrollUrl(input: string): ParsedUrl | null {
     // Direct ID format (e.g., GEXH3WP91)
-    if (/^[A-Z0-9]{9,}$/.test(input)) return input;
+    if (/^[A-Z0-9]{9,}$/.test(input)) return { type: "episode", id: input };
 
     // URL format: https://www.crunchyroll.com/watch/GEXH3WP91/...
-    const match = input.match(/crunchyroll\.com\/watch\/([A-Z0-9]+)/i);
-    return match?.[1] || null;
+    let match = input.match(/crunchyroll\.com\/watch\/([A-Z0-9]+)/i);
+    if (match) return { type: "episode", id: match[1]! };
+
+    // Series URL format: https://www.crunchyroll.com/series/GT00365589/...
+    match = input.match(/crunchyroll\.com\/series\/([A-Z0-9]+)/i);
+    if (match) return { type: "series", id: match[1]! };
+
+    return null;
 }
 
 export const data = new SlashCommandBuilder()
     .setName("subcr")
     .setDescription("Download subtitle dari episode Crunchyroll")
     .addStringOption(opt => opt.setName("url").setDescription("URL atau ID episode Crunchyroll").setRequired(false))
-    .addStringOption(opt => opt.setName("anime").setDescription("Judul anime (romaji atau English)").setRequired(false))
+    .addStringOption(opt =>
+        opt
+            .setName("anime")
+            .setDescription("Judul anime (romaji atau English)")
+            .setRequired(false)
+            .setAutocomplete(true)
+    )
     .addIntegerOption(opt =>
         opt.setName("episode").setDescription("Pilih Nomor episode").setRequired(false).setMinValue(1)
     )
@@ -53,6 +72,22 @@ export const data = new SlashCommandBuilder()
                     .map(([, name]) => ({ name, value: name }))
             )
     );
+
+export async function autocomplete(interaction: AutocompleteInteraction) {
+    const focusedValue = interaction.options.getFocused();
+    if (!focusedValue) {
+        await interaction.respond([]);
+        return;
+    }
+
+    try {
+        const results = await service.searchSeriesAutocomplete(focusedValue);
+        await interaction.respond(results);
+    } catch (error) {
+        console.error("Autocomplete error:", error);
+        await interaction.respond([]);
+    }
+}
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const urlInput = interaction.options.getString("url");
@@ -76,40 +111,107 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     try {
         let episodeId: string | null = null;
         let episodeTitle = "";
+        let episodes: CrunchyrollEpisode[] = [];
 
         if (urlInput) {
-            // Mode 1: Direct URL/ID
-            episodeId = parseEpisodeId(urlInput);
-            if (!episodeId) {
+            // Mode 1: Direct URL/ID or Series URL
+            const parsed = parseCrunchyrollUrl(urlInput);
+            if (!parsed) {
                 await interaction.editReply({
                     content:
-                        "❌ URL/ID tidak valid. Contoh: `https://www.crunchyroll.com/watch/GEXH3WP91/...` atau `GEXH3WP91`"
-                });
-                return;
-            }
-            episodeTitle = episodeId;
-        } else if (animeInput) {
-            // Mode 2: Search by anime title + episode number
-            if (!episodeInput) {
-                await interaction.editReply({
-                    content: "❌ Harus mengisi nomor `episode` jika mencari berdasarkan judul anime."
+                        "❌ URL/ID tidak valid. Contoh: `https://www.crunchyroll.com/watch/GEXH3WP91/...` atau `https://www.crunchyroll.com/series/GT00365589`"
                 });
                 return;
             }
 
-            const episodes = await service.searchEpisode(animeInput, episodeInput);
+            if (parsed.type === "series") {
+                episodes = await service.fetchEpisodesBySeriesId(parsed.id, episodeInput ?? undefined);
+                if (episodes.length === 0) {
+                    await interaction.editReply({
+                        content: episodeInput
+                            ? `❌ Tidak ditemukan episode **${episodeInput}** untuk series tersebut.`
+                            : `❌ Tidak ditemukan episode untuk series tersebut.`
+                    });
+                    return;
+                }
+            } else {
+                episodeId = parsed.id;
+                episodeTitle = episodeId;
+            }
+        } else if (animeInput) {
+            // Mode 2: Search by anime title + optional episode number
+            episodes = await service.searchEpisode(animeInput, episodeInput ?? undefined);
             if (episodes.length === 0) {
                 await interaction.editReply({
-                    content: `❌ Tidak ditemukan episode **${episodeInput}** untuk anime "**${animeInput}**".`
+                    content: episodeInput
+                        ? `❌ Tidak ditemukan episode **${episodeInput}** untuk anime "**${animeInput}**".`
+                        : `❌ Tidak ditemukan episode untuk anime "**${animeInput}**".`
                 });
                 return;
             }
+        }
 
-            const ep = episodes[0]!;
-            episodeId = ep.id;
-            episodeTitle = `${ep.episode_metadata?.series_title || animeInput} - Episode ${ep.episode_metadata?.episode || episodeInput}`;
-            if (ep.title && !/^Episode\s+0*\d+$/i.test(ep.title)) {
-                episodeTitle += ` - ${ep.title}`;
+        // Feature: Interactive Episode Selection
+        if (!episodeId) {
+            if (!episodeInput && episodes.length > 1) {
+                // Determine series title safely
+                const firstEp = episodes[0]!;
+                const baseTitle = firstEp.episode_metadata?.series_title || animeInput || "Series";
+
+                const options = episodes.slice(0, 25).map(ep => {
+                    const epNumStr = ep.episode || ep.episode_number || "?";
+                    return {
+                        label: `Episode ${epNumStr}`.substring(0, 100),
+                        description: (ep.title || baseTitle).substring(0, 100),
+                        value: ep.id
+                    };
+                });
+
+                const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+                    new StringSelectMenuBuilder()
+                        .setCustomId("select_episode")
+                        .setPlaceholder("Pilih Episode...")
+                        .addOptions(options)
+                );
+
+                const reply = await interaction.editReply({
+                    content: `Terdapat beberapa episode untuk anime **${baseTitle}**. Silakan pilih di bawah ini:`,
+                    components: [row]
+                });
+
+                try {
+                    const confirmation = await reply.awaitMessageComponent({
+                        filter: i => i.user.id === interaction.user.id && i.customId === "select_episode",
+                        time: 60_000,
+                        componentType: ComponentType.StringSelect
+                    });
+
+                    episodeId = confirmation.values[0]!;
+                    const ep = episodes.find(e => e.id === episodeId)!;
+                    episodeTitle = `${ep.episode_metadata?.series_title || baseTitle} - Episode ${ep.episode || ep.episode_number || "?"}`;
+                    if (ep.title && !/^Episode\s+0*\d+$/i.test(ep.title)) {
+                        episodeTitle += ` - ${ep.title}`;
+                    }
+
+                    await confirmation.update({
+                        content: `⏳ Memproses subtitle untuk **${episodeTitle}**...`,
+                        components: []
+                    });
+                } catch {
+                    await interaction.editReply({
+                        content: "❌ Waktu habis untuk memilih episode. Silakan ulangi command.",
+                        components: []
+                    });
+                    return;
+                }
+            } else {
+                // Auto-select the only/first episode
+                const ep = episodes[0]!;
+                episodeId = ep.id;
+                episodeTitle = `${ep.episode_metadata?.series_title || animeInput || "Series"} - Episode ${ep.episode || ep.episode_number || episodeInput || "?"}`;
+                if (ep.title && !/^Episode\s+0*\d+$/i.test(ep.title)) {
+                    episodeTitle += ` - ${ep.title}`;
+                }
             }
         }
 

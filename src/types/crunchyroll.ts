@@ -89,6 +89,8 @@ export interface CrunchyrollEpisode {
         }[];
     };
     slug_title: string;
+    episode?: string;
+    episode_number?: number;
 }
 
 export interface CrunchyrollEpisodes {

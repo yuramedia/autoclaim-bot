@@ -573,11 +573,12 @@ export class CrunchyrollService {
         if (!auth) return null;
 
         try {
-            const url = `https://cr-play-service.prd.crunchyrollsvc.com/v1/${episodeId}/web/firefox/play`;
+            const url = `https://cr-play-service.prd.crunchyrollsvc.com/v1/${episodeId}/tv/android_tv/play`;
             const response = await fetch(url, {
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/118.0"
+                    "User-Agent":
+                        "Crunchyroll/ANDROIDTV/3.50.0_22282 (Android 12; en-US; SHIELD Android TV Build/SR1A.211012.001)"
                 }
             });
 

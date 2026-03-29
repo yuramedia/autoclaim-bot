@@ -145,3 +145,37 @@ export async function downloadMedia(videoUrl: string): Promise<DownloadResult> {
         };
     }
 }
+
+/**
+ * Download a direct media URL (bypasses VKrDownloader)
+ * @param url Direct media URL (e.g. mp4 link)
+ * @param defaultFilename Fallback filename
+ */
+export async function downloadDirect(url: string, defaultFilename: string = "video.mp4"): Promise<DownloadResult> {
+    try {
+        const response = await axios.get(url, {
+            responseType: "arraybuffer",
+            timeout: 60000,
+            maxContentLength: MAX_DOWNLOAD_SIZE,
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+        });
+
+        const buffer = Buffer.from(response.data);
+        if (buffer.length > MAX_DOWNLOAD_SIZE) {
+            return { success: false, error: "File too large" };
+        }
+
+        return {
+            success: true,
+            buffer,
+            filename: defaultFilename
+        };
+    } catch (error: any) {
+        return {
+            success: false,
+            error: error.message || "Direct download failed"
+        };
+    }
+}

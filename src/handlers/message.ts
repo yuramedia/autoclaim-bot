@@ -5,7 +5,7 @@
 
 import { Message, EmbedBuilder, AttachmentBuilder } from "discord.js";
 import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fix";
-import { downloadMedia } from "../services/media-downloader";
+import { downloadMedia, downloadDirect } from "../services/media-downloader";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
 import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
 import { getGuildSettings } from "../database/models/GuildSettings";
@@ -128,7 +128,14 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
 
             // Try to download and upload media if enabled (only for supported platforms)
             if (settings.embedFix.autoUpload && postInfo.video && canDownload) {
-                const downloadResult = await downloadMedia(processed.originalUrl);
+                let downloadResult;
+
+                if (processed.platform.id === PlatformId.FACEBOOK) {
+                    // Facebook video URLs from our scraper are direct mp4 links
+                    downloadResult = await downloadDirect(postInfo.video, "facebook_video.mp4");
+                } else {
+                    downloadResult = await downloadMedia(processed.originalUrl);
+                }
 
                 if (downloadResult.success && downloadResult.buffer) {
                     const attachment = new AttachmentBuilder(downloadResult.buffer, {

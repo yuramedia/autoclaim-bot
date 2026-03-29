@@ -258,14 +258,48 @@ export async function fetchFacebookInfo(url: string): Promise<PostInfo | null> {
 
         // Get images
         const images: string[] = [];
+        const authorName = tags["og:title"] || "Facebook User";
+        const urlMatch = tags["og:url"] || url;
+
+        let username = "facebook";
+        if (urlMatch) {
+            try {
+                const urlObj = new URL(urlMatch);
+                if (urlObj.hostname.includes("facebook.com") || urlObj.hostname.includes("facebed.com")) {
+                    const pathParts = urlObj.pathname.split("/").filter(Boolean);
+                    // Common paths to ignore when extracting username from URL
+                    const ignoreWords = [
+                        "reel",
+                        "share",
+                        "groups",
+                        "watch",
+                        "photo",
+                        "story.php",
+                        "events",
+                        "gaming",
+                        "video.php",
+                        "permalink"
+                    ];
+                    if (pathParts.length > 0) {
+                        const firstPart = pathParts[0] as string;
+                        if (!ignoreWords.includes(firstPart.toLowerCase())) {
+                            username = firstPart;
+                        }
+                    }
+                }
+            } catch {
+                // Ignore URL parse errors
+            }
+        }
+
         if (tags["og:image"]) images.push(tags["og:image"]);
 
         return {
             author: {
-                name: title,
-                username: "facebook",
+                name: authorName,
+                username,
                 avatar: tags["og:image"] || undefined,
-                url: tags["og:url"] || url
+                url: urlMatch
             },
             content: tags["og:description"] || "",
             images,

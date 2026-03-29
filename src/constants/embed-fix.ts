@@ -95,7 +95,10 @@ export const PLATFORMS: PlatformConfig[] = [
             // fb.watch short links
             /https?:\/\/(www\.)?fb\.watch\/\w+/i
         ],
-        fixes: [{ oldDomain: "facebook.com", newDomain: "facebed.com" }]
+        fixes: [
+            { oldDomain: "facebook.com", newDomain: "facebed.com" },
+            { oldDomain: "fb.watch", newDomain: "facebed.com" }
+        ]
     },
     {
         id: PlatformId.WEIBO,

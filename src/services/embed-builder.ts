@@ -5,6 +5,7 @@
 
 import { EmbedBuilder } from "discord.js";
 import axios from "axios";
+import * as cheerio from "cheerio";
 import { PlatformId } from "../types/embed-fix";
 import type { PlatformConfig } from "../types/embed-fix";
 import type { PostInfo } from "../types";
@@ -19,6 +20,19 @@ function formatNumber(num: number): string {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
     if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
     return num.toString();
+}
+
+/**
+ * Parse string stats (like "1.5K", "2M") to number
+ */
+function parseStat(str?: string): number {
+    if (!str) return 0;
+    const clean = str.replace(/[^\d.]/g, "");
+    let num = parseFloat(clean);
+    if (str.toLowerCase().includes("k")) num *= 1000;
+    if (str.toLowerCase().includes("m")) num *= 1000000;
+    if (str.toLowerCase().includes("b")) num *= 1000000000;
+    return Math.round(num) || 0;
 }
 
 /**
@@ -187,6 +201,89 @@ export async function fetchBlueskyInfo(url: string): Promise<PostInfo | null> {
 }
 
 /**
+ * Fetch Facebook post info via facebed.com OpenGraph data
+ * @param url - Facebook post URL
+ * @returns Post info or null on error
+ */
+export async function fetchFacebookInfo(url: string): Promise<PostInfo | null> {
+    try {
+        // Swap to facebed.com if it's facebook.com or fb.watch
+        let facebedUrl = url;
+        if (url.includes("facebook.com")) {
+            facebedUrl = url.replace("facebook.com", "facebed.com");
+        } else if (url.includes("fb.watch")) {
+            facebedUrl = url.replace("fb.watch", "facebed.com");
+        }
+
+        const res = await axios.get(facebedUrl, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"
+            },
+            timeout: 10000
+        });
+
+        const $ = cheerio.load(res.data);
+        const tags: Record<string, string> = {};
+
+        $('meta[property^="og:"]').each((i, el) => {
+            const prop = $(el).attr("property");
+            const content = $(el).attr("content");
+            if (prop && content) tags[prop] = content;
+        });
+
+        $('meta[name^="twitter:"]').each((i, el) => {
+            const name = $(el).attr("name");
+            const content = $(el).attr("content");
+            if (name && content) tags[name] = content;
+        });
+
+        const title = tags["og:title"] || "Facebook User";
+        const isLoginWall = title === "Log in or sign up to view";
+
+        if (isLoginWall) return null; // Post might be private or unavailable
+
+        // Facebed's site_name contains stats: "facebed by pi.kt\n⌚ 2026/03/24 07:40:29 UTC+07\n❤️ 958 • 💬 108 • 🔁 158"
+        const siteName = tags["og:site_name"] || "";
+        const likesMatch = siteName.match(/❤️\s*([\d,.KkMm]+)/);
+        const commentsMatch = siteName.match(/💬\s*([\d,.KkMm]+)/);
+        const sharesMatch = siteName.match(/🔁\s*([\d,.KkMm]+)/);
+
+        // Extract dates if available (⌚ 2026/03/24 07:40:29 UTC+07)
+        const dateMatch = siteName.match(/⌚\s*(.+)\n/);
+        let timestamp: Date | undefined;
+        if (dateMatch && dateMatch[1]) {
+            timestamp = new Date(dateMatch[1].replace(" UTC", "Z"));
+            if (isNaN(timestamp.getTime())) timestamp = undefined;
+        }
+
+        // Get images
+        const images: string[] = [];
+        if (tags["og:image"]) images.push(tags["og:image"]);
+
+        return {
+            author: {
+                name: title,
+                username: "facebook",
+                avatar: tags["og:image"] || undefined,
+                url: tags["og:url"] || url
+            },
+            content: tags["og:description"] || "",
+            images,
+            video: tags["og:video"] || tags["og:video:secure_url"],
+            stats: {
+                likes: parseStat(likesMatch?.[1]),
+                comments: parseStat(commentsMatch?.[1]),
+                reposts: parseStat(sharesMatch?.[1])
+            },
+            timestamp
+        };
+    } catch (error) {
+        console.error("Failed to fetch Facebook info:", error);
+        return null;
+    }
+}
+
+/**
  * Fetch post info based on platform
  * @param url - Post URL
  * @param platform - Platform configuration
@@ -204,6 +301,8 @@ export async function fetchPostInfo(
             break;
         case PlatformId.BLUESKY:
             return fetchBlueskyInfo(url);
+        case PlatformId.FACEBOOK:
+            return fetchFacebookInfo(url);
         // Add more platforms as needed
     }
     return null;

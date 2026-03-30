@@ -64,8 +64,7 @@ export function buildRichEmbed(info: PostInfo, platform: PlatformConfig, postUrl
         let avatarUrl = info.author.avatar;
         // Fallback to Facebook logo if avatar is missing
         if (!avatarUrl && platform.id === PlatformId.FACEBOOK) {
-            avatarUrl =
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/2021_Facebook_icon.svg/512px-2021_Facebook_icon.svg.png";
+            avatarUrl = "https://upload.wikimedia.org/wikipedia/commons/6/6c/Facebook_Logo_2023.png";
         }
 
         embed.setAuthor({

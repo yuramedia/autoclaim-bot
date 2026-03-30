@@ -50,10 +50,27 @@ export function buildRichEmbed(info: PostInfo, platform: PlatformConfig, postUrl
     }
 
     // Author
-    if (info.author.name && info.author.username) {
+    if (info.author.name) {
+        let displayName = info.author.name;
+        // Hanya tambahkan username jika bukan dari Facebook dan bukan 'unknown'
+        if (
+            platform.id !== PlatformId.FACEBOOK &&
+            info.author.username &&
+            info.author.username.toLowerCase() !== "unknown"
+        ) {
+            displayName += ` (@${info.author.username})`;
+        }
+
+        let avatarUrl = info.author.avatar;
+        // Fallback to Facebook logo if avatar is missing
+        if (!avatarUrl && platform.id === PlatformId.FACEBOOK) {
+            avatarUrl =
+                "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/2021_Facebook_icon.svg/512px-2021_Facebook_icon.svg.png";
+        }
+
         embed.setAuthor({
-            name: `${info.author.name} (@${info.author.username})`,
-            iconURL: info.author.avatar,
+            name: displayName,
+            iconURL: avatarUrl,
             url: info.author.url
         });
     }
@@ -268,21 +285,14 @@ export async function fetchFacebookInfo(url: string): Promise<PostInfo | null> {
                 if (urlObj.hostname.includes("facebook.com") || urlObj.hostname.includes("facebed.com")) {
                     const pathParts = urlObj.pathname.split("/").filter(Boolean);
                     // Common paths to ignore when extracting username from URL
-                    const ignoreWords = [
-                        "reel",
-                        "share",
-                        "groups",
-                        "watch",
-                        "photo",
-                        "story.php",
-                        "events",
-                        "gaming",
-                        "video.php",
-                        "permalink"
-                    ];
+                    const ignoreWords = ["reel", "share", "groups", "watch", "photo", "events", "gaming", "permalink"];
                     if (pathParts.length > 0) {
                         const firstPart = pathParts[0] as string;
-                        if (!ignoreWords.includes(firstPart.toLowerCase())) {
+                        const isIgnored = ignoreWords.includes(firstPart.toLowerCase());
+                        const isPhp = firstPart.toLowerCase().endsWith(".php");
+
+                        // Treat as user only if it's not a common sub-path and not a PHP script
+                        if (!isIgnored && !isPhp && firstPart !== "profile.php") {
                             username = firstPart;
                         }
                     }

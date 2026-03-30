@@ -61,6 +61,10 @@ export async function downloadMedia(
     try {
         // Fetch media info
         const info = await fetchMediaInfo(videoUrl);
+        console.log("VKrDownloader raw response format count:", info?.formats?.length);
+        if (info?.formats && info.formats.length > 0) {
+            console.log("VKrDownloader first format sample:", info.formats[0]);
+        }
 
         if (!info) {
             return { success: false, error: "Failed to fetch media info" };

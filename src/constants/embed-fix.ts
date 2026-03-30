@@ -81,8 +81,8 @@ export const PLATFORMS: PlatformConfig[] = [
         patterns: [
             // Supported by Facebed: /:user/posts/:(id|hash)
             /https?:\/\/(www\.|m\.)?facebook\.com\/[\w.]+\/posts\/[\w]+/i,
-            // Supported: /share/p/:hash (posts) and /share/v/:hash (videos - partial support)
-            /https?:\/\/(www\.|m\.)?facebook\.com\/share\/(v|p)\/\w+/i,
+            // Supported: /share/p/:hash (posts) and /share/v/:hash (videos - partial support) and /share/r/:hash (reels)
+            /https?:\/\/(www\.|m\.)?facebook\.com\/share\/(v|p|r)\/\w+/i,
             // Supported: /groups/:id/posts/:(id|hash)
             /https?:\/\/(www\.|m\.)?facebook\.com\/groups\/\d+\/posts\/[\w]+/i,
             // Supported: /permalink.php?story_fbid and /story.php?story_fbid

@@ -146,6 +146,12 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                 if (processed.platform.id === PlatformId.FACEBOOK) {
                     // Facebook video URLs from our scraper are direct mp4 links
                     downloadResult = await downloadDirect(postInfo.video, "facebook_video.mp4", maxSizeLimit);
+
+                    // If direct download fails (e.g. maxContentLength exceeded), fallback to VKrDownloader
+                    // which might offer lower resolutions via the select menu
+                    if (!downloadResult.success) {
+                        downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
+                    }
                 } else {
                     downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
                 }

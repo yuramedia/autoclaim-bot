@@ -3,12 +3,23 @@
  * Handles messageCreate events to fix social media embeds
  */
 
-import { Message, EmbedBuilder, AttachmentBuilder } from "discord.js";
+import {
+    Message,
+    EmbedBuilder,
+    AttachmentBuilder,
+    ActionRowBuilder,
+    StringSelectMenuBuilder,
+    StringSelectMenuOptionBuilder
+} from "discord.js";
 import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fix";
 import { downloadMedia, downloadDirect } from "../services/media-downloader";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
 import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
 import { getGuildSettings } from "../database/models/GuildSettings";
+import { getMaxDownloadSize } from "../constants/media-downloader";
+
+// Cache for storing video URLs for interactive resolution selection
+export const videoSelectionCache = new Map<string, { url: string; platform: PlatformId }>();
 
 // Cache to avoid processing same message twice
 const processedMessages = new Set<string>();
@@ -73,6 +84,7 @@ export async function handleMessage(message: Message): Promise<void> {
 async function processUrl(message: Message, processed: ProcessedUrl, settings: any): Promise<void> {
     const embeds: EmbedBuilder[] = [];
     const files: AttachmentBuilder[] = [];
+    const components: ActionRowBuilder<StringSelectMenuBuilder>[] = [];
     let content = "";
 
     // Platforms that VKrDownloader supports (video platforms only)
@@ -86,6 +98,7 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
     ];
 
     const canDownload = DOWNLOADABLE_PLATFORMS.includes(processed.platform.id);
+    const maxSizeLimit = getMaxDownloadSize(message.guild?.premiumTier);
 
     // Custom flow for Nyaa.si
     if (processed.platform.id === PlatformId.NYAA && processed.postId) {
@@ -132,9 +145,9 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
 
                 if (processed.platform.id === PlatformId.FACEBOOK) {
                     // Facebook video URLs from our scraper are direct mp4 links
-                    downloadResult = await downloadDirect(postInfo.video, "facebook_video.mp4");
+                    downloadResult = await downloadDirect(postInfo.video, "facebook_video.mp4", maxSizeLimit);
                 } else {
-                    downloadResult = await downloadMedia(processed.originalUrl);
+                    downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
                 }
 
                 if (downloadResult.success && downloadResult.buffer) {
@@ -142,6 +155,27 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                         name: processed.spoilered ? `SPOILER_${downloadResult.filename}` : downloadResult.filename
                     });
                     files.push(attachment);
+                } else if (downloadResult.oversized && downloadResult.availableFormats) {
+                    const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+                    videoSelectionCache.set(selectionId, {
+                        url: processed.originalUrl,
+                        platform: processed.platform.id
+                    });
+                    setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
+
+                    const selectMenu = new StringSelectMenuBuilder()
+                        .setCustomId(`res_select|${selectionId}`)
+                        .setPlaceholder("Video too large. Select a smaller resolution.")
+                        .addOptions(
+                            downloadResult.availableFormats
+                                .slice(0, 25)
+                                .map(fmt =>
+                                    new StringSelectMenuOptionBuilder()
+                                        .setLabel(`${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`)
+                                        .setValue(fmt.url.substring(0, 100))
+                                )
+                        );
+                    components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
                 }
             }
         }
@@ -151,13 +185,31 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
     if (embeds.length === 0) {
         // For platforms with download support, try to download media
         if (settings.embedFix.autoUpload && canDownload) {
-            const downloadResult = await downloadMedia(processed.originalUrl);
+            const downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
 
             if (downloadResult.success && downloadResult.buffer) {
                 const attachment = new AttachmentBuilder(downloadResult.buffer, {
                     name: processed.spoilered ? `SPOILER_${downloadResult.filename}` : downloadResult.filename
                 });
                 files.push(attachment);
+            } else if (downloadResult.oversized && downloadResult.availableFormats) {
+                const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+                videoSelectionCache.set(selectionId, { url: processed.originalUrl, platform: processed.platform.id });
+                setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
+
+                const selectMenu = new StringSelectMenuBuilder()
+                    .setCustomId(`res_select|${selectionId}`)
+                    .setPlaceholder("Video too large. Select a smaller resolution.")
+                    .addOptions(
+                        downloadResult.availableFormats
+                            .slice(0, 25)
+                            .map(fmt =>
+                                new StringSelectMenuOptionBuilder()
+                                    .setLabel(`${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`)
+                                    .setValue(fmt.url.substring(0, 100))
+                            )
+                    );
+                components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
             } else if (processed.fixedUrl !== processed.originalUrl) {
                 // Fallback to fixed URL
                 content = processed.spoilered ? `||${processed.fixedUrl}||` : processed.fixedUrl;
@@ -169,13 +221,14 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
     }
 
     // Skip if nothing to send
-    if (!content && embeds.length === 0 && files.length === 0) return;
+    if (!content && embeds.length === 0 && files.length === 0 && components.length === 0) return;
 
     // Reply to the message
     await message.reply({
         content: content || undefined,
         embeds,
         files,
+        components: components.length > 0 ? components : undefined,
         allowedMentions: { repliedUser: false }
     });
 }

@@ -5,13 +5,14 @@
 
 import axios from "axios";
 import type { VKRResponse, VKRFormat, DownloadResult } from "../types/media-downloader";
-import { VKRDOWNLOADER_API, VKRDOWNLOADER_API_KEY, MAX_DOWNLOAD_SIZE } from "../constants/media-downloader";
+import { VKRDOWNLOADER_API, VKRDOWNLOADER_API_KEY, DEFAULT_MAX_DOWNLOAD_SIZE } from "../constants/media-downloader";
 
 // Re-export types for backwards compatibility
 export type { VKRResponse, VKRFormat, DownloadResult };
 
 // Parse size string like "10 MB", "5.2 MB" to bytes
 function parseSizeToBytes(sizeStr: string): number {
+    if (!sizeStr) return Infinity;
     const match = sizeStr.match(/([\d.]+)\s*(KB|MB|GB)/i);
     if (!match || !match[1] || !match[2]) return Infinity;
 
@@ -28,16 +29,6 @@ function parseSizeToBytes(sizeStr: string): number {
         default:
             return Infinity;
     }
-}
-
-// Find best format under max size
-function findBestFormat(formats: VKRFormat[]): VKRFormat | null {
-    // Sort by size descending (prefer higher quality)
-    const validFormats = formats
-        .filter(f => parseSizeToBytes(f.size) <= MAX_DOWNLOAD_SIZE)
-        .toSorted((a, b) => parseSizeToBytes(b.size) - parseSizeToBytes(a.size));
-
-    return validFormats[0] ?? null;
 }
 
 /**
@@ -61,9 +52,12 @@ export async function fetchMediaInfo(videoUrl: string): Promise<VKRResponse | nu
 }
 
 /**
- * Download media if it's under the size limit
+ * Download media if it's under the size limit, or return available formats if oversized
  */
-export async function downloadMedia(videoUrl: string): Promise<DownloadResult> {
+export async function downloadMedia(
+    videoUrl: string,
+    maxSizeLimit: number = DEFAULT_MAX_DOWNLOAD_SIZE
+): Promise<DownloadResult> {
     try {
         // Fetch media info
         const info = await fetchMediaInfo(videoUrl);
@@ -76,67 +70,87 @@ export async function downloadMedia(videoUrl: string): Promise<DownloadResult> {
         if (!info.formats || info.formats.length === 0) {
             if (info.source) {
                 // Try to download from source
-                const response = await axios.get(info.source, {
-                    responseType: "arraybuffer",
-                    timeout: 30000,
-                    maxContentLength: MAX_DOWNLOAD_SIZE,
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    }
-                });
+                try {
+                    const response = await axios.get(info.source, {
+                        responseType: "arraybuffer",
+                        timeout: 30000,
+                        maxContentLength: maxSizeLimit,
+                        headers: {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                        }
+                    });
 
-                const buffer = Buffer.from(response.data);
-                if (buffer.length <= MAX_DOWNLOAD_SIZE) {
-                    return {
-                        success: true,
-                        buffer,
-                        filename: `video_${Date.now()}.mp4`,
-                        title: info.title,
-                        thumbnail: info.thumbnail
-                    };
+                    const buffer = Buffer.from(response.data);
+                    if (buffer.length <= maxSizeLimit) {
+                        return {
+                            success: true,
+                            buffer,
+                            filename: `video_${Date.now()}.mp4`,
+                            title: info.title,
+                            thumbnail: info.thumbnail
+                        };
+                    }
+                } catch {
+                    // Fallthrough to error
                 }
             }
             return {
                 success: false,
-                error: "No suitable format found",
+                error: "No suitable format found or file too large",
                 title: info.title,
                 thumbnail: info.thumbnail,
                 fallbackUrl: info.source
             };
         }
 
-        // Find best format under limit
-        const format = findBestFormat(info.formats);
-        if (!format) {
-            return {
-                success: false,
-                error: "All formats exceed size limit",
-                title: info.title,
-                thumbnail: info.thumbnail,
-                fallbackUrl: info.source || info.formats[0]?.url
-            };
+        // Sort formats by size descending (prefer higher quality)
+        const sortedFormats = info.formats.toSorted((a, b) => parseSizeToBytes(b.size) - parseSizeToBytes(a.size));
+        const validFormats = sortedFormats.filter(f => parseSizeToBytes(f.size) <= maxSizeLimit);
+
+        // Try downloading the best valid format automatically
+        if (validFormats.length > 0) {
+            try {
+                const firstValid = validFormats[0]!;
+                const response = await axios.get(firstValid.url, {
+                    responseType: "arraybuffer",
+                    timeout: 60000,
+                    maxContentLength: maxSizeLimit,
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    }
+                });
+
+                const buffer = Buffer.from(response.data);
+
+                if (buffer.length <= maxSizeLimit) {
+                    const ext = firstValid.ext || "mp4";
+                    const filename = `${(info.title || "video").slice(0, 50).replace(/[^\w\s-]/g, "")}_${Date.now()}.${ext}`;
+
+                    return {
+                        success: true,
+                        buffer,
+                        filename,
+                        title: info.title,
+                        thumbnail: info.thumbnail
+                    };
+                }
+            } catch {
+                // If download fails (e.g. maxContentLength exceeded), we fall through to the select menu
+            }
         }
 
-        // Download the media
-        const response = await axios.get(format.url, {
-            responseType: "arraybuffer",
-            timeout: 60000,
-            maxContentLength: MAX_DOWNLOAD_SIZE,
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
-        });
+        if (sortedFormats.length === 0) {
+            return { success: false, error: "No formats available" };
+        }
 
-        const buffer = Buffer.from(response.data);
-        const ext = format.ext || "mp4";
-        const filename = `${(info.title || "video").slice(0, 50).replace(/[^\w\s-]/g, "")}_${Date.now()}.${ext}`;
-
+        // If we reach here, best automatic format didn't fit or no formats ostensibly fit.
+        // Ask the user to manually select a resolution.
         return {
-            success: true,
-            buffer,
-            filename,
-            title: info.title,
-            thumbnail: info.thumbnail
+            success: false,
+            error: "Automatically selected video exceeded server limit. Please select a lower resolution.",
+            oversized: true,
+            availableFormats: sortedFormats, // Show all so they can try lower ones
+            title: info.title
         };
     } catch (error: any) {
         return {
@@ -150,21 +164,26 @@ export async function downloadMedia(videoUrl: string): Promise<DownloadResult> {
  * Download a direct media URL (bypasses VKrDownloader)
  * @param url Direct media URL (e.g. mp4 link)
  * @param defaultFilename Fallback filename
+ * @param maxSizeLimit The maximum size allowed
  */
-export async function downloadDirect(url: string, defaultFilename: string = "video.mp4"): Promise<DownloadResult> {
+export async function downloadDirect(
+    url: string,
+    defaultFilename: string = "video.mp4",
+    maxSizeLimit: number = DEFAULT_MAX_DOWNLOAD_SIZE
+): Promise<DownloadResult> {
     try {
         const response = await axios.get(url, {
             responseType: "arraybuffer",
             timeout: 60000,
-            maxContentLength: MAX_DOWNLOAD_SIZE,
+            maxContentLength: maxSizeLimit,
             headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             }
         });
 
         const buffer = Buffer.from(response.data);
-        if (buffer.length > MAX_DOWNLOAD_SIZE) {
-            return { success: false, error: "File too large" };
+        if (buffer.length > maxSizeLimit) {
+            return { success: false, error: "File too large for this server's boost level" };
         }
 
         return {
@@ -175,7 +194,7 @@ export async function downloadDirect(url: string, defaultFilename: string = "vid
     } catch (error: any) {
         return {
             success: false,
-            error: error.message || "Direct download failed"
+            error: error.message || "Direct download failed or exceeded size limit"
         };
     }
 }

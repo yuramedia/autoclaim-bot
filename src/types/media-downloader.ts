@@ -30,4 +30,6 @@ export interface DownloadResult {
     thumbnail?: string;
     error?: string;
     fallbackUrl?: string;
+    oversized?: boolean;
+    availableFormats?: VKRFormat[];
 }

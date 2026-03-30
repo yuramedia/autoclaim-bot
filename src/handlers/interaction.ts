@@ -14,6 +14,7 @@ import { commands } from "../commands";
 import { handleHoyolabModal } from "./hoyolab-modal";
 import { handleEndfieldModal } from "./endfield-modal";
 import { handleHoyolabSelect } from "./hoyolab-select";
+import { handleResolutionSelect } from "./resolution-select";
 import { handleInteractionError } from "../utils/error-handler";
 
 // Store commands in collection for fast lookup
@@ -97,6 +98,11 @@ async function handleModal(interaction: Interaction): Promise<void> {
  */
 async function handleSelectMenu(interaction: StringSelectMenuInteraction): Promise<void> {
     try {
+        if (interaction.customId.startsWith("res_select|")) {
+            await handleResolutionSelect(interaction);
+            return;
+        }
+
         switch (interaction.customId) {
             case "hoyolab-games-select":
                 await handleHoyolabSelect(interaction);

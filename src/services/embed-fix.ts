@@ -67,7 +67,12 @@ export function findPlatform(url: string): PlatformConfig | null {
 export function applyFix(url: string, platform: PlatformConfig): string {
     let fixedUrl = url;
     for (const fix of platform.fixes) {
-        if (url.includes(fix.oldDomain)) {
+        if (fix.oldDomain instanceof RegExp) {
+            if (fix.oldDomain.test(url)) {
+                fixedUrl = url.replace(fix.oldDomain, fix.newDomain);
+                break;
+            }
+        } else if (url.includes(fix.oldDomain)) {
             fixedUrl = url.replace(fix.oldDomain, fix.newDomain);
             break;
         }

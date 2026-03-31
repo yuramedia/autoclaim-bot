@@ -25,7 +25,7 @@ export interface PlatformConfig {
     name: string;
     color: number;
     patterns: RegExp[];
-    fixes: { oldDomain: string; newDomain: string }[];
+    fixes: { oldDomain: string | RegExp; newDomain: string }[];
 }
 
 /** Result of processing a URL */

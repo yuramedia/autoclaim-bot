@@ -80,24 +80,24 @@ export const PLATFORMS: PlatformConfig[] = [
         color: 0x1877f2,
         patterns: [
             // Supported by Facebed: /:user/posts/:(id|hash)
-            /https?:\/\/(www\.|m\.)?facebook\.com\/[\w.]+\/posts\/[\w]+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/[\w.]+\/posts\/[\w]+/i,
             // Supported: /share/p/:hash (posts) and /share/v/:hash (videos - partial support) and /share/r/:hash (reels)
-            /https?:\/\/(www\.|m\.)?facebook\.com\/share\/(v|p|r)\/\w+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/share\/(v|p|r)\/\w+/i,
             // Supported: /groups/:id/posts/:(id|hash)
-            /https?:\/\/(www\.|m\.)?facebook\.com\/groups\/\d+\/posts\/[\w]+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/groups\/\d+\/posts\/[\w]+/i,
             // Supported: /permalink.php?story_fbid and /story.php?story_fbid
-            /https?:\/\/(www\.|m\.)?facebook\.com\/(permalink|story)\.php\?story_fbid/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/(permalink|story)\.php\?story_fbid/i,
             // Reels (supported)
-            /https?:\/\/(www\.|m\.)?facebook\.com\/reel\/\d+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/reel\/\d+/i,
             // Videos and watch
-            /https?:\/\/(www\.|m\.)?facebook\.com\/[\w.]+\/videos\/\d+/i,
-            /https?:\/\/(www\.|m\.)?facebook\.com\/watch\/?/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/[\w.]+\/videos\/\d+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/watch\/?/i,
             // fb.watch short links
-            /https?:\/\/(www\.)?fb\.watch\/\w+/i
+            /https?:\/\/(?:www\.)?fb\.watch\/\w+/i
         ],
         fixes: [
-            { oldDomain: "facebook.com", newDomain: "facebed.com" },
-            { oldDomain: "fb.watch", newDomain: "facebed.com" }
+            { oldDomain: /(?:[a-z0-9-]+\.)*facebook\.com/i, newDomain: "www.facebed.com" },
+            { oldDomain: /(?:www\.)?fb\.watch/i, newDomain: "www.facebed.com" }
         ]
     },
     {

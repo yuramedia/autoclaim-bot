@@ -223,15 +223,7 @@ export async function fetchBlueskyInfo(url: string): Promise<PostInfo | null> {
  */
 export async function fetchFacebookInfo(url: string): Promise<PostInfo | null> {
     try {
-        // Swap to facebed.com if it's facebook.com or fb.watch
-        let facebedUrl = url;
-        if (url.includes("facebook.com")) {
-            facebedUrl = url.replace("facebook.com", "facebed.com");
-        } else if (url.includes("fb.watch")) {
-            facebedUrl = url.replace("fb.watch", "facebed.com");
-        }
-
-        const res = await axios.get(facebedUrl, {
+        const res = await axios.get(url, {
             headers: {
                 "User-Agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)"
             },

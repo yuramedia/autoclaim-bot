@@ -133,7 +133,7 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
     }
     // Try to fetch rich post info for other platforms
     else if (settings.embedFix.richEmbeds) {
-        const postInfo = await fetchPostInfo(processed.originalUrl, processed.platform, processed.postId);
+        const postInfo = await fetchPostInfo(processed.fixedUrl, processed.platform, processed.postId);
 
         if (postInfo) {
             const richEmbeds = buildRichEmbed(postInfo, processed.platform, processed.originalUrl);

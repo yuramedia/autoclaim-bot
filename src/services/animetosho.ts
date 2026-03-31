@@ -106,6 +106,103 @@ async function fetchAnilistCover(anidbId: number | string): Promise<string | nul
     }
 }
 
+export async function fetchAnilistCoverByTitle(title: string): Promise<string | null> {
+    let cleanTitle = title
+        // Remove file extensions
+        .replace(/\.(mkv|mp4|avi|srt|ass)$/i, "")
+        // Remove content in brackets and parentheses
+        .replace(/\[.*?\]/g, "")
+        .replace(/\(.*?\)/g, "");
+
+    // Common torrent words that might not be in brackets
+    const removeWords = [
+        "1080p",
+        "720p",
+        "480p",
+        "4k",
+        "x265",
+        "x264",
+        "HEVC",
+        "10bit",
+        "8bit",
+        "60fps",
+        "AAC",
+        "FLAC",
+        "Opus",
+        "WEBRip",
+        "WEB-DL",
+        "BluRay",
+        "BDRip",
+        "PROPER",
+        "REPACK",
+        "Dual-Audio",
+        "Multi-Subs",
+        "Subs",
+        "RAW",
+        "HD",
+        "FHD",
+        "Opus2",
+        "0",
+        "v1",
+        "v2",
+        "v3",
+        "v4",
+        "HEADPATTER",
+        "Erai-raws",
+        "SubsPlease"
+    ];
+
+    // Construct regex for these exact words (case insensitive constraint)
+    const exactWordRegex = new RegExp(`\\b(${removeWords.join("|")})\\b`, "gi");
+    cleanTitle = cleanTitle.replace(exactWordRegex, "");
+
+    // Remove standalone episode numbers at the end like "- 01" or "- 12"
+    cleanTitle = cleanTitle.replace(/-\s*\d+(\.5)?\s*$/, "");
+    cleanTitle = cleanTitle.replace(/\bS\d{1,2}\b/gi, ""); // Remove Season numbers like S01, S2
+    cleanTitle = cleanTitle.replace(/\b(Episode|Ep)\s*\d+\b/gi, ""); // Remove 'Episode 12'
+
+    // Replace dots, underscores with spaces
+    cleanTitle = cleanTitle.replace(/[-_.]/g, " ");
+
+    cleanTitle = cleanTitle.replace(/\s+/g, " ").trim();
+
+    try {
+        const query = `
+      query($search: String) {
+        Media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+          coverImage { extraLarge }
+        }
+      }
+    `;
+
+        const aniResponse = await axios.post(
+            "https://graphql.anilist.co",
+            {
+                query,
+                variables: { search: cleanTitle }
+            },
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json"
+                }
+            }
+        );
+
+        const target = aniResponse.data?.data?.Media;
+        if (target) {
+            return target.coverImage?.extraLarge || null;
+        }
+        return null;
+    } catch (error: any) {
+        console.error(
+            `[Anilist Cover] Error fetching cover for title ${cleanTitle}:`,
+            error?.response?.data || error.message
+        );
+        return null;
+    }
+}
+
 async function fetchToshoScreenshots(fileId: number | string): Promise<string[]> {
     try {
         const htmlResponse = await axios.get(`https://animetosho.org/file/${fileId}`);

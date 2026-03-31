@@ -8,7 +8,7 @@ import { EmbedBuilder } from "discord.js";
 import type { NyaaTorrentInfo, NyaaComment, NyaaApiResponse } from "../types/nyaa";
 import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
-import { fetchAnimeImages } from "./animetosho";
+import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./animetosho";
 
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
 
@@ -146,8 +146,13 @@ export async function buildNyaaCommentEmbed(
         // Thumbnail: Anilist cover or secondary screenshot
         if (images.cover) {
             embed.setThumbnail(images.cover);
-        } else if (images.screenshots.length > 1) {
-            embed.setThumbnail(images.screenshots[1] || null);
+        } else {
+            const fallbackCover = await fetchAnilistCoverByTitle(torrentTitle);
+            if (fallbackCover) {
+                embed.setThumbnail(fallbackCover);
+            } else if (images.screenshots.length > 1) {
+                embed.setThumbnail(images.screenshots[1] || null);
+            }
         }
 
         // If the comment doesn't already have an image from markdown, apply primary screenshot
@@ -156,6 +161,9 @@ export async function buildNyaaCommentEmbed(
                 embed.setImage(images.screenshots[0] || null);
             }
         }
+    } else {
+        const fallbackCover = await fetchAnilistCoverByTitle(torrentTitle);
+        if (fallbackCover) embed.setThumbnail(fallbackCover);
     }
 
     return [embed];
@@ -232,8 +240,13 @@ export async function buildNyaaEmbed(
 
         if (images.cover) {
             embed.setThumbnail(images.cover);
-        } else if (images.screenshots.length > 1) {
-            embed.setThumbnail(images.screenshots[1] || null);
+        } else {
+            const fallbackCover = await fetchAnilistCoverByTitle(info.title);
+            if (fallbackCover) {
+                embed.setThumbnail(fallbackCover);
+            } else if (images.screenshots.length > 1) {
+                embed.setThumbnail(images.screenshots[1] || null);
+            }
         }
 
         if (images.screenshots.length > 0) {
@@ -256,6 +269,9 @@ export async function buildNyaaEmbed(
                 };
             }
         }
+    } else {
+        const fallbackCover = await fetchAnilistCoverByTitle(info.title);
+        if (fallbackCover) embed.setThumbnail(fallbackCover);
     }
 
     const embeds: EmbedBuilder[] = [embed];

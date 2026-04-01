@@ -25,41 +25,49 @@ let cachedAccountAuth: CrunchyrollAuth | null = null;
 let accountAuthExpiresAt = 0;
 
 export class CrunchyrollService {
-    private API_BASE = "https://beta-api.crunchyroll.com";
-    private basicAuth = "eTJhcnZqYjBoMHJndnRpemxvdnk6SlZMdndkSXBYdnhVLXFJQnZUMU04b1FUcjFxbFFKWDI=";
-    private userAgent =
+    private readonly API_BASE = "https://beta-api.crunchyroll.com";
+    private static basicAuth = "eTJhcnZqYjBoMHJndnRpemxvdnk6SlZMdndkSXBYdnhVLXFJQnZUMU04b1FUcjFxbFFKWDI=";
+    private static userAgent =
         "Crunchyroll/ANDROIDTV/3.59.0_22338 (Android 12; en-US; SHIELD Android TV Build/SR1A.211012.001)";
+    private static credentialPromise: Promise<void> | null = null;
 
     /**
      * Checks and updates credentials using crextractor
      */
-    private async ensureCredentials(): Promise<void> {
+    private static async ensureCredentials(): Promise<void> {
         if (cachedAuth && Date.now() < authExpiresAt) return;
+        if (CrunchyrollService.credentialPromise) return CrunchyrollService.credentialPromise;
 
-        try {
-            const { extract, pull } = await import("crextractor");
-            let data: any = null;
-
+        CrunchyrollService.credentialPromise = (async () => {
             try {
-                // Attempt to fully extract from the actual APK using jadx
-                // This requires jadx to be installed and available in PATH
-                data = await extract({ target: "tv", cleanup: true });
-            } catch (err) {
-                console.warn("Auto-extraction via APK decompilation failed, falling back to pull():", err);
-                data = await pull({ target: "tv" });
-            }
+                const { extract, pull } = await import("crextractor");
+                let data: any = null;
 
-            if (data?.encoded && data?.version) {
-                this.basicAuth = data.encoded;
-                const match = data.version.match(/([\d.]+)\s*\((\d+)\)/);
-                if (match) {
-                    const versionString = `${match[1]}_${match[2]}`;
-                    this.userAgent = `Crunchyroll/ANDROIDTV/${versionString} (Android 12; en-US; SHIELD Android TV Build/SR1A.211012.001)`;
+                try {
+                    // Attempt to fully extract from the actual APK using jadx
+                    // This requires jadx to be installed and available in PATH
+                    data = await extract({ target: "tv", cleanup: true });
+                } catch (err) {
+                    console.warn("Auto-extraction via APK decompilation failed, falling back to pull():", err);
+                    data = await pull({ target: "tv" });
                 }
+
+                if (data?.encoded && data?.version) {
+                    CrunchyrollService.basicAuth = data.encoded;
+                    const match = data.version.match(/([\d.]+)\s*\((\d+)\)/);
+                    if (match) {
+                        const versionString = `${match[1]}_${match[2]}`;
+                        CrunchyrollService.userAgent = `Crunchyroll/ANDROIDTV/${versionString} (Android 12; en-US; SHIELD Android TV Build/SR1A.211012.001)`;
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to fetch dynamic credentials:", error);
+            } finally {
+                CrunchyrollService.credentialPromise = null;
             }
-        } catch (error) {
-            console.error("Failed to fetch dynamic credentials:", error);
-        }
+        })();
+
+        return CrunchyrollService.credentialPromise;
     }
 
     /**
@@ -71,7 +79,7 @@ export class CrunchyrollService {
             return cachedAuth;
         }
 
-        await this.ensureCredentials();
+        await CrunchyrollService.ensureCredentials();
 
         try {
             const body = new URLSearchParams();
@@ -81,9 +89,9 @@ export class CrunchyrollService {
             const response = await fetch(`${this.API_BASE}/auth/v1/token`, {
                 method: "POST",
                 headers: {
-                    Authorization: `Basic ${this.basicAuth}`,
+                    Authorization: `Basic ${CrunchyrollService.basicAuth}`,
                     "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-                    "User-Agent": this.userAgent
+                    "User-Agent": CrunchyrollService.userAgent
                 },
                 body: body.toString()
             });
@@ -130,7 +138,7 @@ export class CrunchyrollService {
                 method: "GET",
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
-                    "User-Agent": this.userAgent,
+                    "User-Agent": CrunchyrollService.userAgent,
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     Pragma: "no-cache",
                     Expires: "0"
@@ -394,7 +402,7 @@ export class CrunchyrollService {
             const response = await fetch(`${this.API_BASE}/content/v2/cms/objects/${seriesId}`, {
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
-                    "User-Agent": this.userAgent
+                    "User-Agent": CrunchyrollService.userAgent
                 }
             });
 
@@ -457,6 +465,8 @@ export class CrunchyrollService {
             return cachedAccountAuth;
         }
 
+        await CrunchyrollService.ensureCredentials();
+
         const email = process.env.CR_EMAIL;
         const password = process.env.CR_PASSWORD;
 
@@ -477,9 +487,9 @@ export class CrunchyrollService {
             const response = await fetch(`${this.API_BASE}/auth/v1/token`, {
                 method: "POST",
                 headers: {
-                    Authorization: `Basic ${this.basicAuth}`,
+                    Authorization: `Basic ${CrunchyrollService.basicAuth}`,
                     "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-                    "User-Agent": this.userAgent
+                    "User-Agent": CrunchyrollService.userAgent
                 },
                 body: body.toString()
             });
@@ -525,7 +535,7 @@ export class CrunchyrollService {
             const response = await fetch(`${this.API_BASE}/content/v2/discover/search?${params}`, {
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
-                    "User-Agent": this.userAgent
+                    "User-Agent": CrunchyrollService.userAgent
                 }
             });
 
@@ -572,7 +582,7 @@ export class CrunchyrollService {
             const response = await fetch(`${this.API_BASE}/content/v2/discover/search?${params}`, {
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
-                    "User-Agent": this.userAgent
+                    "User-Agent": CrunchyrollService.userAgent
                 }
             });
 
@@ -609,7 +619,7 @@ export class CrunchyrollService {
             const seasonsRes = await fetch(`${this.API_BASE}/content/v2/cms/series/${seriesId}/seasons?locale=en-US`, {
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
-                    "User-Agent": this.userAgent
+                    "User-Agent": CrunchyrollService.userAgent
                 }
             });
 
@@ -630,7 +640,7 @@ export class CrunchyrollService {
                 {
                     headers: {
                         Authorization: `Bearer ${auth.access_token}`,
-                        "User-Agent": this.userAgent
+                        "User-Agent": CrunchyrollService.userAgent
                     }
                 }
             );
@@ -672,7 +682,7 @@ export class CrunchyrollService {
             const response = await fetch(url, {
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
-                    "User-Agent": this.userAgent
+                    "User-Agent": CrunchyrollService.userAgent
                 }
             });
 
@@ -730,7 +740,7 @@ export class CrunchyrollService {
                 const response = await fetch(`${this.API_BASE}/content/v2/discover/browse?${params}`, {
                     headers: {
                         Authorization: `Bearer ${auth.access_token}`,
-                        "User-Agent": this.userAgent
+                        "User-Agent": CrunchyrollService.userAgent
                     }
                 });
 

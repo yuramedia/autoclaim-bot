@@ -114,6 +114,18 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
         .replace(/\[.*?\]/g, "")
         .replace(/\(.*?\)/g, "");
 
+    // Split by pipe and take the first non-empty part
+    if (cleanTitle.includes("|")) {
+        const parts = cleanTitle
+            .split("|")
+            .map(p => p.trim())
+            .filter(p => p.length > 0);
+        const firstPart = parts[0];
+        if (firstPart) {
+            cleanTitle = firstPart;
+        }
+    }
+
     // Common torrent words that might not be in brackets
     const removeWords = [
         "1080p",

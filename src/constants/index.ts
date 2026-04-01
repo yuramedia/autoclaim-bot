@@ -13,6 +13,7 @@ export * from "./languages";
 export * from "./anime";
 export * from "./jisho";
 export * from "./u2-feed";
+export * from "./nekobt";
 
 export const CHANNELS = {
     // Channel IDs will be loaded from env or config

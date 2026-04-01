@@ -111,6 +111,10 @@ export function extractPostId(url: string, platform: PlatformConfig): string | n
             }
             return null;
         }
+        case PlatformId.NEKOBT: {
+            const nekoMatch = url.match(/\/torrents\/(\d+)/);
+            return nekoMatch?.[1] ?? null;
+        }
         default:
             return null;
     }

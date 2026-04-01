@@ -4,6 +4,7 @@
  */
 
 import { PlatformId, type PlatformConfig } from "../types/embed-fix";
+import { NEKOBT_EMBED_COLOR, NEKOBT_TORRENT_REGEX } from "./nekobt";
 
 /** Platform configurations with patterns and fixes */
 export const PLATFORMS: PlatformConfig[] = [
@@ -130,5 +131,12 @@ export const PLATFORMS: PlatformConfig[] = [
         color: 0x0089ff,
         patterns: [/https?:\/\/(www\.)?nyaa\.si\/view\/\d+/i, /https?:\/\/(www\.)?sukebei\.nyaa\.si\/view\/\d+/i],
         fixes: [] // Rich embed only, data fetched via cheerio
+    },
+    {
+        id: PlatformId.NEKOBT,
+        name: "NekoBT",
+        color: NEKOBT_EMBED_COLOR,
+        patterns: [NEKOBT_TORRENT_REGEX],
+        fixes: [] // Rich embed only, data fetched via API
     }
 ];

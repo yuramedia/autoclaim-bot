@@ -84,7 +84,7 @@ export async function handleMessage(message: Message): Promise<void> {
 async function processUrl(message: Message, processed: ProcessedUrl, settings: any): Promise<void> {
     const embeds: EmbedBuilder[] = [];
     const files: AttachmentBuilder[] = [];
-    const components: ActionRowBuilder<StringSelectMenuBuilder>[] = [];
+    const components: any[] = [];
     let content = "";
 
     // Platforms that VKrDownloader supports (video platforms only)
@@ -128,6 +128,17 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                     const nyaaEmbeds = await buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider);
                     embeds.push(...nyaaEmbeds);
                 }
+            }
+        }
+    }
+    // Custom flow for NekoBT
+    else if (processed.platform.id === PlatformId.NEKOBT && processed.postId) {
+        const { buildNekoBTEmbed } = await import("../services/nekobt");
+        const nekobtEmbeds = await buildNekoBTEmbed(processed.originalUrl);
+        if (nekobtEmbeds) {
+            embeds.push(...nekobtEmbeds.embeds);
+            if (nekobtEmbeds.components) {
+                components.push(...nekobtEmbeds.components);
             }
         }
     }

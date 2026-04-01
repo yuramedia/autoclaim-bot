@@ -24,12 +24,8 @@ WORKDIR /app
 # Set production environment
 ENV NODE_ENV=production
 
-# Install dumb-init, bash, openjdk, and jadx for proper signal handling and crextractor support
-RUN apk add --no-cache dumb-init bash openjdk17-jre unzip curl && \
-    curl -L https://github.com/skylot/jadx/releases/download/v1.4.7/jadx-1.4.7.zip -o jadx.zip && \
-    unzip jadx.zip -d /opt/jadx && \
-    ln -s /opt/jadx/bin/jadx /usr/local/bin/jadx && \
-    rm jadx.zip && \
+# Install dumb-init for proper signal handling and setup non-root user
+RUN apk add --no-cache dumb-init && \
     addgroup -g 1001 -S bunjs && \
     adduser -S botuser -u 1001 -G bunjs
 

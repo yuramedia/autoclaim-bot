@@ -37,12 +37,17 @@ import { NEKOBT_API_URL, NEKOBT_EMBED_COLOR, NEKOBT_TORRENT_REGEX } from "../con
 
 export function extractNekoBTId(url: string): string | null {
     const match = url.match(NEKOBT_TORRENT_REGEX);
-    return match?.[1] ?? null;
+    return match?.[2] ?? null;
 }
 
 export async function fetchNekoBTTorrent(id: string): Promise<NekoBTTorrentResponse | null> {
     try {
-        const res = await fetch(`${NEKOBT_API_URL}/torrents/${id}`);
+        const res = await fetch(`${NEKOBT_API_URL}/torrents/${id}`, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0",
+                Accept: "application/json"
+            }
+        });
         if (!res.ok) {
             console.error(`[NekoBT] Failed to fetch torrent ${id}: ${res.status}`);
             return null;
@@ -108,7 +113,8 @@ export async function buildNekoBTEmbed(url: string) {
             { name: "Seeders", value: data.seeders || "0", inline: true },
             { name: "Leechers", value: data.leechers || "0", inline: true },
             { name: "File Size", value: humanSize, inline: true },
-            { name: "Uploaded By", value: uploaderName, inline: true }
+            { name: "Uploaded By", value: uploaderName, inline: true },
+            { name: "ℹ️ Info Hash", value: `\`${data.infohash}\``, inline: false }
         )
         .setTimestamp(data.uploaded_at);
 
@@ -156,8 +162,7 @@ export async function buildNekoBTEmbed(url: string) {
     }
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setLabel("NekoBT").setURL(url).setStyle(ButtonStyle.Link),
-        new ButtonBuilder().setLabel("Magnet").setURL(data.magnet).setStyle(ButtonStyle.Link)
+        new ButtonBuilder().setLabel("View on NekoBT").setURL(url).setStyle(ButtonStyle.Link)
     );
 
     return { embeds: [embed], components: [row] };

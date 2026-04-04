@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events } from "discord.js";
+import { Events } from "discord.js";
 import { config } from "./config";
 import { connectDatabase } from "./database/connection";
 import { startScheduler, checkMissedClaims } from "./services/scheduler";
@@ -7,21 +7,13 @@ import { startU2Feed } from "./services/u2-feed-scheduler";
 import { handleInteraction } from "./handlers/interaction";
 import { handleMessage } from "./handlers/message";
 import { startPresenceUpdater } from "./utils/presence";
-
-// Create client
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
-    ws: {
-        properties: {
-            browser: "Discord iOS"
-        }
-    } as any
-});
+import { client } from "./core/client";
+import { logger } from "./core/logger";
 
 // Ready event
 client.once(Events.ClientReady, readyClient => {
-    console.log(`✅ Logged in as ${readyClient.user.tag}`);
-    console.log(`📊 Serving ${readyClient.guilds.cache.size} guilds`);
+    logger.info(`✅ Logged in as ${readyClient.user.tag}`);
+    logger.info(`📊 Serving ${readyClient.guilds.cache.size} guilds`);
 
     // Start scheduler
     startScheduler(client);
@@ -47,7 +39,7 @@ client.on(Events.MessageCreate, handleMessage);
 
 // Main function
 async function main() {
-    console.log("🚀 Starting Auto-Claim Bot Shard...");
+    logger.info("🚀 Starting Auto-Claim Bot Shard...");
 
     // Connect to database
     await connectDatabase();
@@ -58,13 +50,13 @@ async function main() {
 
 // Handle errors
 process.on("unhandledRejection", error => {
-    console.error("Unhandled rejection:", error);
+    logger.error(error, "Unhandled rejection");
 });
 
 process.on("uncaughtException", error => {
-    console.error("Uncaught exception:", error);
+    logger.error(error, "Uncaught exception");
     process.exit(1);
 });
 
 // Start
-main().catch(console.error);
+main().catch(err => logger.error(err, "Main function rejected"));

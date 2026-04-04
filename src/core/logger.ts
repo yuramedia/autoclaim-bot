@@ -3,12 +3,15 @@ import pino from "pino";
 // Configure pino logger
 export const logger = pino({
     level: process.env.NODE_ENV === "production" ? "info" : "debug",
-    transport: {
-        target: "pino-pretty",
-        options: {
-            colorize: true,
-            translateTime: "SYS:standard",
-            ignore: "pid,hostname"
-        }
-    }
+    transport:
+        process.env.NODE_ENV === "production"
+            ? undefined
+            : {
+                  target: "pino-pretty",
+                  options: {
+                      colorize: true,
+                      translateTime: "SYS:standard",
+                      ignore: "pid,hostname"
+                  }
+              }
 });

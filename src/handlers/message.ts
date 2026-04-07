@@ -19,7 +19,10 @@ import { getGuildSettings } from "../database/models/GuildSettings";
 import { getMaxDownloadSize } from "../constants/media-downloader";
 
 // Cache for storing video URLs for interactive resolution selection
-export const videoSelectionCache = new Map<string, { url: string; platform: PlatformId }>();
+export const videoSelectionCache = new Map<
+    string,
+    { url: string; platform: PlatformId; formats?: import("../types/media-downloader").VKRFormat[] }
+>();
 
 // Cache to avoid processing same message twice
 const processedMessages = new Set<string>();
@@ -176,7 +179,8 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                     const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
                     videoSelectionCache.set(selectionId, {
                         url: processed.originalUrl,
-                        platform: processed.platform.id
+                        platform: processed.platform.id,
+                        formats: downloadResult.availableFormats
                     });
                     setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
 
@@ -186,10 +190,10 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                         .addOptions(
                             downloadResult.availableFormats
                                 .slice(0, 25)
-                                .map(fmt =>
+                                .map((fmt, idx) =>
                                     new StringSelectMenuOptionBuilder()
                                         .setLabel(`${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`)
-                                        .setValue(fmt.url.substring(0, 100))
+                                        .setValue(idx.toString())
                                 )
                         );
                     components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
@@ -211,7 +215,11 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                 files.push(attachment);
             } else if (downloadResult.oversized && downloadResult.availableFormats) {
                 const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-                videoSelectionCache.set(selectionId, { url: processed.originalUrl, platform: processed.platform.id });
+                videoSelectionCache.set(selectionId, {
+                    url: processed.originalUrl,
+                    platform: processed.platform.id,
+                    formats: downloadResult.availableFormats
+                });
                 setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
 
                 const selectMenu = new StringSelectMenuBuilder()
@@ -220,10 +228,10 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                     .addOptions(
                         downloadResult.availableFormats
                             .slice(0, 25)
-                            .map(fmt =>
+                            .map((fmt, idx) =>
                                 new StringSelectMenuOptionBuilder()
                                     .setLabel(`${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`)
-                                    .setValue(fmt.url.substring(0, 100))
+                                    .setValue(idx.toString())
                             )
                     );
                 components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));

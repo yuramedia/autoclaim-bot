@@ -26,6 +26,7 @@ import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
 import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
 import { buildNekoBTEmbed } from "../services/nekobt";
 import { downloadMedia, downloadDirect } from "../services/media-downloader";
+import type { DownloadResult } from "../types/media-downloader";
 import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
 import { getMaxDownloadSize } from "../constants/media-downloader";
@@ -45,6 +46,42 @@ const DOWNLOADABLE_PLATFORMS: PlatformId[] = [
     PlatformId.FACEBOOK,
     PlatformId.THREADS
 ];
+
+/**
+ * Build a resolution-select action row from an oversized download result.
+ * Stores available formats in the shared videoSelectionCache so the
+ * resolution-select handler can look up the full URL by index.
+ */
+function buildResolutionSelect(
+    downloadResult: DownloadResult,
+    url: string,
+    platformId: PlatformId
+): ActionRowBuilder<StringSelectMenuBuilder> | null {
+    if (!downloadResult.oversized || !downloadResult.availableFormats) return null;
+
+    const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+    videoSelectionCache.set(selectionId, {
+        url,
+        platform: platformId,
+        formats: downloadResult.availableFormats
+    });
+    setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
+
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`res_select|${selectionId}`)
+        .setPlaceholder("Video too large. Select a smaller resolution.")
+        .addOptions(
+            downloadResult.availableFormats
+                .slice(0, 25)
+                .map((fmt, idx) =>
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel(`${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`)
+                        .setValue(idx.toString())
+                )
+        );
+
+    return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+}
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const url = interaction.options.getString("url", true).trim();
@@ -78,7 +115,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         let embeds: EmbedBuilder[] = [];
         let files: AttachmentBuilder[] = [];
-        let components: any[] = [];
+        let components: ActionRowBuilder<any>[] = [];
 
         // ── Platform-specific rich embeds ────────────────────────────
 
@@ -143,10 +180,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                         let downloadResult;
 
                         if (platform.id === PlatformId.FACEBOOK) {
-                            // Facebook video URLs from our scraper are direct mp4 links
                             downloadResult = await downloadDirect(info.video, "facebook_video.mp4", maxSizeLimit);
-
-                            // Fallback to VKrDownloader if direct download fails
                             if (!downloadResult.success) {
                                 downloadResult = await downloadMedia(url, maxSizeLimit);
                             }
@@ -155,35 +189,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                         }
 
                         if (downloadResult.success && downloadResult.buffer) {
-                            files.push(
-                                new AttachmentBuilder(downloadResult.buffer, {
-                                    name: downloadResult.filename
-                                })
-                            );
-                        } else if (downloadResult.oversized && downloadResult.availableFormats) {
-                            // Offer resolution picker
-                            const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-                            videoSelectionCache.set(selectionId, {
-                                url,
-                                platform: platform.id
-                            });
-                            setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
-
-                            const selectMenu = new StringSelectMenuBuilder()
-                                .setCustomId(`res_select|${selectionId}`)
-                                .setPlaceholder("Video too large. Select a smaller resolution.")
-                                .addOptions(
-                                    downloadResult.availableFormats
-                                        .slice(0, 25)
-                                        .map(fmt =>
-                                            new StringSelectMenuOptionBuilder()
-                                                .setLabel(
-                                                    `${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`
-                                                )
-                                                .setValue(fmt.url.substring(0, 100))
-                                        )
-                                );
-                            components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
+                            files.push(new AttachmentBuilder(downloadResult.buffer, { name: downloadResult.filename }));
+                        } else {
+                            const row = buildResolutionSelect(downloadResult, url, platform.id);
+                            if (row) components.push(row);
                         }
                     }
                 }
@@ -193,34 +202,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     const downloadResult = await downloadMedia(url, maxSizeLimit);
 
                     if (downloadResult.success && downloadResult.buffer) {
-                        files.push(
-                            new AttachmentBuilder(downloadResult.buffer, {
-                                name: downloadResult.filename
-                            })
-                        );
-                    } else if (downloadResult.oversized && downloadResult.availableFormats) {
-                        const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-                        videoSelectionCache.set(selectionId, {
-                            url,
-                            platform: platform.id
-                        });
-                        setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
-
-                        const selectMenu = new StringSelectMenuBuilder()
-                            .setCustomId(`res_select|${selectionId}`)
-                            .setPlaceholder("Video too large. Select a smaller resolution.")
-                            .addOptions(
-                                downloadResult.availableFormats
-                                    .slice(0, 25)
-                                    .map(fmt =>
-                                        new StringSelectMenuOptionBuilder()
-                                            .setLabel(
-                                                `${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`
-                                            )
-                                            .setValue(fmt.url.substring(0, 100))
-                                    )
-                            );
-                        components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
+                        files.push(new AttachmentBuilder(downloadResult.buffer, { name: downloadResult.filename }));
+                    } else {
+                        const row = buildResolutionSelect(downloadResult, url, platform.id);
+                        if (row) components.push(row);
                     }
                 }
 
@@ -230,7 +215,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         // ── Send result ──────────────────────────────────────────────
 
-        // If we got rich embeds or files, send them
         if (embeds.length > 0 || files.length > 0) {
             await interaction.editReply({
                 embeds: embeds.length > 0 ? embeds : undefined,

@@ -17,8 +17,17 @@ export async function handleResolutionSelect(interaction: StringSelectMenuIntera
         return;
     }
 
-    const selectedFormatUrl = interaction.values[0];
-    if (!selectedFormatUrl) return;
+    // The select menu value is a format index into the cached formats array
+    const selectedIndex = parseInt(interaction.values[0] ?? "", 10);
+    const formats = cachedData.formats;
+    if (isNaN(selectedIndex) || !formats || !formats[selectedIndex]) {
+        await interaction.followUp({
+            content: "❌ Invalid selection. Please send the link again.",
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+    const selectedFormatUrl = formats[selectedIndex].url;
 
     // Remove the select menu immediately to prevent multiple clicks
     await interaction.editReply({ components: [] });

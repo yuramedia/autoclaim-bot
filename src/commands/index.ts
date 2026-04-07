@@ -17,6 +17,7 @@ import * as subcr from "./subcr";
 import * as jisho from "./jisho";
 import * as u2Feed from "./u2-feed";
 import * as crrelease from "./crrelease";
+import * as embedCommand from "./embed";
 
 export const commands = [
     setupHoyolab,
@@ -37,7 +38,8 @@ export const commands = [
     subcr,
     jisho,
     u2Feed,
-    crrelease
+    crrelease,
+    embedCommand
 ];
 
 export const commandsData = commands.map(cmd => cmd.data);

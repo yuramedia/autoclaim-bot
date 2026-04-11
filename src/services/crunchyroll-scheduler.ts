@@ -15,10 +15,9 @@ import {
     feedLock
 } from "../constants";
 import { searchAnime } from "./anime-metadata";
-import type { FormattedEpisode, CrunchyrollEpisode } from "../types/crunchyroll";
+import type { FormattedEpisode } from "../types/crunchyroll";
 
 let isFirstRun = true;
-let isRssTurn = false;
 
 /** Prune oldest entries when the map exceeds MAX_SEEN_EPISODES */
 function pruneSeenEpisodes(): void {
@@ -59,8 +58,8 @@ export function startCrunchyrollFeed(client: Client): void {
 
 async function initializeCache(service: CrunchyrollService): Promise<void> {
     try {
-        console.log("📺 Initializing Crunchyroll episode cache from Browser Endpoint...");
-        const episodes = await service.fetchLatestEpisodes("en-US", 100);
+        console.log("📺 Initializing Crunchyroll episode cache from Browser Endpoint (Global)...");
+        const episodes = await service.fetchLatestEpisodes("", 100);
 
         for (const ep of episodes) {
             seenEpisodes.set(ep.id, ep.title);
@@ -77,30 +76,10 @@ async function initializeCache(service: CrunchyrollService): Promise<void> {
 async function checkForNewEpisodes(client: Client, service: CrunchyrollService): Promise<void> {
     feedLock.isChecking = true;
     try {
-        let episodes: CrunchyrollEpisode[] = [];
-
-        if (isRssTurn) {
-            const uuids = await service.fetchLatestEpisodesFromRss();
-            const newUuids = [];
-            for (const uuid of uuids) {
-                if (!seenEpisodes.has(uuid)) {
-                    newUuids.push(uuid);
-                }
-            }
-            if (newUuids.length > 0) {
-                // Fetch full metadata for the new ones
-                episodes = await service.fetchEpisodesByIds(newUuids);
-            }
-        } else {
-            episodes = await service.fetchLatestEpisodes("en-US", 50);
-        }
-
-        // Toggle endpoint for the next run to split load
-        isRssTurn = !isRssTurn;
-
+        const episodes = await service.fetchLatestEpisodes("", 50);
         if (episodes.length === 0) return;
 
-        // Fetch RSS publishers for enrichment
+        // Fetch RSS publishers for enrichment (original)
         await service.fetchRssPublishers();
 
         // Find new or edited episodes

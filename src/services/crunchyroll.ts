@@ -14,7 +14,7 @@ import type {
     CrunchyrollBrowseItem,
     CrunchyrollBrowseResponse
 } from "../types/crunchyroll";
-import { LANG_MAP } from "../constants";
+import { LANG_MAP, CR_RELEASE_ITEMS_PER_PAGE } from "../constants";
 
 // Cache for anonymous auth token
 let cachedAuth: CrunchyrollAuth | null = null;
@@ -78,10 +78,7 @@ export class CrunchyrollService {
         }
     }
 
-    /**
-     * Fetch latest episodes
-     */
-    async fetchLatestEpisodes(lang = "en-US", count = 50): Promise<CrunchyrollEpisode[]> {
+    async fetchLatestEpisodes(lang = "", count = CR_RELEASE_ITEMS_PER_PAGE): Promise<CrunchyrollEpisode[]> {
         const auth = await this.getAuth();
         if (!auth) return [];
 
@@ -90,9 +87,11 @@ export class CrunchyrollService {
                 n: count.toString(),
                 type: "episode",
                 sort_by: "newly_added",
-                locale: lang,
                 force_locale: crypto.randomUUID()
             });
+            if (lang && lang.trim()) {
+                params.append("locale", lang);
+            }
 
             const response = await fetch(`${this.API_BASE}/content/v2/discover/browse?${params}`, {
                 method: "GET",
@@ -175,11 +174,8 @@ export class CrunchyrollService {
         }
     }
 
-    /**
-     * Fetch multiple episodes by their UUIDs in parallel.
-     */
     async fetchEpisodesByIds(episodeIds: string[]): Promise<CrunchyrollEpisode[]> {
-        const auth = await this.getAccountAuth();
+        const auth = await this.getAuth();
         if (!auth) return [];
 
         try {

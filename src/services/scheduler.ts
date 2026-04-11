@@ -5,6 +5,7 @@
 
 import cron from "node-cron";
 import { Client } from "discord.js";
+import { ramen } from "../core/ramen";
 import { User } from "../database/models/User";
 import { HoyolabService, formatHoyolabResults } from "./hoyolab";
 import { EndfieldService, formatEndfieldResult } from "./endfield";
@@ -35,7 +36,7 @@ export function startScheduler(client: Client): void {
             }
 
             console.log("🔄 Running scheduled daily claims (Shard 0)...");
-            await runDailyClaims(client);
+            await runDailyClaims();
         },
         {
             timezone: "Asia/Singapore" // UTC+8
@@ -45,9 +46,8 @@ export function startScheduler(client: Client): void {
 
 /**
  * Run daily claims for all users
- * @param client - Discord client instance
  */
-export async function runDailyClaims(client: Client): Promise<void> {
+export async function runDailyClaims(): Promise<void> {
     try {
         // Use cursor for memory efficiency
         const cursor = User.find({
@@ -63,7 +63,7 @@ export async function runDailyClaims(client: Client): Promise<void> {
         console.log("📊 Starting batch processing for daily claims...");
 
         for await (const user of cursor) {
-            batch.push(processUserClaim(client, user));
+            batch.push(processUserClaim(user));
             count++;
 
             if (batch.length >= BATCH_SIZE) {
@@ -86,10 +86,9 @@ export async function runDailyClaims(client: Client): Promise<void> {
 
 /**
  * Process claims for a single user
- * @param client - Discord client instance
  * @param user - User document from database
  */
-async function processUserClaim(client: Client, user: any): Promise<void> {
+async function processUserClaim(user: any): Promise<void> {
     const results: string[] = [];
 
     // Claim Hoyolab
@@ -135,34 +134,12 @@ async function processUserClaim(client: Client, user: any): Promise<void> {
         console.error(`[Scheduler] Failed to save user ${user.discordId}:`, saveError);
     }
 
-    // Send DM if enabled
+    // Publish claim result event to RAMEN for notification
     if (user.settings.notifyOnClaim && results.length > 0) {
-        await sendClaimNotification(client, user.discordId, results);
-    }
-}
-
-/**
- * Send claim notification to user via DM
- * @param client - Discord client instance
- * @param discordId - User's Discord ID
- * @param results - Array of result strings
- */
-async function sendClaimNotification(client: Client, discordId: string, results: string[]): Promise<void> {
-    try {
-        const discordUser = await client.users.fetch(discordId);
-        await discordUser.send({
-            embeds: [
-                {
-                    title: "📋 Daily Claim Results",
-                    description: results.join("\n\n"),
-                    color: 0x00ff00,
-                    timestamp: new Date().toISOString()
-                }
-            ]
+        ramen.publish("account:claim_result", {
+            discordId: user.discordId,
+            results
         });
-    } catch {
-        // User might have DMs disabled or bot is blocked
-        console.warn(`[Scheduler] Could not DM user ${discordId} (might have DMs off)`);
     }
 }
 
@@ -200,7 +177,7 @@ function getSingaporeTime(): { year: number; month: number; day: number; hour: n
  * been claimed yet today, triggers runDailyClaims().
  * @param client - Discord client instance
  */
-export async function checkMissedClaims(client: Client): Promise<void> {
+export async function checkMissedClaims(): Promise<void> {
     try {
         const { hour, minute } = config.scheduler;
         const sg = getSingaporeTime();
@@ -242,7 +219,7 @@ export async function checkMissedClaims(client: Client): Promise<void> {
 
         if (missedCount > 0) {
             console.log(`⚠️ Found ${missedCount} user(s) with missed claims. Running recovery...`);
-            await runDailyClaims(client);
+            await runDailyClaims();
         } else {
             console.log("✅ No missed claims detected. All users are up to date.");
         }

@@ -9,17 +9,24 @@ import { handleMessage } from "./handlers/message";
 import { startPresenceUpdater } from "./utils/presence";
 import { client } from "./core/client";
 import { logger } from "./core/logger";
+import { ramen } from "./core/ramen";
+import "./services/ramen/crunchyroll.subscriber";
+import "./services/ramen/u2.subscriber";
+import "./services/ramen/claim.subscriber";
 
 // Ready event
 client.once(Events.ClientReady, readyClient => {
     logger.info(`✅ Logged in as ${readyClient.user.tag}`);
     logger.info(`📊 Serving ${readyClient.guilds.cache.size} guilds`);
 
+    // Initialize RAMEN Event Bus
+    ramen.init(client);
+
     // Start scheduler
     startScheduler(client);
 
     // Check for missed claims (recovery after downtime)
-    checkMissedClaims(client);
+    checkMissedClaims();
 
     // Start Crunchyroll feed
     startCrunchyrollFeed(client);

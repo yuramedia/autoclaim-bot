@@ -3,16 +3,14 @@
  * Polls for new episodes and sends Discord notifications
  */
 
-import { Client, TextChannel, EmbedBuilder } from "discord.js";
+import { Client } from "discord.js";
 import { GuildSettings } from "../database/models/GuildSettings";
 import { CrunchyrollService } from "./crunchyroll";
+import { ramen } from "../core/ramen";
 import {
-    LANG_MAP,
-    CRUNCHYROLL_COLOR,
     CRUNCHYROLL_POLL_INTERVAL,
     MAX_SEEN_EPISODES,
     MAX_EPISODES_PER_CYCLE,
-    MESSAGE_DELAY,
     seenEpisodes,
     feedLock
 } from "../constants";
@@ -141,7 +139,7 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
         // Build edit lookup from newEpisodes
         const editedSet = new Set(newEpisodes.filter(e => e.isEdited).map(e => e.episode.episodeId));
 
-        // Get all guilds with Crunchyroll feed enabled
+        // Get all guilds with Crunchyroll feed enabled to extract channel IDs
         const guilds = await GuildSettings.find({
             "crunchyrollFeed.enabled": true,
             "crunchyrollFeed.channelId": { $ne: null }
@@ -149,121 +147,20 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
 
         if (guilds.length === 0) return;
 
-        // Send notifications to each guild
-        for (const guild of guilds) {
-            try {
-                const channel = await client.channels.fetch(guild.crunchyrollFeed.channelId!);
-                if (!channel || !(channel instanceof TextChannel)) continue;
+        const targetChannelIds = guilds.map(g => g.crunchyrollFeed.channelId!);
 
-                // Send each new episode (limit to 100 per cycle to avoid spam)
-                for (const episode of enrichedEpisodes.slice(0, MAX_EPISODES_PER_CYCLE)) {
-                    const isEdited = editedSet.has(episode.episodeId);
-                    const embed = buildEpisodeEmbed(episode, isEdited);
-                    await channel.send({ embeds: [embed] });
-
-                    // Small delay between messages
-                    await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
-                }
-            } catch (error) {
-                console.error(`Failed to send to guild ${guild.guildId}:`, error);
-            }
+        // Publish to RAMEN Bus instead of sending directly
+        for (const episode of enrichedEpisodes.slice(0, MAX_EPISODES_PER_CYCLE)) {
+            const isEdited = editedSet.has(episode.episodeId);
+            ramen.publish("crunchyroll:new_episode", {
+                episode,
+                isEdited,
+                targetChannelIds
+            });
         }
     } catch (error) {
         console.error("Crunchyroll feed check error:", error);
     } finally {
         feedLock.isChecking = false;
     }
-}
-
-function buildEpisodeEmbed(episode: FormattedEpisode, isEdited: boolean): EmbedBuilder {
-    const authorName = episode.publisher ? `${episode.publisher}` : "Crunchyroll New Video";
-
-    const embed = new EmbedBuilder()
-        .setColor(CRUNCHYROLL_COLOR)
-        .setAuthor({
-            name: authorName,
-            iconURL: "https://www.crunchyroll.com/favicons/favicon-32x32.png"
-        })
-        .setTitle(episode.title)
-        .setURL(episode.url)
-        .setDescription(episode.description.slice(0, 200) + (episode.description.length > 200 ? "..." : ""))
-        .setTimestamp(episode.releasedAt);
-
-    // Add thumbnail and image
-    if (episode.seriesPoster) {
-        embed.setThumbnail(episode.seriesPoster);
-    }
-    if (episode.thumbnail) {
-        embed.setImage(episode.thumbnail);
-    }
-
-    // Episode info fields
-    embed.addFields(
-        {
-            name: "Episode ID",
-            value: `[${episode.episodeId}](${episode.url})`,
-            inline: true
-        },
-        {
-            name: "Season ID",
-            value: `[${episode.seasonId}](https://www.crunchyroll.com/series/${episode.seriesId})`,
-            inline: true
-        },
-        {
-            name: "Series ID",
-            value: `[${episode.seriesId}](https://www.crunchyroll.com/series/${episode.seriesId})`,
-            inline: true
-        },
-        {
-            name: "Version",
-            value: LANG_MAP[episode.audioLocale] || episode.audioLocale,
-            inline: true
-        },
-        {
-            name: "IsDub",
-            value: episode.isDub ? "true" : "false",
-            inline: true
-        },
-        {
-            name: "Duration",
-            value: episode.duration,
-            inline: true
-        }
-    );
-
-    // External Links (2 Columns)
-    if (episode.externalLinks) {
-        const { mal, anilist } = episode.externalLinks;
-
-        // MAL
-        if (mal) {
-            // Extract ID from URL for display if possible, else "Link"
-            const malId = mal.split("/").pop() || "Link";
-            embed.addFields({ name: "MAL", value: `[${malId}](${mal})`, inline: true });
-        } else {
-            embed.addFields({ name: "MAL", value: "-", inline: true });
-        }
-
-        // Anilist
-        if (anilist) {
-            const anilistId = anilist.split("/").pop() || "Link";
-            embed.addFields({ name: "Anilist", value: `[${anilistId}](${anilist})`, inline: true });
-        } else {
-            embed.addFields({ name: "Anilist", value: "-", inline: true });
-        }
-    }
-
-    // Subtitles
-    embed.addFields({
-        name: "Subtitles",
-        value: episode.subtitles,
-        inline: false
-    });
-
-    // Footer
-    embed.setFooter({
-        text: isEdited ? "📝 Edited · Hidup CR!" : "Hidup CR!"
-    });
-
-    return embed;
 }

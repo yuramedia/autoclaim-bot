@@ -4,10 +4,11 @@
  * Based on Rimuru-Bot's Feed.check() + Feed.postNew() pattern
  */
 
-import { Client, TextChannel, EmbedBuilder } from "discord.js";
+import { Client } from "discord.js";
 import { GuildSettings } from "../database/models/GuildSettings";
 import { U2FeedService } from "./u2-feed";
-import { U2_POLL_INTERVAL, U2_COLOR, U2_ICON, U2_DEFAULT_FILTER, U2_MAX_ITEMS } from "../constants/u2-feed";
+import { ramen } from "../core/ramen";
+import { U2_POLL_INTERVAL, U2_DEFAULT_FILTER, U2_MAX_ITEMS } from "../constants/u2-feed";
 import type { FormattedU2Item } from "../types/u2-feed";
 
 /**
@@ -45,14 +46,14 @@ export function startU2Feed(client: Client): void {
     // First check after a small delay (shard-guarded)
     setTimeout(async () => {
         if (client.shard && client.shard.ids[0] !== 0) return;
-        await checkFeed(client, service, feedUrl);
+        await checkFeed(service, feedUrl);
     }, 5000);
 
     // Poll at configured interval
     setInterval(async () => {
         // Only run on Shard 0 or un-sharded clients
         if (client.shard && client.shard.ids[0] !== 0) return;
-        await checkFeed(client, service, feedUrl);
+        await checkFeed(service, feedUrl);
     }, U2_POLL_INTERVAL);
 }
 
@@ -64,7 +65,7 @@ export function startU2Feed(client: Client): void {
  * 4. On first check: silently populate cache (no Discord posts)
  * 5. On subsequent checks: post unposted items
  */
-async function checkFeed(client: Client, service: U2FeedService, feedUrl: string): Promise<void> {
+async function checkFeed(service: U2FeedService, feedUrl: string): Promise<void> {
     try {
         const rawItems = await service.fetchFeed(feedUrl);
         if (!rawItems || rawItems.length === 0) {
@@ -106,7 +107,7 @@ async function checkFeed(client: Client, service: U2FeedService, feedUrl: string
         }
 
         // Post new items on subsequent checks
-        await postNewItems(client, service);
+        await postNewItems();
     } catch (error) {
         console.error("U2 feed check error:", error);
         if (isFirstCheck) isFirstCheck = false;
@@ -117,7 +118,7 @@ async function checkFeed(client: Client, service: U2FeedService, feedUrl: string
  * Post unposted items to subscribed channels
  * Matches Rimuru-Bot's Feed.postNew()
  */
-async function postNewItems(client: Client, _service: U2FeedService): Promise<void> {
+async function postNewItems(): Promise<void> {
     // Get all guilds with U2 feed enabled
     const guilds = await GuildSettings.find({
         "u2Feed.enabled": true,
@@ -126,76 +127,21 @@ async function postNewItems(client: Client, _service: U2FeedService): Promise<vo
 
     if (guilds.length === 0) return;
 
-    for (const item of cachedItems) {
-        if (item.wasPosted) continue;
+    const targets = guilds.map(g => ({
+        channelId: g.u2Feed.channelId!,
+        filter: g.u2Feed.filter || U2_DEFAULT_FILTER
+    }));
 
-        // Post to each guild's configured channel
-        for (const guild of guilds) {
-            try {
-                const channel = await client.channels.fetch(guild.u2Feed.channelId!);
-                if (!channel || !(channel instanceof TextChannel)) continue;
+    const newItems = cachedItems.filter(item => !item.wasPosted);
 
-                // Apply guild's filter regex
-                const filterRegex = new RegExp(guild.u2Feed.filter || U2_DEFAULT_FILTER, "i");
-                if (!filterRegex.test(item.title)) continue;
+    if (newItems.length > 0) {
+        ramen.publish("u2:new_torrents", {
+            items: newItems,
+            targets
+        });
 
-                const embed = buildItemEmbed(item);
-                const message = await channel.send({ embeds: [embed] });
-
-                // Cross-post if the channel is an announcement channel
-                try {
-                    await message.crosspost();
-                } catch {
-                    // Not an announcement channel or no permissions — ignore
-                }
-            } catch (error) {
-                console.error(`Failed to send U2 feed to guild ${guild.guildId}:`, error);
-            }
+        for (const item of newItems) {
+            item.wasPosted = true;
         }
-
-        item.wasPosted = true;
     }
-}
-
-/**
- * Build Discord embed for a U2 feed item
- * Matches Rimuru-Bot's embed building in Feed.postNew()
- */
-function buildItemEmbed(item: FormattedU2Item): EmbedBuilder {
-    const embed = new EmbedBuilder()
-        .setColor(U2_COLOR)
-        .setAuthor({
-            name: "U2",
-            url: "https://u2.dmhy.org",
-            iconURL: U2_ICON
-        })
-        .setTitle(item.title.length > 256 ? item.title.substring(0, 250) + "..." : item.title)
-        .setURL(item.link || "https://u2.dmhy.org")
-        .setTimestamp(item.pubDateUnix > 0 ? new Date(item.pubDateUnix * 1000) : item.pubDate);
-
-    if (item.image) {
-        embed.setImage(item.image);
-    }
-
-    embed.addFields(
-        {
-            name: "Category",
-            value: item.category || "-",
-            inline: true
-        },
-        {
-            name: "Size",
-            value: item.size || "Unknown",
-            inline: true
-        },
-        {
-            name: "Uploader",
-            value: item.uploader || "Unknown",
-            inline: true
-        }
-    );
-
-    embed.setFooter({ text: "U2 BDMV" });
-
-    return embed;
 }

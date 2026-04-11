@@ -15,9 +15,10 @@ import {
     feedLock
 } from "../constants";
 import { searchAnime } from "./anime-metadata";
-import type { FormattedEpisode } from "../types/crunchyroll";
+import type { FormattedEpisode, CrunchyrollEpisode } from "../types/crunchyroll";
 
 let isFirstRun = true;
+let isRssTurn = false;
 
 /** Prune oldest entries when the map exceeds MAX_SEEN_EPISODES */
 function pruneSeenEpisodes(): void {
@@ -39,7 +40,7 @@ export function startCrunchyrollFeed(client: Client): void {
     // Initial fetch to populate cache
     initializeCache(service);
 
-    // Poll every 5 minutes
+    // Poll every interval
     setInterval(async () => {
         // Only run on Shard 0 to prevent duplicates
         if (client.shard && client.shard.ids[0] !== 0) {
@@ -58,7 +59,7 @@ export function startCrunchyrollFeed(client: Client): void {
 
 async function initializeCache(service: CrunchyrollService): Promise<void> {
     try {
-        console.log("📺 Initializing Crunchyroll episode cache...");
+        console.log("📺 Initializing Crunchyroll episode cache from Browser Endpoint...");
         const episodes = await service.fetchLatestEpisodes("en-US", 100);
 
         for (const ep of episodes) {
@@ -76,7 +77,27 @@ async function initializeCache(service: CrunchyrollService): Promise<void> {
 async function checkForNewEpisodes(client: Client, service: CrunchyrollService): Promise<void> {
     feedLock.isChecking = true;
     try {
-        const episodes = await service.fetchLatestEpisodes("en-US", 50);
+        let episodes: CrunchyrollEpisode[] = [];
+
+        if (isRssTurn) {
+            const uuids = await service.fetchLatestEpisodesFromRss();
+            const newUuids = [];
+            for (const uuid of uuids) {
+                if (!seenEpisodes.has(uuid)) {
+                    newUuids.push(uuid);
+                }
+            }
+            if (newUuids.length > 0) {
+                // Fetch full metadata for the new ones
+                episodes = await service.fetchEpisodesByIds(newUuids);
+            }
+        } else {
+            episodes = await service.fetchLatestEpisodes("en-US", 50);
+        }
+
+        // Toggle endpoint for the next run to split load
+        isRssTurn = !isRssTurn;
+
         if (episodes.length === 0) return;
 
         // Fetch RSS publishers for enrichment

@@ -132,6 +132,79 @@ export class CrunchyrollService {
     }
 
     /**
+     * Fetch latest episodes from RSS feed
+     * Returns an array of external episode IDs (UUIDs) extracted from the links.
+     */
+    async fetchLatestEpisodesFromRss(): Promise<string[]> {
+        try {
+            const response = await fetch("https://www.crunchyroll.com/rss/anime", {
+                headers: {
+                    "User-Agent": "Crunchyroll/3.50.0"
+                }
+            });
+
+            if (!response.ok) {
+                console.error("Failed to fetch RSS:", response.status);
+                return [];
+            }
+
+            const xml = await response.text();
+
+            // Extract links and then UUIDs
+            const linkRegex = /<link>([^<]+)<\/link>/g;
+            const uuids: string[] = [];
+
+            let match;
+            while ((match = linkRegex.exec(xml)) !== null) {
+                const link = match[1];
+                if (!link || !link.includes("/watch/")) continue;
+
+                const parts = link.split("/watch/");
+                if (parts.length > 1 && parts[1]) {
+                    const uuid = parts[1].split("/")[0];
+                    if (uuid && uuid.length > 5 && !uuids.includes(uuid)) {
+                        uuids.push(uuid);
+                    }
+                }
+            }
+
+            return uuids;
+        } catch (error) {
+            console.error("Error fetching RSS for episodes:", error);
+            return [];
+        }
+    }
+
+    /**
+     * Fetch multiple episodes by their UUIDs in parallel.
+     */
+    async fetchEpisodesByIds(episodeIds: string[]): Promise<CrunchyrollEpisode[]> {
+        const auth = await this.getAccountAuth();
+        if (!auth) return [];
+
+        try {
+            const results = await Promise.all(
+                episodeIds.map(async id => {
+                    const res = await fetch(`${this.API_BASE}/content/v2/cms/objects/${id}?locale=en-US`, {
+                        headers: {
+                            Authorization: `Bearer ${auth.access_token}`,
+                            "User-Agent": this.userAgent
+                        }
+                    });
+                    if (!res.ok) return null;
+                    const data = (await res.json()) as { data: CrunchyrollEpisode[] };
+                    return data.data?.[0] || null;
+                })
+            );
+
+            return results.filter((ep): ep is CrunchyrollEpisode => ep !== null);
+        } catch (error) {
+            console.error("Error fetching episodes by IDs:", error);
+            return [];
+        }
+    }
+
+    /**
      * Format episode for Discord embed
      */
     formatEpisode(ep: CrunchyrollEpisode): FormattedEpisode {

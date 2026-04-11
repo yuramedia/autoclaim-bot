@@ -149,12 +149,15 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
 
         const targetChannelIds = guilds.map(g => g.crunchyrollFeed.channelId!);
 
-        // Publish to RAMEN Bus instead of sending directly
-        for (const episode of enrichedEpisodes.slice(0, MAX_EPISODES_PER_CYCLE)) {
-            const isEdited = editedSet.has(episode.episodeId);
-            ramen.publish("crunchyroll:new_episode", {
-                episode,
-                isEdited,
+        // Publish to RAMEN Bus as a batch to respect message delays in the subscriber
+        const episodesToPublish = enrichedEpisodes.slice(0, MAX_EPISODES_PER_CYCLE).map(ep => ({
+            episode: ep,
+            isEdited: editedSet.has(ep.episodeId)
+        }));
+
+        if (episodesToPublish.length > 0) {
+            ramen.publish("crunchyroll:new_episodes", {
+                episodes: episodesToPublish,
                 targetChannelIds
             });
         }

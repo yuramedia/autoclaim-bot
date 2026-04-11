@@ -1,6 +1,7 @@
 import { TextChannel, EmbedBuilder } from "discord.js";
 import { client } from "../../core/client";
 import { ramen } from "../../core/ramen";
+import { logger } from "../../core/logger";
 import type { FormattedU2Item } from "../../types/u2-feed";
 import { U2_COLOR, U2_ICON } from "../../constants/u2-feed";
 
@@ -9,8 +10,8 @@ export interface U2Target {
     filter: string;
 }
 
-export interface U2TorrentEvent {
-    item: FormattedU2Item;
+export interface U2TorrentsEvent {
+    items: FormattedU2Item[];
     targets: U2Target[];
 }
 
@@ -53,9 +54,8 @@ function buildItemEmbed(item: FormattedU2Item): EmbedBuilder {
     return embed;
 }
 
-ramen.subscribe<U2TorrentEvent>("u2:new_torrent", async data => {
-    const { item, targets } = data;
-    const embed = buildItemEmbed(item);
+ramen.subscribe<U2TorrentsEvent>("u2:new_torrents", async data => {
+    const { items, targets } = data;
 
     for (const target of targets) {
         try {
@@ -63,21 +63,25 @@ ramen.subscribe<U2TorrentEvent>("u2:new_torrent", async data => {
             if (channel && channel instanceof TextChannel) {
                 // Apply guild's filter regex
                 const filterRegex = new RegExp(target.filter, "i");
-                if (!filterRegex.test(item.title)) continue;
 
-                const message = await channel.send({ embeds: [embed] });
+                for (const item of items) {
+                    if (!filterRegex.test(item.title)) continue;
 
-                // Cross-post if the channel is an announcement channel
-                try {
-                    await message.crosspost();
-                } catch {
-                    // Not an announcement channel or no permissions — ignore
+                    const embed = buildItemEmbed(item);
+                    const message = await channel.send({ embeds: [embed] });
+
+                    // Cross-post if the channel is an announcement channel
+                    try {
+                        await message.crosspost();
+                    } catch {
+                        // Not an announcement channel or no permissions — ignore
+                    }
                 }
             }
         } catch (error) {
-            console.error(`RAMEN: Failed to send U2 feed to channel ${target.channelId}:`, error);
+            logger.error(error as Error, `RAMEN: Failed to send U2 feed to channel ${target.channelId}`);
         }
     }
 });
 
-console.log("🍜 RAMEN Subscriber registered: u2:new_torrent");
+logger.info("🍜 RAMEN Subscriber registered: u2:new_torrents");

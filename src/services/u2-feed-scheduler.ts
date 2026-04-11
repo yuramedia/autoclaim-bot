@@ -132,14 +132,16 @@ async function postNewItems(): Promise<void> {
         filter: g.u2Feed.filter || U2_DEFAULT_FILTER
     }));
 
-    for (const item of cachedItems) {
-        if (item.wasPosted) continue;
+    const newItems = cachedItems.filter(item => !item.wasPosted);
 
-        ramen.publish("u2:new_torrent", {
-            item,
+    if (newItems.length > 0) {
+        ramen.publish("u2:new_torrents", {
+            items: newItems,
             targets
         });
 
-        item.wasPosted = true;
+        for (const item of newItems) {
+            item.wasPosted = true;
+        }
     }
 }

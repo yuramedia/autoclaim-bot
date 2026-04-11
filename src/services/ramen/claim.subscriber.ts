@@ -1,5 +1,6 @@
 import { client } from "../../core/client";
 import { ramen } from "../../core/ramen";
+import { logger } from "../../core/logger";
 
 export interface ClaimResultEvent {
     discordId: string;
@@ -33,8 +34,8 @@ ramen.subscribe<ClaimResultEvent>("account:claim_result", async data => {
         });
     } catch {
         // User might have DMs disabled or bot is blocked
-        console.warn(`[RAMEN] Could not DM user ${discordId} (might have DMs off)`);
+        logger.warn(`[RAMEN] Could not DM user ${discordId} (might have DMs off)`);
     }
 });
 
-console.log("🍜 RAMEN Subscriber registered: account:claim_result");
+logger.info("🍜 RAMEN Subscriber registered: account:claim_result");

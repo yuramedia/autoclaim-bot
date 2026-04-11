@@ -1,12 +1,15 @@
 import { TextChannel, EmbedBuilder } from "discord.js";
 import { client } from "../../core/client";
 import { ramen } from "../../core/ramen";
+import { logger } from "../../core/logger";
 import type { FormattedEpisode } from "../../types/crunchyroll";
 import { LANG_MAP, CRUNCHYROLL_COLOR, MESSAGE_DELAY } from "../../constants";
 
-export interface CrunchyrollEpisodeEvent {
-    episode: FormattedEpisode;
-    isEdited: boolean;
+export interface CrunchyrollEpisodesEvent {
+    episodes: {
+        episode: FormattedEpisode;
+        isEdited: boolean;
+    }[];
     targetChannelIds: string[];
 }
 
@@ -102,23 +105,22 @@ function buildEpisodeEmbed(episode: FormattedEpisode, isEdited: boolean): EmbedB
     return embed;
 }
 
-ramen.subscribe<CrunchyrollEpisodeEvent>("crunchyroll:new_episode", async data => {
-    const { episode, isEdited, targetChannelIds } = data;
-    const embed = buildEpisodeEmbed(episode, isEdited);
+ramen.subscribe<CrunchyrollEpisodesEvent>("crunchyroll:new_episodes", async data => {
+    const { episodes, targetChannelIds } = data;
 
-    // Iterate through given channels and see if this shard manages them
     for (const channelId of targetChannelIds) {
         try {
-            // Using cache.get() ensures we only send if the channel exists on THIS shard.
-            // This prevents duplicate messages or the need for cross-shard .fetch()
             const channel = client.channels.cache.get(channelId);
             if (channel && channel instanceof TextChannel) {
-                await channel.send({ embeds: [embed] });
-                await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
+                for (const { episode, isEdited } of episodes) {
+                    const embed = buildEpisodeEmbed(episode, isEdited);
+                    await channel.send({ embeds: [embed] });
+                    await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
+                }
             }
         } catch (error) {
-            console.error(`RAMEN: Failed to send crunchyroll embedded update to channel ${channelId}:`, error);
+            logger.error(error as Error, `RAMEN: Failed to send crunchyroll embedded update to channel ${channelId}`);
         }
     }
 });
-console.log("🍜 RAMEN Subscriber registered: crunchyroll:new_episode");
+logger.info("🍜 RAMEN Subscriber registered: crunchyroll:new_episodes");

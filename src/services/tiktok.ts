@@ -1,23 +1,11 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { parseStat } from "../utils/stats.js";
 import type { PostInfo } from "../types/index.js";
 
 /**
- * Parse string stats (like "1.5K", "2M") to number
- */
-function parseStat(str?: string): number {
-    if (!str) return 0;
-    const clean = str.replace(/[^\d.]/g, "");
-    let num = parseFloat(clean);
-    if (str.toLowerCase().includes("k")) num *= 1000;
-    if (str.toLowerCase().includes("m")) num *= 1000000;
-    if (str.toLowerCase().includes("b")) num *= 1000000000;
-    return Math.round(num) || 0;
-}
-
-/**
- * Fetch TikTok post info via vxtiktok.com by extracting OpenGraph tags
- * @param url - vxtiktok.com URL to fetch (with domain already fixed)
+ * Fetch TikTok post info via tnktok.com by extracting OpenGraph tags
+ * @param url - tnktok.com URL to fetch (with domain already fixed)
  * @param originalUrl - Original TikTok URL
  * @returns Post info or null on error
  */
@@ -55,7 +43,7 @@ export async function fetchTikTokInfo(url: string): Promise<PostInfo | null> {
         // Extract username from title if it contains (@username)
         let authorName = "TikTok";
         let username = "unknown";
-        const titleMatch = title.match(/^(.+?)\s*\(@(\w+)\)$/);
+        const titleMatch = title.match(/^(.+?)\s*\(@([\w.]+)\)$/);
         if (titleMatch) {
             authorName = titleMatch[1]!;
             username = titleMatch[2]!;

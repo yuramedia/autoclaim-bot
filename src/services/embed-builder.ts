@@ -8,6 +8,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { PlatformId } from "../types/embed-fix";
 import { fetchTikTokInfo } from "./tiktok.js";
+import { parseStat } from "../utils/stats.js";
 import type { PlatformConfig } from "../types/embed-fix";
 import type { PostInfo } from "../types";
 
@@ -21,19 +22,6 @@ function formatNumber(num: number): string {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
     if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
     return num.toString();
-}
-
-/**
- * Parse string stats (like "1.5K", "2M") to number
- */
-function parseStat(str?: string): number {
-    if (!str) return 0;
-    const clean = str.replace(/[^\d.]/g, "");
-    let num = parseFloat(clean);
-    if (str.toLowerCase().includes("k")) num *= 1000;
-    if (str.toLowerCase().includes("m")) num *= 1000000;
-    if (str.toLowerCase().includes("b")) num *= 1000000000;
-    return Math.round(num) || 0;
 }
 
 /**

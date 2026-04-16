@@ -179,8 +179,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     if (info.video && canDownload) {
                         let downloadResult;
 
-                        if (platform.id === PlatformId.FACEBOOK) {
-                            downloadResult = await downloadDirect(info.video, "facebook_video.mp4", maxSizeLimit);
+                        if (platform.id === PlatformId.FACEBOOK || platform.id === PlatformId.TIKTOK) {
+                            downloadResult = await downloadDirect(info.video, `${platform.id}_video.mp4`, maxSizeLimit);
                             if (!downloadResult.success) {
                                 downloadResult = await downloadMedia(url, maxSizeLimit);
                             }

@@ -7,6 +7,7 @@ import { EmbedBuilder } from "discord.js";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { PlatformId } from "../types/embed-fix";
+import { fetchTikTokInfo } from "./tiktok.js";
 import type { PlatformConfig } from "../types/embed-fix";
 import type { PostInfo } from "../types";
 
@@ -65,6 +66,8 @@ export function buildRichEmbed(info: PostInfo, platform: PlatformConfig, postUrl
         // Fallback to Facebook logo if avatar is missing
         if (!avatarUrl && platform.id === PlatformId.FACEBOOK) {
             avatarUrl = "https://upload.wikimedia.org/wikipedia/commons/6/6c/Facebook_Logo_2023.png";
+        } else if (!avatarUrl && platform.id === PlatformId.TIKTOK) {
+            avatarUrl = "https://cdn.pixabay.com/photo/2021/01/30/08/04/tiktok-5963032_1280.png";
         }
 
         embed.setAuthor({
@@ -338,6 +341,8 @@ export async function fetchPostInfo(
             return fetchBlueskyInfo(url);
         case PlatformId.FACEBOOK:
             return fetchFacebookInfo(url);
+        case PlatformId.TIKTOK:
+            return fetchTikTokInfo(url);
         // Add more platforms as needed
     }
     return null;

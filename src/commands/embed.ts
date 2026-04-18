@@ -23,7 +23,13 @@ import {
 } from "discord.js";
 import { findPlatform, applyFix, extractPostId } from "../services/embed-fix";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
-import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
+import {
+    fetchNyaaInfo,
+    buildNyaaEmbed,
+    fetchNyaaComment,
+    buildNyaaCommentEmbed,
+    fetchGameMetadata
+} from "../services/nyaa";
 import { buildNekoBTEmbed } from "../services/nekobt";
 import { downloadMedia, downloadDirect } from "../services/media-downloader";
 import type { DownloadResult } from "../types/media-downloader";
@@ -147,6 +153,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                             // Torrent page embed
                             const info = await fetchNyaaInfo(viewId, provider);
                             if (info) {
+                                // Check if it's a game torrent (Software - Games category) and fetch game metadata
+                                if (info.category === "Software - Games") {
+                                    const gameMetadata = await fetchGameMetadata(info.title);
+                                    if (gameMetadata) {
+                                        info.gameMetadata = gameMetadata;
+                                    }
+                                }
                                 const nyaaEmbeds = await buildNyaaEmbed(info, url, provider);
                                 embeds.push(...nyaaEmbeds);
                             }

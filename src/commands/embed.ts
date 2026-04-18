@@ -28,7 +28,7 @@ import {
     buildNyaaEmbed,
     fetchNyaaComment,
     buildNyaaCommentEmbed,
-    fetchGameFromIGDB
+    fetchGameMetadata
 } from "../services/nyaa";
 import { buildNekoBTEmbed } from "../services/nekobt";
 import { downloadMedia, downloadDirect } from "../services/media-downloader";
@@ -155,12 +155,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                             if (info) {
                                 // Check if it's a game torrent (Software - Games category) and fetch game metadata
                                 if (info.category === "Software - Games") {
-                                    const gameName = info.title.split(/[[(]/).pop();
-                                    if (gameName) {
-                                        const gameMetadata = await fetchGameFromIGDB(gameName.trim());
-                                        if (gameMetadata) {
-                                            info.gameMetadata = gameMetadata;
-                                        }
+                                    const gameMetadata = await fetchGameMetadata(info.title);
+                                    if (gameMetadata) {
+                                        info.gameMetadata = gameMetadata;
                                     }
                                 }
                                 const nyaaEmbeds = await buildNyaaEmbed(info, url, provider);

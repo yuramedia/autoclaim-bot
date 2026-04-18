@@ -13,12 +13,23 @@ import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./animetosho";
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
 
 /**
- * Fetch game information from TheGamesDB
+ * Fetch game metadata from a torrent title using TheGamesDB
+ * Automatically extracts the game name from the title and queries the API
  * No authentication required - free API
- * @param gameName - The name of the game to search for
+ * @param rawTitle - The full torrent title (e.g., "Game Name [PC] [2023-08-17]")
  * @returns Game metadata or null if not found
  */
-export async function fetchGameFromIGDB(gameName: string): Promise<GameMetadata | null> {
+export async function fetchGameMetadata(rawTitle: string): Promise<GameMetadata | null> {
+    // Clean title: remove bracketed content [PC], [Date], etc. and parenthesized content (v1.0), etc.
+    const gameName = rawTitle
+        .replace(/\[.*?\]|\(.*?\)/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!gameName) {
+        return null;
+    }
+
     try {
         const encodedName = encodeURIComponent(gameName);
         const response = await axios.get<{
@@ -60,7 +71,7 @@ export async function fetchGameFromIGDB(gameName: string): Promise<GameMetadata 
             engine: undefined // TheGamesDB doesn't provide engine info
         };
     } catch (error) {
-        console.error(`Failed to fetch game info from TheGamesDB for "${gameName}":`, error);
+        console.error(`Failed to fetch game metadata from TheGamesDB for "${gameName}":`, error);
         return null;
     }
 }

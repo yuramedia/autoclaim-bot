@@ -19,7 +19,7 @@ import {
     buildNyaaEmbed,
     fetchNyaaComment,
     buildNyaaCommentEmbed,
-    fetchGameFromIGDB
+    fetchGameMetadata
 } from "../services/nyaa";
 import { getGuildSettings } from "../database/models/GuildSettings";
 import { getMaxDownloadSize } from "../constants/media-downloader";
@@ -136,12 +136,9 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                 if (nyaaInfo) {
                     // Check if it's a game torrent (Software - Games category) and fetch game metadata
                     if (nyaaInfo.category === "Software - Games") {
-                        const gameName = nyaaInfo.title.split(/[[(]/).pop();
-                        if (gameName) {
-                            const gameMetadata = await fetchGameFromIGDB(gameName.trim());
-                            if (gameMetadata) {
-                                nyaaInfo.gameMetadata = gameMetadata;
-                            }
+                        const gameMetadata = await fetchGameMetadata(nyaaInfo.title);
+                        if (gameMetadata) {
+                            nyaaInfo.gameMetadata = gameMetadata;
                         }
                     }
                     const nyaaEmbeds = await buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider);

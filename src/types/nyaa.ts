@@ -29,15 +29,6 @@ export interface NyaaApiResponse {
     comments: NyaaComment[];
 }
 
-/** Game metadata from IGDB */
-export interface GameMetadata {
-    id: number;
-    name: string;
-    cover?: string;
-    developer?: string;
-    engine?: string;
-}
-
 /** Information extracted from a nyaa.si torrent page */
 export interface NyaaTorrentInfo {
     title: string;
@@ -52,5 +43,4 @@ export interface NyaaTorrentInfo {
     infoHash: string;
     magnetLink: string;
     torrentUrl: string | null;
-    gameMetadata?: GameMetadata;
 }

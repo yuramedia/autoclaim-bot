@@ -14,13 +14,7 @@ import {
 import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fix";
 import { downloadMedia, downloadDirect } from "../services/media-downloader";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
-import {
-    fetchNyaaInfo,
-    buildNyaaEmbed,
-    fetchNyaaComment,
-    buildNyaaCommentEmbed,
-    fetchGameMetadata
-} from "../services/nyaa";
+import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
 import { getGuildSettings } from "../database/models/GuildSettings";
 import { getMaxDownloadSize } from "../constants/media-downloader";
 
@@ -134,13 +128,6 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
             } else {
                 const nyaaInfo = await fetchNyaaInfo(viewId, provider);
                 if (nyaaInfo) {
-                    // Check if it's a game torrent (Software - Games category) and fetch game metadata
-                    if (nyaaInfo.category === "Software - Games") {
-                        const gameMetadata = await fetchGameMetadata(nyaaInfo.title);
-                        if (gameMetadata) {
-                            nyaaInfo.gameMetadata = gameMetadata;
-                        }
-                    }
                     const nyaaEmbeds = await buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider);
                     embeds.push(...nyaaEmbeds);
                 }

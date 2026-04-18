@@ -5,76 +5,12 @@
 
 import axios from "axios";
 import { EmbedBuilder } from "discord.js";
-import type { NyaaTorrentInfo, NyaaComment, NyaaApiResponse, GameMetadata } from "../types/nyaa";
+import type { NyaaTorrentInfo, NyaaComment, NyaaApiResponse } from "../types/nyaa";
 import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
 import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./animetosho";
 
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
-
-/**
- * Fetch game metadata from a torrent title using TheGamesDB
- * Automatically extracts the game name from the title and queries the API
- * No authentication required - free API
- * @param rawTitle - The full torrent title (e.g., "Game Name [PC] [2023-08-17]")
- * @returns Game metadata or null if not found
- */
-export async function fetchGameMetadata(rawTitle: string): Promise<GameMetadata | null> {
-    // Clean title: remove bracketed content [PC], [Date], etc. and parenthesized content (v1.0), etc.
-    const gameName = rawTitle
-        .replace(/\[.*?\]|\(.*?\)/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-
-    if (!gameName) {
-        return null;
-    }
-
-    try {
-        const encodedName = encodeURIComponent(gameName);
-        const response = await axios.get<{
-            data?: {
-                games?: Array<{
-                    id: number;
-                    game_title: string;
-                    developers?: string[];
-                    images?: {
-                        boxart?: {
-                            front?: string;
-                        };
-                    };
-                }>;
-            };
-            remaining_monthly_allowance?: number;
-        }>(`https://api.thegamesdb.net/v1/Games/ByGameName?name=${encodedName}`, {
-            timeout: 10000
-        });
-
-        const games = response.data?.data?.games;
-        if (!games || games.length === 0) {
-            return null;
-        }
-
-        const game = games[0];
-        if (!game) return null;
-
-        const cover = game.images?.boxart?.front
-            ? `https://cdn.thegamesdb.net/images/thumb/${game.images.boxart.front}`
-            : undefined;
-        const developer = game.developers?.[0];
-
-        return {
-            id: game.id,
-            name: game.game_title,
-            cover,
-            developer,
-            engine: undefined // TheGamesDB doesn't provide engine info
-        };
-    } catch (error) {
-        console.error(`Failed to fetch game metadata from TheGamesDB for "${gameName}":`, error);
-        return null;
-    }
-}
 
 /**
  * Fetch and extract torrent information from a nyaa.si view page via NyaaAPI
@@ -275,35 +211,6 @@ export async function buildNyaaEmbed(
         embed.addFields({ name: "\u200B", value: "\u200B", inline: true });
     }
 
-    // Add game metadata if available
-    if (info.gameMetadata) {
-        const gameFields: Array<{
-            name: string;
-            value: string;
-            inline: boolean;
-        }> = [];
-
-        if (info.gameMetadata.developer) {
-            gameFields.push({
-                name: "👨‍💻 Developer",
-                value: info.gameMetadata.developer,
-                inline: true
-            });
-        }
-
-        if (info.gameMetadata.engine) {
-            gameFields.push({
-                name: "⚙️ Engine",
-                value: info.gameMetadata.engine,
-                inline: true
-            });
-        }
-
-        if (gameFields.length > 0) {
-            embed.addFields(gameFields);
-        }
-    }
-
     embed.addFields(
         { name: "⬆️ Seeds", value: info.seeds.toString(), inline: true },
         { name: "⬇️ Leechers", value: info.leechers.toString(), inline: true },
@@ -327,11 +234,8 @@ export async function buildNyaaEmbed(
         }
     } catch {}
 
-    // Use game cover as thumbnail if available
-    if (info.gameMetadata?.cover) {
-        embed.setThumbnail(info.gameMetadata.cover);
-    } else if (info.infoHash && info.infoHash !== "Unknown") {
-        // Fetch AnimeTosho images for thumbnail and cover
+    // Fetch AnimeTosho images for thumbnail and cover
+    if (info.infoHash && info.infoHash !== "Unknown") {
         const images = await fetchAnimeImages(info.infoHash);
 
         if (images.cover) {

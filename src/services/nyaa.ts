@@ -13,29 +13,30 @@ import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./animetosho";
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
 
 /**
- * Extract image URLs from text (supports markdown syntax and direct URLs)
+ * Extract image URLs from text (supports markdown syntax and direct URLs with query params)
  * @param text - Text to search for image URLs
- * @returns Array of image URLs found
+ * @returns Array of image URLs found (deduplicated)
  */
 function extractImageUrls(text: string): string[] {
     if (!text) return [];
 
-    const imageUrls: string[] = [];
+    const imageUrls = new Set<string>();
 
-    // Match markdown image syntax: ![alt](url)
+    // Match markdown image syntax: ![alt](url) with trimmed URLs
     const markdownRegex = /!\[.*?\]\((.*?)\)/g;
     let match;
     while ((match = markdownRegex.exec(text)) !== null) {
-        if (match[1]) imageUrls.push(match[1]);
+        const url = match[1]?.trim();
+        if (url) imageUrls.add(url);
     }
 
-    // Match direct image URLs (http/https URLs ending with image extensions)
-    const directUrlRegex = /https?:\/\/[^\s)<>\]]+\.(jpg|jpeg|png|gif|webp|bmp)/gi;
+    // Match direct image URLs (http/https URLs with optional query parameters)
+    const directUrlRegex = /https?:\/\/[^\s)<>\]]+\.(?:jpg|jpeg|png|gif|webp|bmp)(?:\?[^\s)<>\]]*)?/gi;
     while ((match = directUrlRegex.exec(text)) !== null) {
-        if (match[0] && !imageUrls.includes(match[0])) imageUrls.push(match[0]);
+        imageUrls.add(match[0]);
     }
 
-    return imageUrls;
+    return Array.from(imageUrls);
 }
 
 /**
@@ -145,12 +146,14 @@ export async function buildNyaaCommentEmbed(
 
     let description = comment.commentBody || "*Empty comment*";
 
-    // Extract first image if any to use as embed image
-    const imageMatch = description.match(/!\[.*?\]\((.*?)\)/);
-    if (imageMatch && imageMatch[1]) {
-        embed.setImage(imageMatch[1]);
-        // Remove the first image from the description to avoid clutter, using simple replace
-        description = description.replace(imageMatch[0], "").trim();
+    // Extract images from comment using shared utility
+    const commentImages = extractImageUrls(description);
+    let firstImageUrl: string | null = null;
+    if (commentImages.length > 0) {
+        firstImageUrl = commentImages[0]!;
+        embed.setImage(firstImageUrl);
+        // Remove the first image markdown from description to avoid clutter
+        description = description.replace(/!\[.*?\]\((.*?)\)/, "").trim();
     }
 
     embed.setDescription(description.slice(0, 4096) || "*Empty comment*");
@@ -177,14 +180,14 @@ export async function buildNyaaCommentEmbed(
             if (fallbackCover) {
                 embed.setThumbnail(fallbackCover);
             } else if (images.screenshots.length > 1) {
-                embed.setThumbnail(images.screenshots[1] || null);
+                embed.setThumbnail(images.screenshots[1]!);
             }
         }
 
         // If the comment doesn't already have an image from markdown, apply primary screenshot
-        if (!imageMatch || !imageMatch[1]) {
+        if (!firstImageUrl) {
             if (images.screenshots.length > 0) {
-                embed.setImage(images.screenshots[0] || null);
+                embed.setImage(images.screenshots[0]!);
             }
         }
     } else {
@@ -271,7 +274,7 @@ export async function buildNyaaEmbed(
         if (images.cover) {
             embed.setThumbnail(images.cover);
         } else if (images.screenshots.length > 0) {
-            embed.setThumbnail(images.screenshots[0] || null);
+            embed.setThumbnail(images.screenshots[0]!);
         } else {
             const fallbackCover = await fetchAnilistCoverByTitle(info.title);
             if (fallbackCover) {
@@ -283,7 +286,7 @@ export async function buildNyaaEmbed(
         if (descriptionImages.length > 0) {
             embed.setImage(descriptionImages[0]!);
         } else if (images.screenshots.length > 0) {
-            embed.setImage(images.screenshots[0] || null);
+            embed.setImage(images.screenshots[0]!);
         } else if (images.cover) {
             embed.setImage(images.cover);
         } else {
@@ -323,6 +326,16 @@ export async function buildNyaaEmbed(
         }
     }
 
-    const embeds: EmbedBuilder[] = [embed];
+    // Add additional embeds for remaining description images
+    const additionalEmbeds: EmbedBuilder[] = [];
+    if (descriptionImages.length > 1) {
+        for (let i = 1; i < descriptionImages.length; i++) {
+            const imageEmbed = new EmbedBuilder().setColor(NYAA_COLOR).setURL(url).setImage(descriptionImages[i]!);
+
+            additionalEmbeds.push(imageEmbed);
+        }
+    }
+
+    const embeds: EmbedBuilder[] = [embed, ...additionalEmbeds];
     return embeds;
 }

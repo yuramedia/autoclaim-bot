@@ -13,6 +13,33 @@ import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./animetosho";
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
 
 /**
+ * Extract image URLs from text (supports markdown syntax and direct URLs with query params)
+ * @param text - Text to search for image URLs
+ * @returns Array of image URLs found (deduplicated)
+ */
+function extractImageUrls(text: string): string[] {
+    if (!text) return [];
+
+    const imageUrls = new Set<string>();
+
+    // Match markdown image syntax: ![alt](url) with trimmed URLs
+    const markdownRegex = /!\[.*?\]\((.*?)\)/g;
+    let match;
+    while ((match = markdownRegex.exec(text)) !== null) {
+        const url = match[1]?.trim();
+        if (url) imageUrls.add(url);
+    }
+
+    // Match direct image URLs (http/https URLs with optional query parameters)
+    const directUrlRegex = /https?:\/\/[^\s)<>\]]+\.(?:jpg|jpeg|png|gif|webp|bmp)(?:\?[^\s)<>\]]*)?/gi;
+    while ((match = directUrlRegex.exec(text)) !== null) {
+        imageUrls.add(match[0]);
+    }
+
+    return Array.from(imageUrls);
+}
+
+/**
  * Fetch and extract torrent information from a nyaa.si view page via NyaaAPI
  * @param viewId - The ID of the torrent page
  * @param provider - 'nyaa' or 'sukebei'
@@ -119,12 +146,14 @@ export async function buildNyaaCommentEmbed(
 
     let description = comment.commentBody || "*Empty comment*";
 
-    // Extract first image if any to use as embed image
-    const imageMatch = description.match(/!\[.*?\]\((.*?)\)/);
-    if (imageMatch && imageMatch[1]) {
-        embed.setImage(imageMatch[1]);
-        // Remove the first image from the description to avoid clutter, using simple replace
-        description = description.replace(imageMatch[0], "").trim();
+    // Extract images from comment using shared utility
+    const commentImages = extractImageUrls(description);
+    let firstImageUrl: string | null = null;
+    if (commentImages.length > 0) {
+        firstImageUrl = commentImages[0]!;
+        embed.setImage(firstImageUrl);
+        // Remove the first image markdown from description to avoid clutter
+        description = description.replace(/!\[.*?\]\((.*?)\)/, "").trim();
     }
 
     embed.setDescription(description.slice(0, 4096) || "*Empty comment*");
@@ -151,14 +180,14 @@ export async function buildNyaaCommentEmbed(
             if (fallbackCover) {
                 embed.setThumbnail(fallbackCover);
             } else if (images.screenshots.length > 1) {
-                embed.setThumbnail(images.screenshots[1] || null);
+                embed.setThumbnail(images.screenshots[1]!);
             }
         }
 
         // If the comment doesn't already have an image from markdown, apply primary screenshot
-        if (!imageMatch || !imageMatch[1]) {
+        if (!firstImageUrl) {
             if (images.screenshots.length > 0) {
-                embed.setImage(images.screenshots[0] || null);
+                embed.setImage(images.screenshots[0]!);
             }
         }
     } else {
@@ -234,23 +263,37 @@ export async function buildNyaaEmbed(
         }
     } catch {}
 
-    // Fetch AnimeTosho images for thumbnail and cover
+    // Extract images from description
+    const descriptionImages = extractImageUrls(info.information || "");
+
+    // Fetch AnimeTosho images for better quality
     if (info.infoHash && info.infoHash !== "Unknown") {
         const images = await fetchAnimeImages(info.infoHash);
 
+        // Set thumbnail: prioritize animetosho cover (main priority), then screenshot, then anilist cover
         if (images.cover) {
             embed.setThumbnail(images.cover);
+        } else if (images.screenshots.length > 0) {
+            embed.setThumbnail(images.screenshots[0]!);
         } else {
             const fallbackCover = await fetchAnilistCoverByTitle(info.title);
             if (fallbackCover) {
                 embed.setThumbnail(fallbackCover);
-            } else if (images.screenshots.length > 1) {
-                embed.setThumbnail(images.screenshots[1] || null);
             }
         }
 
-        if (images.screenshots.length > 0) {
-            embed.setImage(images.screenshots[0] || null);
+        // Set main image: priority is description images -> animetosho screenshots -> animetosho cover -> anilist cover
+        if (descriptionImages.length > 0) {
+            embed.setImage(descriptionImages[0]!);
+        } else if (images.screenshots.length > 0) {
+            embed.setImage(images.screenshots[0]!);
+        } else if (images.cover) {
+            embed.setImage(images.cover);
+        } else {
+            const fallbackCover = await fetchAnilistCoverByTitle(info.title);
+            if (fallbackCover) {
+                embed.setImage(fallbackCover);
+            }
         }
 
         if (images.directDownloads.length > 0) {
@@ -270,10 +313,29 @@ export async function buildNyaaEmbed(
             }
         }
     } else {
-        const fallbackCover = await fetchAnilistCoverByTitle(info.title);
-        if (fallbackCover) embed.setThumbnail(fallbackCover);
+        // No infohash: use description images or anilist cover
+        if (descriptionImages.length > 0) {
+            embed.setImage(descriptionImages[0]!);
+            embed.setThumbnail(descriptionImages[0]!);
+        } else {
+            const fallbackCover = await fetchAnilistCoverByTitle(info.title);
+            if (fallbackCover) {
+                embed.setImage(fallbackCover);
+                embed.setThumbnail(fallbackCover);
+            }
+        }
     }
 
-    const embeds: EmbedBuilder[] = [embed];
+    // Add additional embeds for remaining description images
+    const additionalEmbeds: EmbedBuilder[] = [];
+    if (descriptionImages.length > 1) {
+        for (let i = 1; i < descriptionImages.length; i++) {
+            const imageEmbed = new EmbedBuilder().setColor(NYAA_COLOR).setURL(url).setImage(descriptionImages[i]!);
+
+            additionalEmbeds.push(imageEmbed);
+        }
+    }
+
+    const embeds: EmbedBuilder[] = [embed, ...additionalEmbeds];
     return embeds;
 }

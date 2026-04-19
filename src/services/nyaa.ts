@@ -13,6 +13,32 @@ import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./animetosho";
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
 
 /**
+ * Extract image URLs from text (supports markdown syntax and direct URLs)
+ * @param text - Text to search for image URLs
+ * @returns Array of image URLs found
+ */
+function extractImageUrls(text: string): string[] {
+    if (!text) return [];
+
+    const imageUrls: string[] = [];
+
+    // Match markdown image syntax: ![alt](url)
+    const markdownRegex = /!\[.*?\]\((.*?)\)/g;
+    let match;
+    while ((match = markdownRegex.exec(text)) !== null) {
+        if (match[1]) imageUrls.push(match[1]);
+    }
+
+    // Match direct image URLs (http/https URLs ending with image extensions)
+    const directUrlRegex = /https?:\/\/[^\s)<>\]]+\.(jpg|jpeg|png|gif|webp|bmp)/gi;
+    while ((match = directUrlRegex.exec(text)) !== null) {
+        if (match[0] && !imageUrls.includes(match[0])) imageUrls.push(match[0]);
+    }
+
+    return imageUrls;
+}
+
+/**
  * Fetch and extract torrent information from a nyaa.si view page via NyaaAPI
  * @param viewId - The ID of the torrent page
  * @param provider - 'nyaa' or 'sukebei'
@@ -234,23 +260,37 @@ export async function buildNyaaEmbed(
         }
     } catch {}
 
-    // Fetch AnimeTosho images for thumbnail and cover
+    // Extract images from description
+    const descriptionImages = extractImageUrls(info.information || "");
+
+    // Fetch AnimeTosho images for better quality
     if (info.infoHash && info.infoHash !== "Unknown") {
         const images = await fetchAnimeImages(info.infoHash);
 
+        // Set thumbnail: prioritize animetosho cover (main priority), then screenshot, then anilist cover
         if (images.cover) {
             embed.setThumbnail(images.cover);
+        } else if (images.screenshots.length > 0) {
+            embed.setThumbnail(images.screenshots[0] || null);
         } else {
             const fallbackCover = await fetchAnilistCoverByTitle(info.title);
             if (fallbackCover) {
                 embed.setThumbnail(fallbackCover);
-            } else if (images.screenshots.length > 1) {
-                embed.setThumbnail(images.screenshots[1] || null);
             }
         }
 
-        if (images.screenshots.length > 0) {
+        // Set main image: priority is description images -> animetosho screenshots -> animetosho cover -> anilist cover
+        if (descriptionImages.length > 0) {
+            embed.setImage(descriptionImages[0]!);
+        } else if (images.screenshots.length > 0) {
             embed.setImage(images.screenshots[0] || null);
+        } else if (images.cover) {
+            embed.setImage(images.cover);
+        } else {
+            const fallbackCover = await fetchAnilistCoverByTitle(info.title);
+            if (fallbackCover) {
+                embed.setImage(fallbackCover);
+            }
         }
 
         if (images.directDownloads.length > 0) {
@@ -270,8 +310,17 @@ export async function buildNyaaEmbed(
             }
         }
     } else {
-        const fallbackCover = await fetchAnilistCoverByTitle(info.title);
-        if (fallbackCover) embed.setThumbnail(fallbackCover);
+        // No infohash: use description images or anilist cover
+        if (descriptionImages.length > 0) {
+            embed.setImage(descriptionImages[0]!);
+            embed.setThumbnail(descriptionImages[0]!);
+        } else {
+            const fallbackCover = await fetchAnilistCoverByTitle(info.title);
+            if (fallbackCover) {
+                embed.setImage(fallbackCover);
+                embed.setThumbnail(fallbackCover);
+            }
+        }
     }
 
     const embeds: EmbedBuilder[] = [embed];

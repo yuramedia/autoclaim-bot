@@ -1,5 +1,6 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { ANILIST_API_URL, ANILIST_USER_AGENT } from "../constants/anime.js";
 
 export interface AnimeToshoImages {
     screenshots: string[];
@@ -85,7 +86,7 @@ async function fetchAnilistCover(anidbId: number | string): Promise<string | nul
     `;
 
         const aniResponse = await axios.post(
-            "https://graphql.anilist.co",
+            ANILIST_API_URL,
             {
                 query,
                 variables: { id: parseInt(anilistId.toString()) }
@@ -93,7 +94,8 @@ async function fetchAnilistCover(anidbId: number | string): Promise<string | nul
             {
                 headers: {
                     "Content-Type": "application/json",
-                    Accept: "application/json"
+                    Accept: "application/json",
+                    "User-Agent": ANILIST_USER_AGENT
                 }
             }
         );
@@ -188,7 +190,7 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
     `;
 
         const aniResponse = await axios.post(
-            "https://graphql.anilist.co",
+            ANILIST_API_URL,
             {
                 query,
                 variables: { search: cleanTitle }
@@ -196,7 +198,8 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
             {
                 headers: {
                     "Content-Type": "application/json",
-                    Accept: "application/json"
+                    Accept: "application/json",
+                    "User-Agent": ANILIST_USER_AGENT
                 }
             }
         );

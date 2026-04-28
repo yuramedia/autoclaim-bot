@@ -5,5 +5,7 @@
         "correctness": "error",
         "suspicious": "warn"
     },
-    "rules": {}
+    "rules": {
+        "no-underscore-dangle": ["error", { "allow": ["_ramen_ipc"] }]
+    }
 }

@@ -50,24 +50,24 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         return;
     }
 
+    await interaction.deferReply({ ephemeral: true });
+
     const subcommand = interaction.options.getSubcommand();
     const settings = await getGuildSettings(interaction.guildId);
 
     switch (subcommand) {
         case "enable": {
             await updateEmbedFixSettings(interaction.guildId, { enabled: true });
-            await interaction.reply({
-                content: "✅ Embed fix has been **enabled** for this server.",
-                ephemeral: true
+            await interaction.editReply({
+                content: "✅ Embed fix has been **enabled** for this server."
             });
             break;
         }
 
         case "disable": {
             await updateEmbedFixSettings(interaction.guildId, { enabled: false });
-            await interaction.reply({
-                content: "❌ Embed fix has been **disabled** for this server.",
-                ephemeral: true
+            await interaction.editReply({
+                content: "❌ Embed fix has been **disabled** for this server."
             });
             break;
         }
@@ -75,11 +75,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         case "auto-upload": {
             const enabled = interaction.options.getBoolean("enabled", true);
             await updateEmbedFixSettings(interaction.guildId, { autoUpload: enabled });
-            await interaction.reply({
+            await interaction.editReply({
                 content: enabled
                     ? "✅ Auto upload has been **enabled**. Media under 10MB will be downloaded and uploaded to Discord."
-                    : "❌ Auto upload has been **disabled**. Only embed fix links will be shown.",
-                ephemeral: true
+                    : "❌ Auto upload has been **disabled**. Only embed fix links will be shown."
             });
             break;
         }
@@ -87,11 +86,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         case "rich-embeds": {
             const enabled = interaction.options.getBoolean("enabled", true);
             await updateEmbedFixSettings(interaction.guildId, { richEmbeds: enabled });
-            await interaction.reply({
+            await interaction.editReply({
                 content: enabled
                     ? "✅ Rich embeds have been **enabled**. Posts will show author info and engagement stats."
-                    : "❌ Rich embeds have been **disabled**. Only embed fix links will be shown.",
-                ephemeral: true
+                    : "❌ Rich embeds have been **disabled**. Only embed fix links will be shown."
             });
             break;
         }
@@ -102,9 +100,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             const platform = PLATFORMS.find(p => p.id === platformId);
 
             if (!platform) {
-                await interaction.reply({
-                    content: "❌ Unknown platform.",
-                    ephemeral: true
+                await interaction.editReply({
+                    content: "❌ Unknown platform."
                 });
                 return;
             }
@@ -125,11 +122,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
 
             await updateEmbedFixSettings(interaction.guildId, { disabledPlatforms });
-            await interaction.reply({
+            await interaction.editReply({
                 content: enabled
                     ? `✅ **${platform.name}** embed fix has been **enabled**.`
-                    : `❌ **${platform.name}** embed fix has been **disabled**.`,
-                ephemeral: true
+                    : `❌ **${platform.name}** embed fix has been **disabled**.`
             });
             break;
         }
@@ -167,7 +163,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 value: platformStatus
             });
 
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await interaction.editReply({ embeds: [embed] });
             break;
         }
     }

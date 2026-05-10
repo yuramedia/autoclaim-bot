@@ -145,7 +145,7 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
         const guilds = await GuildSettings.find({
             "crunchyrollFeed.enabled": true,
             "crunchyrollFeed.channelId": { $ne: null }
-        });
+        }).lean();
 
         if (guilds.length === 0) return;
 

@@ -123,7 +123,7 @@ async function postNewItems(): Promise<void> {
     const guilds = await GuildSettings.find({
         "u2Feed.enabled": true,
         "u2Feed.channelId": { $ne: null }
-    });
+    }).lean();
 
     if (guilds.length === 0) return;
 

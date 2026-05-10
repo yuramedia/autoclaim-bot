@@ -40,6 +40,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         return;
     }
 
+    await interaction.deferReply({ ephemeral: true });
+
     const subcommand = interaction.options.getSubcommand();
     const settings = await getGuildSettings(interaction.guildId);
 
@@ -53,15 +55,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             } as ICrunchyrollFeedSettings;
             await settings.save();
 
-            await interaction.reply({
+            await interaction.editReply({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(0xf47521)
                         .setTitle("✅ Crunchyroll Feed Aktif")
                         .setDescription(`Notifikasi episode baru akan dikirim ke <#${channel.id}>`)
                         .setFooter({ text: "Episode baru akan muncul dalam beberapa menit setelah rilis" })
-                ],
-                ephemeral: true
+                ]
             });
             break;
         }
@@ -73,9 +74,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             } as ICrunchyrollFeedSettings;
             await settings.save();
 
-            await interaction.reply({
-                content: "✅ Notifikasi Crunchyroll telah dinonaktifkan.",
-                ephemeral: true
+            await interaction.editReply({
+                content: "✅ Notifikasi Crunchyroll telah dinonaktifkan."
             });
             break;
         }
@@ -98,7 +98,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     }
                 );
 
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            await interaction.editReply({ embeds: [embed] });
             break;
         }
     }

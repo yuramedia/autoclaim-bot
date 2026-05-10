@@ -8,7 +8,7 @@ import { EmbedBuilder } from "discord.js";
 import type { NyaaTorrentInfo, NyaaComment, NyaaApiResponse } from "../types/nyaa";
 import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
-import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./animetosho";
+import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./amenzb";
 
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
 
@@ -168,7 +168,7 @@ export async function buildNyaaCommentEmbed(
         }
     } catch {}
 
-    // Fetch AnimeTosho images if infoHash is provided
+    // Fetch ameNZB images if infoHash is provided
     if (infoHash && infoHash !== "Unknown") {
         const images = await fetchAnimeImages(infoHash);
 
@@ -266,11 +266,11 @@ export async function buildNyaaEmbed(
     // Extract images from description
     const descriptionImages = extractImageUrls(info.information || "");
 
-    // Fetch AnimeTosho images for better quality
+    // Fetch ameNZB images for better quality
     if (info.infoHash && info.infoHash !== "Unknown") {
         const images = await fetchAnimeImages(info.infoHash);
 
-        // Set thumbnail: prioritize animetosho cover (main priority), then screenshot, then anilist cover
+        // Set thumbnail: prioritize ameNZB cover (main priority), then screenshot, then anilist cover
         if (images.cover) {
             embed.setThumbnail(images.cover);
         } else if (images.screenshots.length > 0) {
@@ -282,7 +282,7 @@ export async function buildNyaaEmbed(
             }
         }
 
-        // Set main image: priority is description images -> animetosho screenshots -> animetosho cover -> anilist cover
+        // Set main image: priority is description images -> ameNZB screenshots -> ameNZB cover -> anilist cover
         if (descriptionImages.length > 0) {
             embed.setImage(descriptionImages[0]!);
         } else if (images.screenshots.length > 0) {
@@ -293,23 +293,6 @@ export async function buildNyaaEmbed(
             const fallbackCover = await fetchAnilistCoverByTitle(info.title);
             if (fallbackCover) {
                 embed.setImage(fallbackCover);
-            }
-        }
-
-        if (images.directDownloads.length > 0) {
-            const ddlLinks = images.directDownloads
-                .slice(0, 5)
-                .map(dl => `[${dl.name}](${dl.url})`)
-                .join(" | ");
-
-            const fields = embed.data.fields || [];
-            const atIndex = fields.findIndex(f => f.name === "⬇️ AnimeTosho");
-            if (atIndex !== -1) {
-                fields[atIndex] = {
-                    ...fields[atIndex],
-                    name: "⬇️ Downloads",
-                    value: `${ddlLinks}\n*[View on AnimeTosho](https://animetosho.org/view/${info.infoHash})*`
-                };
             }
         }
     } else {

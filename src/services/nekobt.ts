@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
-import { fetchAnilistCoverByTitle, fetchAnimeImages } from "./animetosho";
+import { fetchAnilistCoverByTitle, fetchAnimeImages } from "./amenzb";
 
 export interface NekoBTTorrentResponse {
     error: boolean;
@@ -118,7 +118,7 @@ export async function buildNekoBTEmbed(url: string) {
         )
         .setTimestamp(data.uploaded_at);
 
-    // Fetch AnimeTosho images for thumbnail and cover
+    // Fetch ameNZB images for thumbnail and cover
     if (data.infohash && data.infohash !== "Unknown" && data.animetosho !== "skipped") {
         const images = await fetchAnimeImages(data.infohash);
 
@@ -139,18 +139,6 @@ export async function buildNekoBTEmbed(url: string) {
             embed.setImage(images.screenshots[0] || null);
         } else if (data.screenshots && data.screenshots.length > 1) {
             embed.setImage(data.screenshots[1] || null);
-        }
-
-        if (images.directDownloads.length > 0) {
-            const ddlLinks = images.directDownloads
-                .slice(0, 5)
-                .map(dl => `[${dl.name}](${dl.url})`)
-                .join(" | ");
-
-            embed.addFields({
-                name: "⬇️ Downloads",
-                value: `${ddlLinks}\n*[View on AnimeTosho](https://animetosho.org/view/${data.infohash})*`
-            });
         }
     } else {
         const fallbackCover = await fetchAnilistCoverByTitle(data.title);

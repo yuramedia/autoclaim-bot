@@ -49,3 +49,6 @@ export type { FormattedU2Item, IU2FeedSettings } from "./u2-feed";
 
 // Nyaa types
 export type { NyaaTorrentInfo } from "./nyaa";
+
+// ameNZB types
+export type { AmeNZBImages, AmeNZBNewznabItem } from "./amenzb";

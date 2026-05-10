@@ -24,10 +24,17 @@ WORKDIR /app
 # Set production environment
 ENV NODE_ENV=production
 
+# Metadata labels
+LABEL org.opencontainers.image.source="https://github.com/yuramedia/autoclaim-bot"
+LABEL org.opencontainers.image.description="Discord bot for automated game claims"
+LABEL org.opencontainers.image.licenses="MIT"
+
 # Install dumb-init for proper signal handling and setup non-root user
 RUN apk add --no-cache dumb-init && \
     addgroup -g 1001 -S bunjs && \
-    adduser -S botuser -u 1001 -G bunjs
+    adduser -S botuser -u 1001 -G bunjs && \
+    mkdir -p /app/logs /app/data && \
+    chown -R botuser:bunjs /app
 
 # Copy dependencies from builder
 COPY --from=builder --chown=botuser:bunjs /app/node_modules ./node_modules
@@ -35,9 +42,6 @@ COPY --from=builder --chown=botuser:bunjs /app/node_modules ./node_modules
 # Copy source code and config
 COPY --chown=botuser:bunjs package.json tsconfig.json ./
 COPY --chown=botuser:bunjs src ./src
-
-# Create logs and data directories
-RUN mkdir -p /app/logs /app/data && chown -R botuser:bunjs /app
 
 # Switch to non-root user for security
 USER botuser

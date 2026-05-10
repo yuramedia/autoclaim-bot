@@ -302,13 +302,6 @@ export async function buildNyaaEmbed(
                 embed.setImage(fallbackCover);
             }
         }
-
-        if (images.nzbId) {
-            embed.addFields({
-                name: "⬇️ Downloads",
-                value: `*[View on ameNZB](https://amenzb.moe/release/${images.nzbId})*`
-            });
-        }
     } else {
         // No infohash: use description images or anilist cover
         if (descriptionImages.length > 0) {

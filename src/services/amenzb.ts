@@ -304,7 +304,9 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
 
     // Remove standalone episode numbers at the end like "- 01" or "- 12"
     cleanTitle = cleanTitle.replace(/-\s*\d+(\.\d+)?\s*$/, "");
+    cleanTitle = cleanTitle.replace(/\bS\d{1,2}E\d{1,3}\b/gi, ""); // Remove S01E02
     cleanTitle = cleanTitle.replace(/\bS\d{1,2}\b/gi, ""); // Remove Season numbers like S01, S2
+    cleanTitle = cleanTitle.replace(/\bE\d{1,3}\b/gi, ""); // Remove E02
     cleanTitle = cleanTitle.replace(/\b(Episode|Ep)\s*\d+\b/gi, ""); // Remove 'Episode 12'
 
     // Replace dots, underscores with spaces

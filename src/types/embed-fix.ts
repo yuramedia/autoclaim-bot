@@ -17,7 +17,8 @@ export enum PlatformId {
     MISSKEY = "misskey",
     PLURK = "plurk",
     NYAA = "nyaa",
-    NEKOBT = "nekobt"
+    NEKOBT = "nekobt",
+    AMENZB = "amenzb"
 }
 
 /** Configuration for a specific platform */

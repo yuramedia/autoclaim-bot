@@ -138,5 +138,12 @@ export const PLATFORMS: PlatformConfig[] = [
         color: NEKOBT_EMBED_COLOR,
         patterns: [NEKOBT_TORRENT_REGEX],
         fixes: [] // Rich embed only, data fetched via API
+    },
+    {
+        id: PlatformId.AMENZB,
+        name: "AmeNZB",
+        color: 0x00a2ff,
+        patterns: [/https?:\/\/(www\.)?amenzb\.moe\/(release|download)\/\d+/i],
+        fixes: [] // Rich embed only
     }
 ];

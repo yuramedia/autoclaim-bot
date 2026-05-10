@@ -140,6 +140,13 @@ export async function buildNekoBTEmbed(url: string) {
         } else if (data.screenshots && data.screenshots.length > 1) {
             embed.setImage(data.screenshots[1] || null);
         }
+
+        if (images.nzbId) {
+            embed.addFields({
+                name: "⬇️ Downloads",
+                value: `*[View on ameNZB](https://amenzb.moe/release/${images.nzbId})*`
+            });
+        }
     } else {
         const fallbackCover = await fetchAnilistCoverByTitle(data.title);
         if (fallbackCover) {

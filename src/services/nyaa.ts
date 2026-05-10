@@ -8,6 +8,7 @@ import { EmbedBuilder } from "discord.js";
 import type { NyaaTorrentInfo, NyaaComment, NyaaApiResponse } from "../types/nyaa";
 import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
+import { BROWSER_USER_AGENT } from "../constants/anime";
 import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./amenzb";
 
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
@@ -52,7 +53,10 @@ export async function fetchNyaaInfo(
     try {
         const url = `https://nyaaapi.onrender.com/${provider}/id/${viewId}`;
         const response = await axios.get<{ data: NyaaApiResponse }>(url, {
-            timeout: 15000
+            timeout: 15000,
+            headers: {
+                "User-Agent": BROWSER_USER_AGENT
+            }
         });
 
         const data = response.data.data;
@@ -95,7 +99,10 @@ export async function fetchNyaaComment(
     try {
         const url = `https://nyaaapi.onrender.com/${provider}/id/${viewId}`;
         const response = await axios.get<{ data: NyaaApiResponse }>(url, {
-            timeout: 15000
+            timeout: 15000,
+            headers: {
+                "User-Agent": BROWSER_USER_AGENT
+            }
         });
 
         const data = response.data.data;
@@ -294,6 +301,13 @@ export async function buildNyaaEmbed(
             if (fallbackCover) {
                 embed.setImage(fallbackCover);
             }
+        }
+
+        if (images.nzbId) {
+            embed.addFields({
+                name: "⬇️ Downloads",
+                value: `*[View on ameNZB](https://amenzb.moe/release/${images.nzbId})*`
+            });
         }
     } else {
         // No infohash: use description images or anilist cover

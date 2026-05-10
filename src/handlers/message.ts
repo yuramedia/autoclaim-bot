@@ -145,6 +145,14 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
             }
         }
     }
+    // Custom flow for AmeNZB
+    else if (processed.platform.id === PlatformId.AMENZB && processed.postId) {
+        const { buildAmeNZBEmbed } = await import("../services/amenzb");
+        const amenzbEmbed = await buildAmeNZBEmbed(processed.postId, processed.originalUrl);
+        if (amenzbEmbed) {
+            embeds.push(amenzbEmbed);
+        }
+    }
     // Try to fetch rich post info for other platforms
     else if (settings.embedFix.richEmbeds) {
         const postInfo = await fetchPostInfo(processed.fixedUrl, processed.platform, processed.postId);

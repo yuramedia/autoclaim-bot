@@ -6,6 +6,7 @@
 
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { EmbedBuilder } from "discord.js";
 import {
     AMENZB_BASE_URL,
     AMENZB_API_PATH,
@@ -13,8 +14,17 @@ import {
     AMENZB_SCREENSHOTS_PATH,
     AMENZB_COVERS_PATH
 } from "../constants/amenzb.js";
-import { ANILIST_API_URL, ANILIST_USER_AGENT } from "../constants/anime.js";
+import { ANILIST_API_URL, ANILIST_USER_AGENT, BROWSER_USER_AGENT } from "../constants/anime.js";
 import type { AmeNZBImages } from "../types/amenzb.js";
+
+/**
+ * Common headers for ameNZB requests
+ */
+const AMENZB_HEADERS = {
+    "User-Agent": BROWSER_USER_AGENT,
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9"
+};
 
 /**
  * Fetches ameNZB screenshots and cover image for a given torrent infohash.
@@ -26,40 +36,24 @@ import type { AmeNZBImages } from "../types/amenzb.js";
 export async function fetchAnimeImages(infohash: string): Promise<AmeNZBImages> {
     const result: AmeNZBImages = {
         screenshots: [],
-        cover: null
+        cover: null,
+        nzbId: null
     };
 
-    if (!AMENZB_API_KEY) {
-        console.warn("[ameNZB] No API key configured (AMENZB_API_KEY). Skipping ameNZB lookup.");
-        return result;
-    }
-
     try {
-        // 1. Search ameNZB by info_hash using Newznab API
-        const searchUrl = `${AMENZB_BASE_URL}${AMENZB_API_PATH}?t=search&apikey=${AMENZB_API_KEY}&info_hash=${infohash.toLowerCase()}`;
-        const searchResponse = await axios.get(searchUrl, { timeout: 15000 });
-        const xml = searchResponse.data as string;
-
-        if (!xml || typeof xml !== "string") {
-            return result;
-        }
-
-        // Check for API error
-        const errorMatch = xml.match(/<error\s+code="(\d+)"\s+description="([^"]*)"\s*\/>/);
-        if (errorMatch) {
-            console.error(`[ameNZB] API error ${errorMatch[1]}: ${errorMatch[2]}`);
-            return result;
-        }
-
-        // 2. Parse the first <item> from Newznab XML response
-        const releaseId = extractReleaseId(xml);
+        // 1. Find the release ID using the info_hash
+        const releaseId = await findReleaseIdByHash(infohash);
         if (!releaseId) {
             return result;
         }
+        result.nzbId = releaseId;
 
-        // 3. Scrape the release page for screenshots and cover
+        // 2. Scrape the release page for screenshots and cover
         const releaseUrl = `${AMENZB_BASE_URL}/release/${releaseId}`;
-        const releaseResponse = await axios.get(releaseUrl, { timeout: 15000 });
+        const releaseResponse = await axios.get(releaseUrl, {
+            timeout: 15000,
+            headers: AMENZB_HEADERS
+        });
         const html = releaseResponse.data as string;
 
         if (html && typeof html === "string") {
@@ -68,13 +62,14 @@ export async function fetchAnimeImages(infohash: string): Promise<AmeNZBImages> 
 
             // Extract cover from the release page (ameNZB static cover or Anilist link)
             result.cover = extractCover(html);
-        }
 
-        // 4. If no cover found from HTML, try Anilist by extracting title from XML
-        if (!result.cover) {
-            const title = extractTitleFromXml(xml);
-            if (title) {
-                result.cover = await fetchAnilistCoverByTitle(title);
+            // 4. If no cover found from HTML, try Anilist by extracting title from page
+            if (!result.cover) {
+                const $ = cheerio.load(html);
+                const title = $("h5").first().text().trim() || $("h4").first().text().trim();
+                if (title) {
+                    result.cover = await fetchAnilistCoverByTitle(title);
+                }
             }
         }
 
@@ -82,6 +77,72 @@ export async function fetchAnimeImages(infohash: string): Promise<AmeNZBImages> 
     } catch (error) {
         console.error(`[ameNZB] Error fetching images for ${infohash}:`, error);
         return result;
+    }
+}
+
+/**
+ * Build rich Discord embed from an ameNZB release ID
+ * @param releaseId - Numeric ameNZB release ID
+ * @param url - Original URL
+ * @returns Configured EmbedBuilder
+ */
+export async function buildAmeNZBEmbed(releaseId: string, url: string): Promise<EmbedBuilder | null> {
+    try {
+        const releaseUrl = `${AMENZB_BASE_URL}/release/${releaseId}`;
+        const response = await axios.get(releaseUrl, {
+            timeout: 15000,
+            headers: AMENZB_HEADERS
+        });
+        const html = response.data as string;
+
+        if (!html || typeof html !== "string") {
+            return null;
+        }
+
+        const $ = cheerio.load(html);
+        const title = $("h5").first().text().trim() || $("h4").first().text().trim() || "ameNZB Release";
+        const screenshots = extractScreenshots(html, releaseId);
+        const cover = extractCover(html);
+
+        // Extract metadata
+        const metadata: Record<string, string> = {};
+        $(".row.g-2.mt-2 div.col-auto").each((_, el) => {
+            const text = $(el).text().trim();
+            if (text.includes(":")) {
+                const [key, value] = text.split(":").map(s => s.trim());
+                if (key && value) metadata[key] = value;
+            }
+        });
+
+        const embed = new EmbedBuilder()
+            .setColor(0x00a2ff)
+            .setTitle(title.slice(0, 256))
+            .setURL(url)
+            .setAuthor({
+                name: "ameNZB",
+                iconURL: `${AMENZB_BASE_URL}/static/favicon.ico`,
+                url: AMENZB_BASE_URL
+            });
+
+        if (cover) embed.setThumbnail(cover);
+        if (screenshots.length > 0) embed.setImage(screenshots[0]!);
+
+        // Add fields
+        if (metadata["Episodes"]) embed.addFields({ name: "Episodes", value: metadata["Episodes"], inline: true });
+        if (metadata["Studio"]) embed.addFields({ name: "Studio", value: metadata["Studio"], inline: true });
+        if (metadata["Source"]) embed.addFields({ name: "Source", value: metadata["Source"], inline: true });
+
+        // Add health status if found
+        const healthMatch = html.match(/health_status\s*=\s*'([^']+)'/);
+        if (healthMatch?.[1]) {
+            const status = healthMatch[1].charAt(0).toUpperCase() + healthMatch[1].slice(1);
+            embed.addFields({ name: "Health", value: status, inline: true });
+        }
+
+        return embed;
+    } catch (error) {
+        console.error(`[ameNZB] Error building embed for ${releaseId}:`, error);
+        return null;
     }
 }
 
@@ -112,16 +173,6 @@ function extractReleaseId(xml: string): string | null {
     }
 
     return null;
-}
-
-/**
- * Extracts the title from the first <item><title> in Newznab XML.
- * @param xml - Newznab XML response string
- * @returns The release title, or null if not found
- */
-function extractTitleFromXml(xml: string): string | null {
-    const match = xml.match(/<item>[\s\S]*?<title>([^<]+)<\/title>/);
-    return match?.[1] || null;
 }
 
 /**
@@ -353,6 +404,51 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
 }
 
 /**
+ * Finds the ameNZB release ID for a given infohash
+ */
+async function findReleaseIdByHash(infohash: string): Promise<string | null> {
+    // Try API first if API key is available
+    if (AMENZB_API_KEY) {
+        try {
+            const searchUrl = `${AMENZB_BASE_URL}${AMENZB_API_PATH}?t=search&apikey=${AMENZB_API_KEY}&info_hash=${infohash.toLowerCase()}`;
+            const response = await axios.get(searchUrl, { timeout: 15000, headers: AMENZB_HEADERS });
+
+            const xml = response.data as string;
+            const releaseId = extractReleaseId(xml);
+            if (releaseId) return releaseId;
+        } catch (error) {
+            console.error("[ameNZB API] Search failed:", error);
+        }
+    }
+
+    // Fallback to scraping the browse page
+    try {
+        const response = await axios.get(`${AMENZB_BASE_URL}/browse?q=${infohash}`, {
+            timeout: 15000,
+            headers: AMENZB_HEADERS
+        });
+
+        // Check if axios followed a redirect to a release page
+        const finalUrl = response.request?.res?.responseUrl || response.config?.url || "";
+        const idMatch = finalUrl.match(/\/(release|download)\/(\d+)/);
+        if (idMatch?.[2]) {
+            return idMatch[2];
+        }
+
+        const $ = cheerio.load(response.data);
+        const releaseLink = $("a[href^='/release/']").first().attr("href");
+
+        if (releaseLink) {
+            return releaseLink.split("/").pop() || null;
+        }
+    } catch (error) {
+        console.error("[ameNZB Scrape] Search failed:", error);
+    }
+
+    return null;
+}
+
+/**
  * Fetches an Anilist cover image using an AniDB anime ID.
  * Maps the AniDB ID to Anilist ID via animeapi.my.id, then queries the Anilist GraphQL API.
  * @param anidbId - The AniDB anime ID
@@ -361,7 +457,10 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
 export async function fetchAnilistCover(anidbId: number | string): Promise<string | null> {
     try {
         // Get Anilist ID from the mapping API
-        const mapResponse = await axios.get(`https://animeapi.my.id/anidb/${anidbId}`);
+        const mapResponse = await axios.get(`https://animeapi.my.id/anidb/${anidbId}`, {
+            timeout: 10000,
+            headers: { "User-Agent": ANILIST_USER_AGENT }
+        });
         const anilistId = mapResponse.data?.anilist;
 
         if (!anilistId) return null;

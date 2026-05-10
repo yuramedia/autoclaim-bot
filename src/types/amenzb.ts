@@ -9,6 +9,8 @@ export interface AmeNZBImages {
     screenshots: string[];
     /** Cover image URL (from ameNZB or Anilist fallback) */
     cover: string | null;
+    /** ameNZB numeric release ID */
+    nzbId: string | null;
 }
 
 /** Parsed Newznab XML <item> from ameNZB search response */

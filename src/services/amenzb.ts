@@ -27,6 +27,21 @@ const AMENZB_HEADERS = {
 };
 
 /**
+ * Result of a release search
+ */
+interface SearchResult {
+    releaseId: string;
+    html?: string;
+    title?: string;
+}
+
+/**
+ * Cache for anime images: infohash -> AmeNZBImages
+ */
+const imageCache = new Map<string, { data: AmeNZBImages; expiry: number }>();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+/**
  * Fetches ameNZB screenshots and cover image for a given torrent infohash.
  * Searches ameNZB by info_hash, then scrapes the release page for screenshot URLs.
  * Falls back to Anilist cover images when ameNZB cover is unavailable.
@@ -34,6 +49,14 @@ const AMENZB_HEADERS = {
  * @returns An object containing screenshot URLs and a cover URL (if found)
  */
 export async function fetchAnimeImages(infohash: string): Promise<AmeNZBImages> {
+    const hash = infohash.toLowerCase();
+
+    // Check cache
+    const cached = imageCache.get(hash);
+    if (cached && Date.now() < cached.expiry) {
+        return cached.data;
+    }
+
     const result: AmeNZBImages = {
         screenshots: [],
         cover: null,
@@ -42,34 +65,54 @@ export async function fetchAnimeImages(infohash: string): Promise<AmeNZBImages> 
 
     try {
         // 1. Find the release ID using the info_hash
-        const releaseId = await findReleaseIdByHash(infohash);
-        if (!releaseId) {
+        const searchResult = await findReleaseInfoByHash(hash);
+        if (!searchResult) {
             return result;
         }
+        const { releaseId, title: searchTitle } = searchResult;
+        let { html } = searchResult;
         result.nzbId = releaseId;
 
-        // 2. Scrape the release page for screenshots and cover
-        const releaseUrl = `${AMENZB_BASE_URL}/release/${releaseId}`;
-        const releaseResponse = await axios.get(releaseUrl, {
-            timeout: 15000,
-            headers: AMENZB_HEADERS
-        });
-        const html = releaseResponse.data as string;
+        // 2. Scrape the release page for screenshots and cover (if HTML not already fetched)
+        if (!html) {
+            const releaseUrl = `${AMENZB_BASE_URL}/release/${releaseId}`;
+            const releaseResponse = await axios.get(releaseUrl, {
+                timeout: 15000,
+                headers: AMENZB_HEADERS
+            });
+            html = releaseResponse.data as string;
+        }
 
         if (html && typeof html === "string") {
+            const $ = cheerio.load(html);
+
             // Extract screenshots from the release page HTML
             result.screenshots = extractScreenshots(html, releaseId);
 
             // Extract cover from the release page (ameNZB static cover or Anilist link)
             result.cover = extractCover(html);
 
-            // 4. If no cover found from HTML, try Anilist by extracting title from page
+            // 4. If no cover found from HTML, try Anilist by extracting title from page or search
             if (!result.cover) {
-                const $ = cheerio.load(html);
-                const title = $("h5").first().text().trim() || $("h4").first().text().trim();
+                const pageTitle = $("h5").first().text().trim() || $("h4").first().text().trim();
+                const title = pageTitle || searchTitle;
                 if (title) {
                     result.cover = await fetchAnilistCoverByTitle(title);
                 }
+            }
+        }
+
+        // Cache result if something was found
+        if (result.nzbId || result.screenshots.length > 0 || result.cover) {
+            imageCache.set(hash, {
+                data: result,
+                expiry: Date.now() + CACHE_TTL
+            });
+
+            // Prune cache if too large
+            if (imageCache.size > 1000) {
+                const firstKey = imageCache.keys().next().value;
+                if (firstKey) imageCache.delete(firstKey);
             }
         }
 
@@ -404,9 +447,9 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
 }
 
 /**
- * Finds the ameNZB release ID for a given infohash
+ * Finds the ameNZB release ID and associated info for a given infohash
  */
-async function findReleaseIdByHash(infohash: string): Promise<string | null> {
+async function findReleaseInfoByHash(infohash: string): Promise<SearchResult | null> {
     // Try API first if API key is available
     if (AMENZB_API_KEY) {
         try {
@@ -415,7 +458,12 @@ async function findReleaseIdByHash(infohash: string): Promise<string | null> {
 
             const xml = response.data as string;
             const releaseId = extractReleaseId(xml);
-            if (releaseId) return releaseId;
+            if (releaseId) {
+                return {
+                    releaseId,
+                    title: extractTitleFromXml(xml) || undefined
+                };
+            }
         } catch (error) {
             console.error("[ameNZB API] Search failed:", error);
         }
@@ -432,20 +480,37 @@ async function findReleaseIdByHash(infohash: string): Promise<string | null> {
         const finalUrl = response.request?.res?.responseUrl || response.config?.url || "";
         const idMatch = finalUrl.match(/\/(release|download)\/(\d+)/);
         if (idMatch?.[2]) {
-            return idMatch[2];
+            return {
+                releaseId: idMatch[2],
+                html: response.data as string
+            };
         }
 
         const $ = cheerio.load(response.data);
-        const releaseLink = $("a[href^='/release/']").first().attr("href");
+        const releaseLink = $("a[href^='/release/']").first();
+        const releaseHref = releaseLink.attr("href");
 
-        if (releaseLink) {
-            return releaseLink.split("/").pop() || null;
+        if (releaseHref) {
+            return {
+                releaseId: releaseHref.split("/").pop() || "",
+                title: releaseLink.text().trim() || undefined
+            };
         }
     } catch (error) {
         console.error("[ameNZB Scrape] Search failed:", error);
     }
 
     return null;
+}
+
+/**
+ * Extracts the title from the first <item><title> in Newznab XML.
+ * @param xml - Newznab XML response string
+ * @returns The release title, or null if not found
+ */
+function extractTitleFromXml(xml: string): string | null {
+    const match = xml.match(/<item>[\s\S]*?<title>([^<]+)<\/title>/);
+    return match?.[1] || null;
 }
 
 /**

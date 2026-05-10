@@ -259,27 +259,28 @@ export class EndfieldService {
         }
         console.log(`[Endfield] Found ${gameRoles.length} game role(s): ${gameRoles.join(", ")}`);
 
-        // Step 5: Send attendance for each role
-        const roleResults: EndfieldRoleResult[] = [];
-        let allSuccess = true;
-
-        for (const gameRole of gameRoles) {
+        // Step 5: Send attendance for each role in parallel
+        const rolePromises = gameRoles.map(async (gameRole): Promise<EndfieldRoleResult> => {
             try {
                 const response = await sendAttendanceRequest(cred, signToken, gameRole, this.language);
                 console.log(`[Endfield] Role ${gameRole} response:`, JSON.stringify(response));
 
-                const result = this.handleResponse(gameRole, response);
-                roleResults.push(result);
-                if (!result.success && !result.already) allSuccess = false;
+                return this.handleResponse(gameRole, response);
             } catch (error: any) {
                 console.error(`[Endfield] Role ${gameRole} error:`, error.message);
-                roleResults.push({
+                return {
                     gameRole,
                     success: false,
                     message: error.message || "Network error"
-                });
-                allSuccess = false;
+                };
             }
+        });
+
+        const roleResults = await Promise.all(rolePromises);
+        let allSuccess = true;
+
+        for (const result of roleResults) {
+            if (!result.success && !result.already) allSuccess = false;
         }
 
         return {

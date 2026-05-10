@@ -90,41 +90,55 @@ export async function runDailyClaims(): Promise<void> {
  */
 async function processUserClaim(user: any): Promise<void> {
     const results: string[] = [];
+    const claimPromises: Promise<void>[] = [];
 
     // Claim Hoyolab
     if (user.hoyolab?.token) {
-        try {
-            const hoyolab = new HoyolabService(user.hoyolab.token);
-            const hoyolabResults = await hoyolab.claimAll(user.hoyolab.games);
-            const resultText = formatHoyolabResults(hoyolabResults);
-            results.push("**Hoyolab**\n" + resultText);
+        claimPromises.push(
+            (async () => {
+                try {
+                    const hoyolab = new HoyolabService(user.hoyolab.token);
+                    const hoyolabResults = await hoyolab.claimAll(user.hoyolab.games);
+                    const resultText = formatHoyolabResults(hoyolabResults);
+                    results.push("**Hoyolab**\n" + resultText);
 
-            // Update last claim
-            user.hoyolab.lastClaim = new Date();
-            user.hoyolab.lastClaimResult = resultText;
-        } catch (error: any) {
-            console.error(`[Scheduler] Hoyolab claim error for ${user.discordId}:`, error.message);
-            results.push("**Hoyolab**\n❌ Error: " + error.message);
-        }
+                    // Update last claim
+                    user.hoyolab.lastClaim = new Date();
+                    user.hoyolab.lastClaimResult = resultText;
+                } catch (error: any) {
+                    console.error(`[Scheduler] Hoyolab claim error for ${user.discordId}:`, error.message);
+                    results.push("**Hoyolab**\n❌ Error: " + error.message);
+                }
+            })()
+        );
     }
 
     // Claim Endfield
     if (user.endfield?.accountToken) {
-        try {
-            const endfield = new EndfieldService({
-                accountToken: user.endfield.accountToken
-            });
-            const endfieldResult = await endfield.claim();
-            const resultText = formatEndfieldResult(endfieldResult);
-            results.push("**SKPORT/Endfield**\n" + resultText);
+        claimPromises.push(
+            (async () => {
+                try {
+                    const endfield = new EndfieldService({
+                        accountToken: user.endfield.accountToken
+                    });
+                    const endfieldResult = await endfield.claim();
+                    const resultText = formatEndfieldResult(endfieldResult);
+                    results.push("**SKPORT/Endfield**\n" + resultText);
 
-            // Update last claim
-            user.endfield.lastClaim = new Date();
-            user.endfield.lastClaimResult = resultText;
-        } catch (error: any) {
-            console.error(`[Scheduler] Endfield claim error for ${user.discordId}:`, error.message);
-            results.push("**SKPORT/Endfield**\n❌ Error: " + error.message);
-        }
+                    // Update last claim
+                    user.endfield.lastClaim = new Date();
+                    user.endfield.lastClaimResult = resultText;
+                } catch (error: any) {
+                    console.error(`[Scheduler] Endfield claim error for ${user.discordId}:`, error.message);
+                    results.push("**SKPORT/Endfield**\n❌ Error: " + error.message);
+                }
+            })()
+        );
+    }
+
+    // Wait for all claims to finish
+    if (claimPromises.length > 0) {
+        await Promise.all(claimPromises);
     }
 
     // Save updates

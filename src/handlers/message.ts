@@ -59,10 +59,8 @@ export async function handleMessage(message: Message): Promise<void> {
     if (processedUrls.length === 0) return;
 
     try {
-        // Process each URL
-        for (const processed of processedUrls) {
-            await processUrl(message, processed, settings);
-        }
+        // Process each URL in parallel
+        await Promise.all(processedUrls.map(processed => processUrl(message, processed, settings)));
 
         // Suppress original embeds after bot has replied
         // Wait briefly for Discord to generate the original embed

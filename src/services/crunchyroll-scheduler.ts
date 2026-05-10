@@ -116,25 +116,27 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
 
         console.log(`📺 Found ${enrichedEpisodes.length} new/edited Crunchyroll episode(s)`);
 
-        // Enrich with Metadata (MAL/Anilist/AniDB)
-        for (const ep of enrichedEpisodes) {
-            try {
-                const metadata = await searchAnime(ep.seriesTitle);
-                if (metadata) {
-                    ep.externalLinks = {
-                        anilist: metadata.siteUrl || `https://anilist.co/anime/${metadata.id}`,
-                        mal: metadata.idMal ? `https://myanimelist.net/anime/${metadata.idMal}` : undefined
-                    };
-                } else {
-                    ep.externalLinks = {
-                        anilist: `https://anilist.co/search/anime?search=${encodeURIComponent(ep.seriesTitle)}`,
-                        mal: `https://myanimelist.net/anime.php?q=${encodeURIComponent(ep.seriesTitle)}`
-                    };
+        // Enrich with Metadata (MAL/Anilist/AniDB) in parallel
+        await Promise.all(
+            enrichedEpisodes.map(async ep => {
+                try {
+                    const metadata = await searchAnime(ep.seriesTitle);
+                    if (metadata) {
+                        ep.externalLinks = {
+                            anilist: metadata.siteUrl || `https://anilist.co/anime/${metadata.id}`,
+                            mal: metadata.idMal ? `https://myanimelist.net/anime/${metadata.idMal}` : undefined
+                        };
+                    } else {
+                        ep.externalLinks = {
+                            anilist: `https://anilist.co/search/anime?search=${encodeURIComponent(ep.seriesTitle)}`,
+                            mal: `https://myanimelist.net/anime.php?q=${encodeURIComponent(ep.seriesTitle)}`
+                        };
+                    }
+                } catch (e) {
+                    console.error(`Error enriching metadata for ${ep.seriesTitle}:`, e);
                 }
-            } catch (e) {
-                console.error(`Error enriching metadata for ${ep.seriesTitle}:`, e);
-            }
-        }
+            })
+        );
 
         // Build edit lookup from newEpisodes
         const editedSet = new Set(newEpisodes.filter(e => e.isEdited).map(e => e.episode.episodeId));

@@ -179,22 +179,23 @@ export async function buildNyaaCommentEmbed(
     if (infoHash && infoHash !== "Unknown") {
         const images = await fetchAnimeImages(infoHash);
 
-        // Thumbnail: Anilist cover or secondary screenshot
-        if (images.cover) {
-            embed.setThumbnail(images.cover);
-        } else {
-            const fallbackCover = await fetchAnilistCoverByTitle(torrentTitle);
-            if (fallbackCover) {
-                embed.setThumbnail(fallbackCover);
+        // If the comment doesn't already have an image from markdown, apply primary screenshot
+        if (!firstImageUrl && images.screenshots.length > 0) {
+            embed.setImage(images.screenshots[0]!);
+
+            // Use cover as thumbnail if available, or secondary screenshot
+            if (images.cover) {
+                embed.setThumbnail(images.cover);
             } else if (images.screenshots.length > 1) {
                 embed.setThumbnail(images.screenshots[1]!);
             }
-        }
-
-        // If the comment doesn't already have an image from markdown, apply primary screenshot
-        if (!firstImageUrl) {
-            if (images.screenshots.length > 0) {
-                embed.setImage(images.screenshots[0]!);
+        } else {
+            // Main image already set from markdown, use cover for thumbnail
+            if (images.cover) {
+                embed.setThumbnail(images.cover);
+            } else {
+                const fallbackCover = await fetchAnilistCoverByTitle(torrentTitle);
+                if (fallbackCover) embed.setThumbnail(fallbackCover);
             }
         }
     } else {
@@ -272,48 +273,44 @@ export async function buildNyaaEmbed(
 
     // Extract images from description
     const descriptionImages = extractImageUrls(info.information || "");
+    let mainImage: string | null = descriptionImages.length > 0 ? descriptionImages[0]! : null;
+    let thumbnail: string | null = null;
 
     // Fetch ameNZB images for better quality
     if (info.infoHash && info.infoHash !== "Unknown") {
         const images = await fetchAnimeImages(info.infoHash);
 
-        // Set thumbnail: prioritize ameNZB cover (main priority), then screenshot, then anilist cover
-        if (images.cover) {
-            embed.setThumbnail(images.cover);
-        } else if (images.screenshots.length > 0) {
-            embed.setThumbnail(images.screenshots[0]!);
-        } else {
-            const fallbackCover = await fetchAnilistCoverByTitle(info.title);
-            if (fallbackCover) {
-                embed.setThumbnail(fallbackCover);
+        // Determine best main image if not from description
+        if (!mainImage) {
+            if (images.screenshots.length > 0) {
+                mainImage = images.screenshots[0]!;
+            } else if (images.cover) {
+                mainImage = images.cover;
+            } else {
+                mainImage = await fetchAnilistCoverByTitle(info.title);
             }
         }
 
-        // Set main image: priority is description images -> ameNZB screenshots -> ameNZB cover -> anilist cover
-        if (descriptionImages.length > 0) {
-            embed.setImage(descriptionImages[0]!);
-        } else if (images.screenshots.length > 0) {
-            embed.setImage(images.screenshots[0]!);
-        } else if (images.cover) {
-            embed.setImage(images.cover);
-        } else {
-            const fallbackCover = await fetchAnilistCoverByTitle(info.title);
-            if (fallbackCover) {
-                embed.setImage(fallbackCover);
-            }
+        // Determine best thumbnail (prefer cover if main image is a screenshot)
+        if (images.cover && images.cover !== mainImage) {
+            thumbnail = images.cover;
+        } else if (images.screenshots.length > 1 && images.screenshots[1] !== mainImage) {
+            thumbnail = images.screenshots[1]!;
+        } else if (!mainImage) {
+            thumbnail = images.cover || (images.screenshots.length > 0 ? images.screenshots[0]! : null);
         }
-    } else {
-        // No infohash: use description images or anilist cover
-        if (descriptionImages.length > 0) {
-            embed.setImage(descriptionImages[0]!);
-            embed.setThumbnail(descriptionImages[0]!);
-        } else {
-            const fallbackCover = await fetchAnilistCoverByTitle(info.title);
-            if (fallbackCover) {
-                embed.setImage(fallbackCover);
-                embed.setThumbnail(fallbackCover);
-            }
-        }
+    } else if (!mainImage) {
+        // No infohash and no description images: use anilist cover
+        mainImage = await fetchAnilistCoverByTitle(info.title);
+    }
+
+    // Apply images to embed
+    if (mainImage) embed.setImage(mainImage);
+    if (thumbnail && thumbnail !== mainImage) {
+        embed.setThumbnail(thumbnail);
+    } else if (!mainImage) {
+        // Fallback to Nyaa avatar if no images found at all
+        embed.setThumbnail(`https://${domain}/static/img/avatar/default.png`);
     }
 
     // Add additional embeds for remaining description images

@@ -27,10 +27,7 @@ function buildEpisodeEmbed(episode: FormattedEpisode, isEdited: boolean): EmbedB
         .setDescription(episode.description.slice(0, 200) + (episode.description.length > 200 ? "..." : ""))
         .setTimestamp(new Date(episode.releasedAt));
 
-    // Add thumbnail and image
-    if (episode.seriesPoster) {
-        embed.setThumbnail(episode.seriesPoster);
-    }
+    // Add image (large)
     if (episode.thumbnail) {
         embed.setImage(episode.thumbnail);
     }

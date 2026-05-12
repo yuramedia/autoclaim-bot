@@ -14,7 +14,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         .setImage("https://b.cdnst.net/images/share-logo.png")
         .setFooter({ text: "⏳ This takes approximately 30 seconds." });
 
-    await interaction.reply({ embeds: [waitingEmbed] });
+    await interaction.deferReply();
+    await interaction.editReply({ embeds: [waitingEmbed] });
 
     try {
         const speedTest = new UniversalSpeedTest({

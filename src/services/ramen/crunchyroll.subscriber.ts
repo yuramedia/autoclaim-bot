@@ -32,6 +32,11 @@ function buildEpisodeEmbed(episode: FormattedEpisode, isEdited: boolean): EmbedB
         embed.setImage(episode.thumbnail);
     }
 
+    // Add thumbnail (small) - Series poster (Anime Cover)
+    if (episode.seriesPoster) {
+        embed.setThumbnail(episode.seriesPoster);
+    }
+
     // Episode info fields
     embed.addFields(
         {

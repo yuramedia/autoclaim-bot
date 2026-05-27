@@ -6,6 +6,13 @@
 /** Crunchyroll brand color (orange) */
 export const CRUNCHYROLL_COLOR = 0xf47521;
 
+/** Crunchyroll basic auth token */
+export const CRUNCHYROLL_BASIC_AUTH = "bm1oaGcwbDZ4eXhjZm02aHQ2aGY6SjR6bU1mdjNkMVFkWHk4dDk2d1NjeDdoUnkzclBHLTM=";
+
+/** Crunchyroll android TV User-Agent */
+export const CRUNCHYROLL_USER_AGENT =
+    "Crunchyroll/ANDROIDTV/3.61.0_22341 (Android 12; en-US; SHIELD Android TV Build/SR1A.211012.001)";
+
 /** Poll interval for checking new episodes (2 minutes) */
 export const CRUNCHYROLL_POLL_INTERVAL = 2 * 60 * 1000;
 

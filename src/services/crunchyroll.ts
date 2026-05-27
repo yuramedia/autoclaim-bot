@@ -14,7 +14,7 @@ import type {
     CrunchyrollBrowseItem,
     CrunchyrollBrowseResponse
 } from "../types/crunchyroll";
-import { LANG_MAP, CR_RELEASE_ITEMS_PER_PAGE } from "../constants";
+import { LANG_MAP, CR_RELEASE_ITEMS_PER_PAGE, CRUNCHYROLL_BASIC_AUTH, CRUNCHYROLL_USER_AGENT } from "../constants";
 
 // Cache for anonymous auth token
 let cachedAuth: CrunchyrollAuth | null = null;
@@ -26,9 +26,8 @@ let accountAuthExpiresAt = 0;
 
 export class CrunchyrollService {
     private readonly API_BASE = "https://beta-api.crunchyroll.com";
-    private basicAuth = "eTJhcnZqYjBoMHJndnRpemxvdnk6SlZMdndkSXBYdnhVLXFJQnZUMU04b1FUcjFxbFFKWDI=";
-    private userAgent =
-        "Crunchyroll/ANDROIDTV/3.59.0_22338 (Android 12; en-US; SHIELD Android TV Build/SR1A.211012.001)";
+    private basicAuth = CRUNCHYROLL_BASIC_AUTH;
+    private userAgent = CRUNCHYROLL_USER_AGENT;
 
     /**
      * Get auth token (cached)

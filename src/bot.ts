@@ -10,6 +10,7 @@ import { startPresenceUpdater } from "./utils/presence";
 import { client } from "./core/client";
 import { logger } from "./core/logger";
 import { ramen } from "./core/ramen";
+import { fetchCrunchyrollLanguages } from "./constants";
 import "./services/ramen/crunchyroll.subscriber";
 import "./services/ramen/u2.subscriber";
 import "./services/ramen/claim.subscriber";
@@ -47,6 +48,9 @@ client.on(Events.MessageCreate, handleMessage);
 // Main function
 async function main() {
     logger.info("🚀 Starting Auto-Claim Bot Shard...");
+
+    // Fetch Crunchyroll languages
+    await fetchCrunchyrollLanguages();
 
     // Connect to database
     await connectDatabase();

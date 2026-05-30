@@ -1,6 +1,9 @@
 # Docker Compose untuk autoclaim-bot (Production)
 # Deploy: docker compose up -d
-# Note: Requires external network 'yura-network' setup by yura-infra
+# Note: Requires external network 'yura-network' — setup via yura-infra repo.
+#
+# Untuk development lokal, gunakan:
+#   docker compose -f docker-compose.dev.yml up
 
 services:
     bot:

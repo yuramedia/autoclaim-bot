@@ -4,6 +4,7 @@
  */
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
+import { config } from "../config";
 
 export const data = new SlashCommandBuilder().setName("help").setDescription("Show how to use this bot");
 
@@ -92,7 +93,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             },
             {
                 name: "⏰ Auto-Claim Schedule",
-                value: "Daily rewards akan di-claim otomatis setiap **00:00 UTC+8** (tengah malam).",
+                value: (() => {
+                    const { hour, minute } = config.scheduler;
+                    const t = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")} UTC+8`;
+                    return `Daily rewards akan di-claim otomatis setiap **${t}**.`;
+                })(),
                 inline: false
             }
         )

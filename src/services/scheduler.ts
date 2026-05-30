@@ -10,6 +10,7 @@ import { User } from "../database/models/User";
 import { HoyolabService, formatHoyolabResults } from "./hoyolab";
 import { EndfieldService, formatEndfieldResult } from "./endfield";
 import { config } from "../config";
+import { logger } from "../core/logger";
 
 /** Batch processing configuration */
 const BATCH_SIZE = 5; // Process 5 users concurrently
@@ -23,7 +24,7 @@ export function startScheduler(client: Client): void {
     const { hour, minute } = config.scheduler;
     const cronExpression = `${minute} ${hour} * * *`;
 
-    console.log(
+    logger.info(
         `📅 Scheduler set for ${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")} every day`
     );
 
@@ -35,7 +36,7 @@ export function startScheduler(client: Client): void {
                 return;
             }
 
-            console.log("🔄 Running scheduled daily claims (Shard 0)...");
+            logger.info("🔄 Running scheduled daily claims (Shard 0)...");
             await runDailyClaims();
         },
         {
@@ -60,7 +61,7 @@ export async function runDailyClaims(): Promise<void> {
         let batch: Promise<void>[] = [];
         let count = 0;
 
-        console.log("📊 Starting batch processing for daily claims...");
+        logger.info("📊 Starting batch processing for daily claims...");
 
         for await (const user of cursor) {
             batch.push(processUserClaim(user));
@@ -78,9 +79,9 @@ export async function runDailyClaims(): Promise<void> {
             await Promise.all(batch);
         }
 
-        console.log(`✅ Daily claims completed. Processed ${count} users.`);
+        logger.info(`✅ Daily claims completed. Processed ${count} users.`);
     } catch (error) {
-        console.error("[Scheduler] Error:", error);
+        logger.error(error, "[Scheduler] Error:");
     }
 }
 
@@ -106,7 +107,10 @@ async function processUserClaim(user: any): Promise<void> {
                     user.hoyolab.lastClaim = new Date();
                     user.hoyolab.lastClaimResult = resultText;
                 } catch (error: any) {
-                    console.error(`[Scheduler] Hoyolab claim error for ${user.discordId}:`, error.message);
+                    logger.error({
+                        msg: `[Scheduler] Hoyolab claim error for ${user.discordId}:`,
+                        detail: error.message
+                    });
                     results.push("**Hoyolab**\n❌ Error: " + error.message);
                 }
             })()
@@ -129,7 +133,10 @@ async function processUserClaim(user: any): Promise<void> {
                     user.endfield.lastClaim = new Date();
                     user.endfield.lastClaimResult = resultText;
                 } catch (error: any) {
-                    console.error(`[Scheduler] Endfield claim error for ${user.discordId}:`, error.message);
+                    logger.error({
+                        msg: `[Scheduler] Endfield claim error for ${user.discordId}:`,
+                        detail: error.message
+                    });
                     results.push("**SKPORT/Endfield**\n❌ Error: " + error.message);
                 }
             })()
@@ -145,7 +152,7 @@ async function processUserClaim(user: any): Promise<void> {
     try {
         await user.save();
     } catch (saveError) {
-        console.error(`[Scheduler] Failed to save user ${user.discordId}:`, saveError);
+        logger.error(saveError, `[Scheduler] Failed to save user ${user.discordId}:`);
     }
 
     // Publish claim result event to RAMEN for notification
@@ -201,7 +208,7 @@ export async function checkMissedClaims(): Promise<void> {
 
         // If we haven't passed today's claim time yet, nothing to recover
         if (currentMinutes < scheduledMinutes) {
-            console.log("⏰ Scheduled claim time hasn't passed yet today. No recovery needed.");
+            logger.info("⏰ Scheduled claim time hasn't passed yet today. No recovery needed.");
             return;
         }
 
@@ -232,12 +239,12 @@ export async function checkMissedClaims(): Promise<void> {
         });
 
         if (missedCount > 0) {
-            console.log(`⚠️ Found ${missedCount} user(s) with missed claims. Running recovery...`);
+            logger.info(`⚠️ Found ${missedCount} user(s) with missed claims. Running recovery...`);
             await runDailyClaims();
         } else {
-            console.log("✅ No missed claims detected. All users are up to date.");
+            logger.info("✅ No missed claims detected. All users are up to date.");
         }
     } catch (error) {
-        console.error("[Scheduler] Error checking missed claims:", error);
+        logger.error(error, "[Scheduler] Error checking missed claims:");
     }
 }

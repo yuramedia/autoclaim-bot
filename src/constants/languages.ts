@@ -1,6 +1,8 @@
+import { logger } from "../core/logger";
+
 /**
- * Language code to display name mapping
- * Used by Crunchyroll feed and other services
+ * Language code to display name mapping.
+ * Seeded with known clean overrides; updated at runtime by fetchCrunchyrollLanguages().
  */
 export const LANG_MAP: Record<string, string> = {
     "en-US": "English",
@@ -33,6 +35,9 @@ export const LANG_MAP: Record<string, string> = {
 /**
  * Fetches Crunchyroll timed text and audio languages from remote configurations
  * and updates LANG_MAP in place.
+ *
+ * LANG_MAP entries act as clean-name overrides so they always win over the
+ * raw values returned by the Crunchyroll config endpoints.
  */
 export async function fetchCrunchyrollLanguages(): Promise<void> {
     try {
@@ -46,63 +51,28 @@ export async function fetchCrunchyrollLanguages(): Promise<void> {
 
         const merged: Record<string, string> = {};
 
-        // Merge timed text languages
         if (timedTextRes && typeof timedTextRes === "object") {
-            Object.entries(timedTextRes).forEach(([code, name]) => {
-                if (typeof name === "string") {
-                    merged[code] = name;
-                }
-            });
+            for (const [code, name] of Object.entries(timedTextRes)) {
+                if (typeof name === "string") merged[code] = name;
+            }
         }
 
-        // Merge audio languages
         if (audioRes && typeof audioRes === "object") {
-            Object.entries(audioRes).forEach(([code, name]) => {
-                if (typeof name === "string") {
-                    merged[code] = name;
-                }
-            });
+            for (const [code, name] of Object.entries(audioRes)) {
+                if (typeof name === "string") merged[code] = name;
+            }
         }
 
-        // Update LANG_MAP in place, prioritizing our clean overrides
-        // and keeping ja-JP which is missing from Crunchyroll configs.
-        const cleanOverrides: Record<string, string> = {
-            "en-US": "English",
-            "ja-JP": "Japanese",
-            "id-ID": "Indonesian",
-            "ms-MY": "Malay",
-            "de-DE": "German",
-            "es-LA": "Spanish (LA)",
-            "es-ES": "Spanish (ES)",
-            "es-419": "Spanish (LA)",
-            "fr-FR": "French",
-            "it-IT": "Italian",
-            "pl-PL": "Polish",
-            "pt-BR": "Portuguese (BR)",
-            "pt-PT": "Portuguese",
-            "vi-VN": "Vietnamese",
-            "tr-TR": "Turkish",
-            "ru-RU": "Russian",
-            "ar-SA": "Arabic",
-            "hi-IN": "Hindi",
-            "ta-IN": "Tamil",
-            "te-IN": "Telugu",
-            "zh-HK": "Cantonese",
-            "zh-CN": "Mandarin",
-            "zh-TW": "Mandarin (TW)",
-            "ko-KR": "Korean",
-            "th-TH": "Thai"
-        };
+        // Snapshot current overrides before mutating
+        const overrides = { ...LANG_MAP };
 
-        // Combine: merged languages fallback, overrides take precedence
-        const newMap = { ...merged, ...cleanOverrides };
+        // Combine: remote data as base, our clean overrides take precedence
+        const newMap = { ...merged, ...overrides };
 
-        // Mutate the original LANG_MAP so references are kept
-        Object.keys(LANG_MAP).forEach(key => {
-            delete LANG_MAP[key];
-        });
+        // Mutate in place so existing references to LANG_MAP stay valid
+        for (const key of Object.keys(LANG_MAP)) delete LANG_MAP[key];
         Object.assign(LANG_MAP, newMap);
     } catch (error) {
-        console.error("Failed to fetch Crunchyroll languages, using defaults:", error);
+        logger.error(error, "Failed to fetch Crunchyroll languages, using defaults");
     }
 }

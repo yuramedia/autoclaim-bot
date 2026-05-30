@@ -68,7 +68,6 @@ jobs:
                   CLAIM_MINUTE: ${{ vars.CLAIM_MINUTE || '0' }}
                   CR_EMAIL: ${{ secrets.CR_EMAIL }}
                   CR_PASSWORD: ${{ secrets.CR_PASSWORD }}
-                  CR_ETP_RT: ${{ secrets.CR_ETP_RT }}
                   U2_RSS_URL: ${{ secrets.U2_RSS_URL }}
                   AMENZB_API_KEY: ${{ secrets.AMENZB_API_KEY }}
               with:
@@ -77,7 +76,7 @@ jobs:
                   key: ${{ secrets.DEPLOY_SSH_KEY }}
                   port: ${{ secrets.DEPLOY_SSH_PORT }}
                   password: ${{ secrets.DEPLOY_SSH_PASSWORD }}
-                  envs: DISCORD_TOKEN,DISCORD_CLIENT_ID,MONGODB_URI,CLAIM_HOUR,CLAIM_MINUTE,CR_EMAIL,CR_PASSWORD,CR_ETP_RT,U2_RSS_URL,AMENZB_API_KEY
+                  envs: DISCORD_TOKEN,DISCORD_CLIENT_ID,MONGODB_URI,CLAIM_HOUR,CLAIM_MINUTE,CR_EMAIL,CR_PASSWORD,U2_RSS_URL,AMENZB_API_KEY
                   script: |
                       mkdir -p ${{ secrets.DEPLOY_SSH_PATH }}
                       cd ${{ secrets.DEPLOY_SSH_PATH }}
@@ -91,7 +90,6 @@ jobs:
                       CLAIM_MINUTE=${CLAIM_MINUTE}
                       CR_EMAIL=${CR_EMAIL}
                       CR_PASSWORD=${CR_PASSWORD}
-                      CR_ETP_RT=${CR_ETP_RT}
                       AMENZB_API_KEY=${AMENZB_API_KEY}
                       EOF
                       chmod 600 .env.production

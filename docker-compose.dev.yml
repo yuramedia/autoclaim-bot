@@ -1,0 +1,56 @@
+# Docker Compose untuk Development Lokal
+# Usage: docker compose -f docker-compose.dev.yml up
+#
+# Tidak memerlukan external network — semuanya self-contained.
+# Hot-reload aktif: perubahan di src/ langsung terdeteksi.
+
+services:
+    bot:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: autoclaim-bot-dev
+        restart: unless-stopped
+
+        environment:
+            NODE_ENV: development
+
+        # Mount source untuk hot-reload
+        volumes:
+            - .:/app
+            - /app/node_modules
+
+        # Baca dari .env (bukan .env.production)
+        env_file:
+            - .env
+
+        depends_on:
+            mongo:
+                condition: service_healthy
+
+        # Override command untuk dev mode dengan hot-reload
+        command: bun --watch src/index.ts
+
+    mongo:
+        image: mongo:7
+        container_name: autoclaim-bot-mongo-dev
+        restart: unless-stopped
+
+        environment:
+            MONGO_INITDB_DATABASE: autoclaim-bot
+
+        volumes:
+            - mongo_dev_data:/data/db
+
+        ports:
+            # Expose ke localhost untuk akses dengan MongoDB Compass / mongosh
+            - "27017:27017"
+
+        healthcheck:
+            test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+volumes:
+    mongo_dev_data:

@@ -9,6 +9,8 @@ import { GuildSettings } from "../database/models/GuildSettings";
 import { U2FeedService } from "./u2-feed";
 import { ramen } from "../core/ramen";
 import { U2_POLL_INTERVAL, U2_DEFAULT_FILTER, U2_MAX_ITEMS } from "../constants/u2-feed";
+import { config } from "../config";
+import { logger } from "../core/logger";
 import type { FormattedU2Item } from "../types/u2-feed";
 
 /**
@@ -32,15 +34,15 @@ function itemEquals(a: FormattedU2Item, b: FormattedU2Item): boolean {
  * Start the U2 feed scheduler
  */
 export function startU2Feed(client: Client): void {
-    const feedUrl = process.env.U2_RSS_URL;
+    const feedUrl = config.u2.rssUrl;
     if (!feedUrl) {
-        console.log("📦 U2 feed disabled (no U2_RSS_URL configured)");
+        logger.info("📦 U2 feed disabled (no U2_RSS_URL configured)");
         return;
     }
 
-    console.log("📦 Starting U2 BDMV feed scheduler...");
+    logger.info("📦 Starting U2 BDMV feed scheduler...");
     const maskedUrl = feedUrl.replace(/passkey=[^&\s]*/i, "passkey=***");
-    console.log(`📦 Feed URL: ${maskedUrl}`);
+    logger.info(`📦 Feed URL: ${maskedUrl}`);
     const service = new U2FeedService();
 
     // First check after a small delay (shard-guarded)
@@ -70,7 +72,7 @@ async function checkFeed(service: U2FeedService, feedUrl: string): Promise<void>
         const rawItems = await service.fetchFeed(feedUrl);
         if (!rawItems || rawItems.length === 0) {
             if (isFirstCheck) {
-                console.log("📦 U2 feed empty on first check. Feed may be down.");
+                logger.info("📦 U2 feed empty on first check. Feed may be down.");
                 isFirstCheck = false;
             }
             return;
@@ -86,7 +88,7 @@ async function checkFeed(service: U2FeedService, feedUrl: string): Promise<void>
                 // New item — add to cache
                 cachedItems.push(formatted);
             } catch (error) {
-                console.error("U2 RSS item format error:", error);
+                logger.error(error, "U2 RSS item format error:");
             }
         }
 
@@ -101,7 +103,7 @@ async function checkFeed(service: U2FeedService, feedUrl: string): Promise<void>
             for (const item of cachedItems) {
                 item.wasPosted = true;
             }
-            console.log(`📦 Cached ${cachedItems.length} U2 items (first run, silent)`);
+            logger.info(`📦 Cached ${cachedItems.length} U2 items (first run, silent)`);
             isFirstCheck = false;
             return;
         }
@@ -109,7 +111,7 @@ async function checkFeed(service: U2FeedService, feedUrl: string): Promise<void>
         // Post new items on subsequent checks
         await postNewItems();
     } catch (error) {
-        console.error("U2 feed check error:", error);
+        logger.error(error, "U2 feed check error:");
         if (isFirstCheck) isFirstCheck = false;
     }
 }

@@ -1,3 +1,5 @@
+import { config } from "../config";
+
 /**
  * ameNZB Constants
  * Configuration for ameNZB Newznab-compatible Search API
@@ -19,4 +21,4 @@ export const AMENZB_SCREENSHOTS_PATH = "/static/screenshots";
 export const AMENZB_COVERS_PATH = "/static/covers";
 
 /** ameNZB API key from environment */
-export const AMENZB_API_KEY = process.env.AMENZB_API_KEY || "";
+export const AMENZB_API_KEY = config.amenzb.apiKey;

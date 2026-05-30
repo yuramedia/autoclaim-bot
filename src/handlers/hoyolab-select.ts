@@ -1,25 +1,7 @@
 import { StringSelectMenuInteraction, MessageFlags } from "discord.js";
 import { User } from "../database/models/User";
-
-/**
- * Format a Hoyolab game key into a display name
- */
-function formatGameName(key: string): string {
-    switch (key) {
-        case "genshin":
-            return "Genshin Impact";
-        case "starRail":
-            return "Honkai: Star Rail";
-        case "honkai3":
-            return "Honkai Impact 3rd";
-        case "tearsOfThemis":
-            return "Tears of Themis";
-        case "zenlessZoneZero":
-            return "Zenless Zone Zero";
-        default:
-            return key;
-    }
-}
+import { getGameDisplayName } from "../constants/games";
+import { config } from "../config";
 
 export async function handleHoyolabSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -34,22 +16,20 @@ export async function handleHoyolabSelect(interaction: StringSelectMenuInteracti
         zenlessZoneZero: selectedGames.includes("zenlessZoneZero")
     };
 
-    // Update user
     await User.findOneAndUpdate(
         { discordId: interaction.user.id },
-        {
-            $set: {
-                "hoyolab.games": games
-            }
-        }
+        { $set: { "hoyolab.games": games } }
     );
 
     const enabledGamesList = Object.entries(games)
         .filter(([, enabled]) => enabled)
-        .map(([key]) => `• ${formatGameName(key)}`)
+        .map(([key]) => `• ${getGameDisplayName(key)}`)
         .join("\n");
 
+    const { hour, minute } = config.scheduler;
+    const claimTime = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")} UTC+8`;
+
     await interaction.editReply({
-        content: `✅ **Setup Complete!**\n\nThe following games have been enabled for auto-claim:\n\n${enabledGamesList}\n\nYour rewards will be claimed daily at 00:00 UTC+8.`
+        content: `✅ **Setup Complete!**\n\nThe following games have been enabled for auto-claim:\n\n${enabledGamesList}\n\nYour rewards will be claimed daily at **${claimTime}**.`
     });
 }

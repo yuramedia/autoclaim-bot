@@ -15,6 +15,8 @@ import type {
     CrunchyrollBrowseResponse
 } from "../types/crunchyroll";
 import { LANG_MAP, CR_RELEASE_ITEMS_PER_PAGE, CRUNCHYROLL_BASIC_AUTH, CRUNCHYROLL_USER_AGENT } from "../constants";
+import { config } from "../config";
+import { logger } from "../core/logger";
 
 // Cache for anonymous auth token
 let cachedAuth: CrunchyrollAuth | null = null;
@@ -495,11 +497,11 @@ export class CrunchyrollService {
 
         // Using manual credentials
 
-        const email = process.env.CR_EMAIL;
-        const password = process.env.CR_PASSWORD;
+        const email = config.crunchyroll.email;
+        const password = config.crunchyroll.password;
 
         if (!email || !password) {
-            console.error("CR_EMAIL or CR_PASSWORD not configured");
+            logger.error("CR_EMAIL or CR_PASSWORD not configured");
             return null;
         }
 

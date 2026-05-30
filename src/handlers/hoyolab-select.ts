@@ -16,10 +16,7 @@ export async function handleHoyolabSelect(interaction: StringSelectMenuInteracti
         zenlessZoneZero: selectedGames.includes("zenlessZoneZero")
     };
 
-    await User.findOneAndUpdate(
-        { discordId: interaction.user.id },
-        { $set: { "hoyolab.games": games } }
-    );
+    await User.findOneAndUpdate({ discordId: interaction.user.id }, { $set: { "hoyolab.games": games } });
 
     const enabledGamesList = Object.entries(games)
         .filter(([, enabled]) => enabled)

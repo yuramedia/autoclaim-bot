@@ -9,6 +9,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Fixed
+
 - Hapus `CR_ETP_RT` orphan dari deploy pipeline (env var tidak dipakai di source code)
 - Inkonsistensi default `CLAIM_HOUR`: sekarang konsisten `0` di `config.ts` dan `.env.example`
 - Validasi range `CLAIM_HOUR` (0–23) dan `CLAIM_MINUTE` (0–59) — nilai di luar range fallback ke `0`
@@ -21,6 +22,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `amenzb.ts`: baca `AMENZB_API_KEY` dari `config.amenzb` bukan `process.env` langsung
 
 ### Added
+
 - `LICENSE` file (MIT)
 - `CONTRIBUTING.md` — panduan setup local dev dan alur PR
 - `SECURITY.md` — cara melaporkan kerentanan dan best practices self-hosting
@@ -30,11 +32,13 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Semua 20 slash commands terdokumentasi di `README.md`
 
 ### Removed
+
 - `test-amenzb.ts` (root) — file debug dengan API key hardcoded
 - `src/test-u2-feed.ts` — file debug yang tertinggal di source produksi
 - `CR_ETP_RT` dari semua referensi deploy pipeline
 
 ### Security
+
 - `test-amenzb.ts` mengandung API key hardcoded (`AMENZB_API_KEY`) — file dihapus dan pattern `test-*.ts` ditambahkan ke `.gitignore`
 - Centralisasi semua env var ke `src/config.ts` untuk mencegah `process.env` tersebar di seluruh codebase
 

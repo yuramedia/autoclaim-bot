@@ -24,7 +24,9 @@ export function startScheduler(client: Client): void {
     const { hour, minute } = config.scheduler;
     const cronExpression = `${minute} ${hour} * * *`;
 
-    logger.info(`📅 Scheduler set for ${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")} every day`);
+    logger.info(
+        `📅 Scheduler set for ${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")} every day`
+    );
 
     cron.schedule(
         cronExpression,
@@ -105,7 +107,10 @@ async function processUserClaim(user: any): Promise<void> {
                     user.hoyolab.lastClaim = new Date();
                     user.hoyolab.lastClaimResult = resultText;
                 } catch (error: any) {
-                    logger.error({ msg: `[Scheduler] Hoyolab claim error for ${user.discordId}:`, detail: error.message });
+                    logger.error({
+                        msg: `[Scheduler] Hoyolab claim error for ${user.discordId}:`,
+                        detail: error.message
+                    });
                     results.push("**Hoyolab**\n❌ Error: " + error.message);
                 }
             })()
@@ -128,7 +133,10 @@ async function processUserClaim(user: any): Promise<void> {
                     user.endfield.lastClaim = new Date();
                     user.endfield.lastClaimResult = resultText;
                 } catch (error: any) {
-                    logger.error({ msg: `[Scheduler] Endfield claim error for ${user.discordId}:`, detail: error.message });
+                    logger.error({
+                        msg: `[Scheduler] Endfield claim error for ${user.discordId}:`,
+                        detail: error.message
+                    });
                     results.push("**SKPORT/Endfield**\n❌ Error: " + error.message);
                 }
             })()

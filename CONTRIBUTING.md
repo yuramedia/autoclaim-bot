@@ -74,9 +74,9 @@ Pastikan tidak ada lint error sebelum membuat PR.
 ## Pull Request
 
 1. Fork repo dan buat branch dari `main`:
-   ```bash
-   git checkout -b feat/nama-fitur
-   ```
+    ```bash
+    git checkout -b feat/nama-fitur
+    ```
 2. Pastikan `bun run lint` lulus tanpa error.
 3. Buat PR ke branch `main` dengan deskripsi yang jelas tentang perubahan.
 4. CI akan otomatis menjalankan lint check dan Docker build check.

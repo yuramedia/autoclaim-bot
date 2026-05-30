@@ -16,6 +16,7 @@ Jika kamu menemukan kerentanan keamanan, **jangan buat issue publik**.
 Kirim laporan ke: **security@yuramedia.dev** (atau hubungi maintainer langsung via Discord)
 
 Sertakan:
+
 - Deskripsi kerentanan
 - Langkah reproduksi
 - Dampak potensial
@@ -31,7 +32,7 @@ Jika kamu menjalankan bot ini sendiri:
 2. **Batasi akses MongoDB** — gunakan authentication dan network whitelist. Jangan expose port MongoDB ke publik.
 3. **Rotasi token** secara berkala — Hoyolab token bisa expire; regenerate jika ada aktivitas mencurigakan.
 4. **Amankan server** — jalankan bot di lingkungan yang tidak accessible publik jika memungkinkan.
-5. **AMENZB_API_KEY** — pin IP bot di *Account Settings → IP Security* di amenzb.moe untuk mencegah penyalahgunaan.
+5. **AMENZB_API_KEY** — pin IP bot di _Account Settings → IP Security_ di amenzb.moe untuk mencegah penyalahgunaan.
 6. **Jangan hardcode secret** di source code — selalu gunakan environment variables melalui `config.ts`.
 
 ## Token Storage

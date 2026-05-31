@@ -66,7 +66,7 @@ Proyek menggunakan **OXC** untuk linting dan formatting:
 bun run lint
 
 # Format
-bun run fmt
+bun run format
 ```
 
 Pastikan tidak ada lint error sebelum membuat PR.

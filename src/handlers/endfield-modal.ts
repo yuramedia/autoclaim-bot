@@ -7,6 +7,7 @@
 import { type ModalSubmitInteraction, MessageFlags } from "discord.js";
 import { User } from "../database/models/User";
 import { EndfieldService } from "../services/endfield";
+import { encryptToken } from "../utils/token-crypto";
 
 export async function handleEndfieldModal(interaction: ModalSubmitInteraction): Promise<void> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -23,14 +24,14 @@ export async function handleEndfieldModal(interaction: ModalSubmitInteraction): 
         return;
     }
 
-    // Save to database
+    // Save to database — encrypt token before storage
     await User.findOneAndUpdate(
         { discordId: interaction.user.id },
         {
             $set: {
                 username: interaction.user.username,
                 endfield: {
-                    accountToken,
+                    accountToken: encryptToken(accountToken),
                     accountName: nickname
                 }
             },

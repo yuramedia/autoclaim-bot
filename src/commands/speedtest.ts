@@ -1,9 +1,22 @@
-import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
 import { UniversalSpeedTest, SpeedUnits } from "universal-speedtest";
+import { getCooldownRemaining, setCooldown, formatCooldown } from "../utils/cooldown";
+
+const SPEEDTEST_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes per user
 
 export const data = new SlashCommandBuilder().setName("speedtest").setDescription("Check hosting server network speed");
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    // Per-user cooldown — speedtest is resource-intensive (~30s, consumes bandwidth)
+    const remaining = getCooldownRemaining("speedtest", interaction.user.id, SPEEDTEST_COOLDOWN_MS);
+    if (remaining > 0) {
+        await interaction.reply({
+            content: `⏳ Please wait **${formatCooldown(remaining)}** before running another speedtest.`,
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
     const waitingEmbed = new EmbedBuilder()
         .setTitle("🌐 Speedtest")
         .setColor(0xffff00)
@@ -30,6 +43,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         });
 
         const result = await speedTest.performOoklaTest();
+
+        // Stamp cooldown after a successful (expensive) run
+        setCooldown("speedtest", interaction.user.id);
 
         const finishEmbed = new EmbedBuilder()
             .setTitle(`🌐 ${interaction.client.user?.username} Speedtest`)
@@ -65,7 +81,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     inline: true
                 },
                 {
-                    name: "� Jitter",
+                    name: "📈 Jitter",
                     value: `\`${result.pingResult.jitter.toFixed(2)}ms\``,
                     inline: true
                 },

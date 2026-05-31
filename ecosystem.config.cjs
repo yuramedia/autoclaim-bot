@@ -1,3 +1,11 @@
+/**
+ * PM2 Ecosystem Config — LEGACY / UNUSED
+ *
+ * This file is kept for reference only. The project now deploys via Docker.
+ * See docker-compose.yml and .github/workflows/deploy.yml for the active setup.
+ *
+ * To run locally without Docker: bun run start
+ */
 module.exports = {
     apps: [
         {

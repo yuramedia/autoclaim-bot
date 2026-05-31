@@ -4,6 +4,11 @@ on:
     push:
         branches: [main]
 
+# Prevent concurrent deploys — if a new push arrives while deploying, cancel the old run.
+concurrency:
+    group: deploy-production
+    cancel-in-progress: true
+
 env:
     REGISTRY: ghcr.io
     IMAGE_NAME: yuramedia/autoclaim-bot
@@ -17,20 +22,20 @@ jobs:
 
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@v6
+              uses: actions/checkout@main
 
             - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v4
+              uses: docker/setup-buildx-action@master
 
             - name: Log in to Container Registry
-              uses: docker/login-action@v4
+              uses: docker/login-action@master
               with:
                   registry: ${{ env.REGISTRY }}
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Build and Push Docker Image
-              uses: docker/build-push-action@v7
+              uses: docker/build-push-action@master
               with:
                   context: .
                   push: true
@@ -44,9 +49,15 @@ jobs:
         needs: build
         runs-on: ubuntu-latest
 
+        # Registers the job as a tracked GitHub Deployment (shows in the
+        # "Deployments" sidebar and lets you add protection rules later).
+        environment:
+            name: production
+            url: https://discord.com/oauth2/authorize?client_id=${{ secrets.DISCORD_CLIENT_ID }}
+
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@v6
+              uses: actions/checkout@main
 
             - name: Copy docker-compose.yml to Server
               uses: appleboy/scp-action@master
@@ -70,19 +81,20 @@ jobs:
                   CR_PASSWORD: ${{ secrets.CR_PASSWORD }}
                   U2_RSS_URL: ${{ secrets.U2_RSS_URL }}
                   AMENZB_API_KEY: ${{ secrets.AMENZB_API_KEY }}
+                  TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
               with:
                   host: ${{ secrets.DEPLOY_SSH_HOST }}
                   username: ${{ secrets.DEPLOY_SSH_USERNAME }}
                   key: ${{ secrets.DEPLOY_SSH_KEY }}
                   port: ${{ secrets.DEPLOY_SSH_PORT }}
                   password: ${{ secrets.DEPLOY_SSH_PASSWORD }}
-                  envs: DISCORD_TOKEN,DISCORD_CLIENT_ID,MONGODB_URI,CLAIM_HOUR,CLAIM_MINUTE,CR_EMAIL,CR_PASSWORD,U2_RSS_URL,AMENZB_API_KEY
+                  envs: DISCORD_TOKEN,DISCORD_CLIENT_ID,MONGODB_URI,CLAIM_HOUR,CLAIM_MINUTE,CR_EMAIL,CR_PASSWORD,U2_RSS_URL,AMENZB_API_KEY,TOKEN_ENCRYPTION_KEY
                   script: |
                       mkdir -p ${{ secrets.DEPLOY_SSH_PATH }}
                       cd ${{ secrets.DEPLOY_SSH_PATH }}
 
-                      # Create .env.production from GitHub secrets
-                      cat > .env.production << EOF
+                      # Write .env.production from GitHub secrets
+                      cat > .env.production << ENVEOF
                       DISCORD_TOKEN=${DISCORD_TOKEN}
                       DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
                       MONGODB_URI=${MONGODB_URI}
@@ -90,23 +102,34 @@ jobs:
                       CLAIM_MINUTE=${CLAIM_MINUTE}
                       CR_EMAIL=${CR_EMAIL}
                       CR_PASSWORD=${CR_PASSWORD}
+                      U2_RSS_URL=${U2_RSS_URL}
                       AMENZB_API_KEY=${AMENZB_API_KEY}
-                      EOF
+                      TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY}
+                      ENVEOF
                       chmod 600 .env.production
 
                       # Pull latest image
                       docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-                      # Start container using the copied docker-compose.yml
+                      # Restart container
                       docker compose up -d --remove-orphans
 
-                      # Wait for startup
-                      sleep 5
+                      # Wait until the container is healthy (up to 60 seconds)
+                      echo "Waiting for container to be ready..."
+                      for i in $(seq 1 12); do
+                          STATUS=$(docker inspect --format='{{.State.Status}}' autoclaim-bot 2>/dev/null || echo "missing")
+                          if [ "$STATUS" = "running" ]; then
+                              echo "✓ Container is running (attempt $i)"
+                              break
+                          fi
+                          echo "  Attempt $i/12: status=$STATUS — retrying in 5s"
+                          sleep 5
+                      done
 
-                      # Deploy slash commands (register new/updated commands)
+                      # Register slash commands
                       docker compose exec -T autoclaim-bot bun run deploy
-                      echo "✓ Slash commands deployed"
+                      echo "✓ Slash commands registered"
 
-                      # Verify deployment
+                      # Final status
                       docker compose ps
                       echo "✓ Deployment completed"

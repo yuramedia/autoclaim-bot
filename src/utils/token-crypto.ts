@@ -30,6 +30,9 @@ function getKey(): Buffer {
 /**
  * Encrypt a token string.
  * Returns a colon-separated hex string: iv:authTag:ciphertext
+ *
+ * @param plaintext - The raw token string to encrypt.
+ * @returns The encrypted token in a colon-separated hex format.
  */
 export function encryptToken(plaintext: string): string {
     const key = getKey();
@@ -45,6 +48,9 @@ export function encryptToken(plaintext: string): string {
 /**
  * Decrypt a token string.
  * Falls back to returning the original value on failure (plaintext backward-compat).
+ *
+ * @param value - The encrypted token string (in format iv:authTag:ciphertext) or a plaintext fallback.
+ * @returns The decrypted token, or the original value if decryption fails or format is invalid.
  */
 export function decryptToken(value: string): string {
     try {
@@ -54,14 +60,12 @@ export function decryptToken(value: string): string {
         if (parts.length !== 3) return value;
 
         const [ivHex, authTagHex, encryptedHex] = parts;
+        if (!ivHex || !authTagHex || !encryptedHex) return value;
         const key = getKey();
         const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, "hex"));
         decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
 
-        return Buffer.concat([
-            decipher.update(Buffer.from(encryptedHex, "hex")),
-            decipher.final()
-        ]).toString("utf8");
+        return Buffer.concat([decipher.update(Buffer.from(encryptedHex, "hex")), decipher.final()]).toString("utf8");
     } catch {
         // Decryption failed — token is probably plaintext (pre-migration).
         return value;

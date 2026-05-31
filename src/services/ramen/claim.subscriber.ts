@@ -20,9 +20,7 @@ ramen.subscribe<ClaimResultEvent>("account:claim_result", async data => {
     // Pick embed style based on whether this is a token-error alert
     const embedColor = isTokenError ? 0xff4444 : 0x00ff00;
     const embedTitle = isTokenError ? "⚠️ Token Error — Action Required" : "📋 Daily Claim Results";
-    const footer = isTokenError
-        ? "Re-run /setup-hoyolab or /setup-endfield to update your token."
-        : undefined;
+    const footer = isTokenError ? "Re-run /setup-hoyolab or /setup-endfield to update your token." : undefined;
 
     try {
         const discordUser = await client.users.fetch(discordId);

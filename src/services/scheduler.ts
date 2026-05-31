@@ -7,6 +7,7 @@ import cron from "node-cron";
 import { Client } from "discord.js";
 import { ramen } from "../core/ramen";
 import { User } from "../database/models/User";
+import type { IUser } from "../database/models/User";
 import { HoyolabService, formatHoyolabResults } from "./hoyolab";
 import { EndfieldService, formatEndfieldResult } from "./endfield";
 import { config } from "../config";
@@ -90,7 +91,7 @@ export async function runDailyClaims(): Promise<void> {
  * Process claims for a single user
  * @param user - User document from database
  */
-async function processUserClaim(user: any): Promise<void> {
+async function processUserClaim(user: IUser): Promise<void> {
     const results: string[] = [];
     const claimPromises: Promise<void>[] = [];
 
@@ -158,9 +159,7 @@ async function processUserClaim(user: any): Promise<void> {
 
     // Detect token errors — notify regardless of notifyOnClaim preference
     const TOKEN_ERROR_PATTERNS = ["expired", "invalid token", "ACCOUNT_TOKEN", "cookie_token"];
-    const hasTokenError = results.some(r =>
-        TOKEN_ERROR_PATTERNS.some(p => r.toLowerCase().includes(p.toLowerCase()))
-    );
+    const hasTokenError = results.some(r => TOKEN_ERROR_PATTERNS.some(p => r.toLowerCase().includes(p.toLowerCase())));
 
     // Publish to RAMEN:
     // - always if there is a token error (user must know even if notifications are off)

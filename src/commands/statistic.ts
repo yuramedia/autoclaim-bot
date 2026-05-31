@@ -3,7 +3,14 @@
  * Display detailed bot and system statistics
  */
 
-import { SlashCommandBuilder, EmbedBuilder, ChatInputCommandInteraction, MessageFlags, version as djsVersion } from "discord.js";
+import {
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ChatInputCommandInteraction,
+    MessageFlags,
+    version as djsVersion,
+    Team
+} from "discord.js";
 import os from "os";
 import { version as nodeVersion } from "process";
 import { formatUptimeSeconds } from "../utils/time";
@@ -24,9 +31,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     // Determine if the caller is the bot owner.
     // client.application.owner is either a User (single owner) or a Team.
     const isOwner = owner
-        ? "id" in owner
-            ? owner.id === interaction.user.id                        // single User owner
-            : Boolean((owner as any)?.members?.has?.(interaction.user.id)) // Team: any member
+        ? owner instanceof Team
+            ? owner.members.has(interaction.user.id)
+            : owner.id === interaction.user.id
         : false;
 
     if (!isOwner) {

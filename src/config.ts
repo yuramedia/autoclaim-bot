@@ -42,8 +42,8 @@ export const config = {
 if (!config.security.tokenEncryptionKey) {
     console.error(
         "[Config] FATAL: TOKEN_ENCRYPTION_KEY is not set.\n" +
-        "  Generate one with: openssl rand -hex 32\n" +
-        "  Then add it to your .env file."
+            "  Generate one with: openssl rand -hex 32\n" +
+            "  Then add it to your .env file."
     );
     process.exit(1);
 }

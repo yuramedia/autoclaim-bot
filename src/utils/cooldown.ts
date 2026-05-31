@@ -10,6 +10,11 @@ const cooldowns = new Map<string, Map<string, number>>();
 /**
  * Returns the remaining cooldown in milliseconds.
  * Returns 0 if the user is not on cooldown.
+ *
+ * @param commandName - The name of the command to check cooldown for.
+ * @param userId - The Discord user ID of the user.
+ * @param cooldownMs - The total cooldown duration in milliseconds.
+ * @returns The remaining cooldown in milliseconds, or 0 if not on cooldown.
  */
 export function getCooldownRemaining(commandName: string, userId: string, cooldownMs: number): number {
     const commandMap = cooldowns.get(commandName);
@@ -24,6 +29,9 @@ export function getCooldownRemaining(commandName: string, userId: string, cooldo
 
 /**
  * Stamps a cooldown for a user on a command (call after successful execution).
+ *
+ * @param commandName - The name of the command to stamp.
+ * @param userId - The Discord user ID of the user to stamp.
  */
 export function setCooldown(commandName: string, userId: string): void {
     if (!cooldowns.has(commandName)) cooldowns.set(commandName, new Map());
@@ -32,6 +40,9 @@ export function setCooldown(commandName: string, userId: string): void {
 
 /**
  * Formats a remaining ms value to a human-readable string, e.g. "4m 32s" or "28s".
+ *
+ * @param remainingMs - The remaining cooldown duration in milliseconds.
+ * @returns A formatted human-readable cooldown duration string.
  */
 export function formatCooldown(remainingMs: number): string {
     const totalSec = Math.ceil(remainingMs / 1000);

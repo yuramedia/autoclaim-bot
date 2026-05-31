@@ -3,7 +3,14 @@
  * Display detailed bot and system statistics
  */
 
-import { SlashCommandBuilder, EmbedBuilder, ChatInputCommandInteraction, version as djsVersion } from "discord.js";
+import {
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ChatInputCommandInteraction,
+    MessageFlags,
+    version as djsVersion,
+    Team
+} from "discord.js";
 import os from "os";
 import { version as nodeVersion } from "process";
 import { formatUptimeSeconds } from "../utils/time";
@@ -13,13 +20,28 @@ export const data = new SlashCommandBuilder()
     .setDescription("Displays detailed bot and system statistics");
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const client = interaction.client;
 
-    // Fetch application owner
+    // Fetch application owner info if not already cached
     if (!client.application?.owner) await client.application?.fetch();
     const owner = client.application?.owner;
+
+    // Determine if the caller is the bot owner.
+    // client.application.owner is either a User (single owner) or a Team.
+    const isOwner = owner
+        ? owner instanceof Team
+            ? owner.members.has(interaction.user.id)
+            : owner.id === interaction.user.id
+        : false;
+
+    if (!isOwner) {
+        await interaction.editReply({
+            content: "❌ This command is restricted to the bot owner."
+        });
+        return;
+    }
 
     // Get system stats
     const cpu = os.cpus()[0];

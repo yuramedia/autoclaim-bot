@@ -7,10 +7,12 @@ import cron from "node-cron";
 import { Client } from "discord.js";
 import { ramen } from "../core/ramen";
 import { User } from "../database/models/User";
+import type { IUser } from "../database/models/User";
 import { HoyolabService, formatHoyolabResults } from "./hoyolab";
 import { EndfieldService, formatEndfieldResult } from "./endfield";
 import { config } from "../config";
 import { logger } from "../core/logger";
+import { decryptToken } from "../utils/token-crypto";
 
 /** Batch processing configuration */
 const BATCH_SIZE = 5; // Process 5 users concurrently
@@ -89,7 +91,7 @@ export async function runDailyClaims(): Promise<void> {
  * Process claims for a single user
  * @param user - User document from database
  */
-async function processUserClaim(user: any): Promise<void> {
+async function processUserClaim(user: IUser): Promise<void> {
     const results: string[] = [];
     const claimPromises: Promise<void>[] = [];
 
@@ -98,14 +100,14 @@ async function processUserClaim(user: any): Promise<void> {
         claimPromises.push(
             (async () => {
                 try {
-                    const hoyolab = new HoyolabService(user.hoyolab.token);
-                    const hoyolabResults = await hoyolab.claimAll(user.hoyolab.games);
+                    const hoyolab = new HoyolabService(decryptToken(user.hoyolab!.token));
+                    const hoyolabResults = await hoyolab.claimAll(user.hoyolab!.games);
                     const resultText = formatHoyolabResults(hoyolabResults);
                     results.push("**Hoyolab**\n" + resultText);
 
                     // Update last claim
-                    user.hoyolab.lastClaim = new Date();
-                    user.hoyolab.lastClaimResult = resultText;
+                    user.hoyolab!.lastClaim = new Date();
+                    user.hoyolab!.lastClaimResult = resultText;
                 } catch (error: any) {
                     logger.error({
                         msg: `[Scheduler] Hoyolab claim error for ${user.discordId}:`,
@@ -123,15 +125,15 @@ async function processUserClaim(user: any): Promise<void> {
             (async () => {
                 try {
                     const endfield = new EndfieldService({
-                        accountToken: user.endfield.accountToken
+                        accountToken: decryptToken(user.endfield!.accountToken)
                     });
                     const endfieldResult = await endfield.claim();
                     const resultText = formatEndfieldResult(endfieldResult);
                     results.push("**SKPORT/Endfield**\n" + resultText);
 
                     // Update last claim
-                    user.endfield.lastClaim = new Date();
-                    user.endfield.lastClaimResult = resultText;
+                    user.endfield!.lastClaim = new Date();
+                    user.endfield!.lastClaimResult = resultText;
                 } catch (error: any) {
                     logger.error({
                         msg: `[Scheduler] Endfield claim error for ${user.discordId}:`,
@@ -155,11 +157,18 @@ async function processUserClaim(user: any): Promise<void> {
         logger.error(saveError, `[Scheduler] Failed to save user ${user.discordId}:`);
     }
 
-    // Publish claim result event to RAMEN for notification
-    if (user.settings.notifyOnClaim && results.length > 0) {
+    // Detect token errors — notify regardless of notifyOnClaim preference
+    const TOKEN_ERROR_PATTERNS = ["expired", "invalid token", "ACCOUNT_TOKEN", "cookie_token"];
+    const hasTokenError = results.some(r => TOKEN_ERROR_PATTERNS.some(p => r.toLowerCase().includes(p.toLowerCase())));
+
+    // Publish to RAMEN:
+    // - always if there is a token error (user must know even if notifications are off)
+    // - conditionally if notifyOnClaim is enabled
+    if (results.length > 0 && (user.settings.notifyOnClaim || hasTokenError)) {
         ramen.publish("account:claim_result", {
             discordId: user.discordId,
-            results
+            results,
+            isTokenError: hasTokenError
         });
     }
 }

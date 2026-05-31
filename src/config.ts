@@ -32,5 +32,18 @@ export const config = {
     },
     amenzb: {
         apiKey: process.env.AMENZB_API_KEY || ""
+    },
+    security: {
+        tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY || ""
     }
 };
+
+// Fail fast: encryption key is required for safe token storage.
+if (!config.security.tokenEncryptionKey) {
+    console.error(
+        "[Config] FATAL: TOKEN_ENCRYPTION_KEY is not set.\n" +
+            "  Generate one with: openssl rand -hex 32\n" +
+            "  Then add it to your .env file."
+    );
+    process.exit(1);
+}

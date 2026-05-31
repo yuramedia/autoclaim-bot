@@ -13,6 +13,7 @@ import {
 import { User } from "../database/models/User";
 import { HoyolabService } from "../services/hoyolab";
 import { GAME_DISPLAY_NAMES, type HoyolabGameKey } from "../constants";
+import { encryptToken } from "../utils/token-crypto";
 
 /** Default game options for select menu */
 const GAME_SELECT_OPTIONS: Array<{ key: HoyolabGameKey; emoji: string }> = [
@@ -60,13 +61,13 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
         return;
     }
 
-    // Save to database (partial update)
+    // Save to database (partial update) — encrypt token before storage
     await User.findOneAndUpdate(
         { discordId: interaction.user.id },
         {
             $set: {
                 username: interaction.user.username,
-                "hoyolab.token": token,
+                "hoyolab.token": encryptToken(token),
                 "hoyolab.accountName": nickname,
                 // Default all games to false initially, user will select them next
                 "hoyolab.games": {

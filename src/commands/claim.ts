@@ -7,6 +7,10 @@ import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, Me
 import { User } from "../database/models/User";
 import { HoyolabService, formatHoyolabResults } from "../services/hoyolab";
 import { EndfieldService, formatEndfieldResult } from "../services/endfield";
+import { decryptToken } from "../utils/token-crypto";
+import { getCooldownRemaining, setCooldown, formatCooldown } from "../utils/cooldown";
+
+const CLAIM_COOLDOWN_MS = 30_000; // 30 seconds
 
 export const data = new SlashCommandBuilder()
     .setName("claim")
@@ -24,6 +28,16 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    // Cooldown check
+    const remaining = getCooldownRemaining("claim", interaction.user.id, CLAIM_COOLDOWN_MS);
+    if (remaining > 0) {
+        await interaction.reply({
+            content: `⏳ Slow down! You can use \`/claim\` again in **${formatCooldown(remaining)}**.`,
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const service = interaction.options.getString("service") || "all";
@@ -42,7 +56,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     // Claim Hoyolab
     if ((service === "all" || service === "hoyolab") && user.hoyolab?.token) {
-        const hoyolabService = new HoyolabService(user.hoyolab.token);
+        const hoyolabService = new HoyolabService(decryptToken(user.hoyolab.token));
         const results = await hoyolabService.claimAll(user.hoyolab.games);
 
         embed.addFields({
@@ -59,7 +73,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     // Claim Endfield
     if ((service === "all" || service === "endfield") && user.endfield?.accountToken) {
         const endfieldService = new EndfieldService({
-            accountToken: user.endfield.accountToken
+            accountToken: decryptToken(user.endfield.accountToken)
         });
         const result = await endfieldService.claim();
 
@@ -82,5 +96,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     }
 
     await user.save();
+    setCooldown("claim", interaction.user.id);
     await interaction.editReply({ embeds: [embed] });
 }

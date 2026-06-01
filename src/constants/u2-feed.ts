@@ -2,8 +2,8 @@
  * U2 Torrent Feed Constants
  */
 
-/** Polling interval for U2 RSS feed (10 minutes) */
-export const U2_POLL_INTERVAL = 10 * 60 * 1000;
+/** Polling interval for U2 RSS feed (1 minute) */
+export const U2_POLL_INTERVAL = 1 * 60 * 1000;
 
 /** U2 embed color (teal/cyan) */
 export const U2_COLOR = 0x09a3cc;

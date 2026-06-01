@@ -11,13 +11,16 @@
  */
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
+import { config } from "../config";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16; // bytes
 
-/** Derive a 32-byte key from the env var using SHA-256. */
+/** Derive a 32-byte key from the config value using SHA-256. */
 function getKey(): Buffer {
-    const raw = process.env.TOKEN_ENCRYPTION_KEY;
+    const raw = config.security.tokenEncryptionKey;
+    // config.ts already validates this on startup and calls process.exit(1) if missing,
+    // but we keep this guard as a safety net for any out-of-order import scenarios.
     if (!raw) {
         throw new Error(
             "TOKEN_ENCRYPTION_KEY is not set. Add it to your .env file. " +

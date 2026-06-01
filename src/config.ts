@@ -12,6 +12,9 @@ const claimMinute = !isNaN(rawMinute) && rawMinute >= 0 && rawMinute <= 59 ? raw
 // ── Config ───────────────────────────────────────────────────────────────────
 
 export const config = {
+    /** Runtime environment. Controls log level and transport. */
+    env: process.env.NODE_ENV || "development",
+
     discord: {
         token: process.env.DISCORD_TOKEN || "",
         clientId: process.env.DISCORD_CLIENT_ID || ""

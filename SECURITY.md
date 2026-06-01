@@ -7,7 +7,7 @@ Proyek ini menyimpan **token/cookie sensitif** milik pengguna di MongoDB, termas
 - Cookie Hoyolab (`ltoken_v2`, `ltuid_v2`, `cookie_token_v2`)
 - Token SKPORT/Endfield (`ACCOUNT_TOKEN`)
 
-Keamanan data pengguna adalah prioritas utama.
+Token-token di atas dienkripsi menggunakan AES-256-GCM sebelum disimpan. Kunci enkripsinya adalah `TOKEN_ENCRYPTION_KEY` — simpan nilai ini dengan aman dan jangan sampai hilang (data tidak bisa didekripsi tanpanya).
 
 ## Melaporkan Kerentanan
 

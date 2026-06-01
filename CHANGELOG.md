@@ -10,7 +10,24 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- Hapus `CR_ETP_RT` orphan dari deploy pipeline (env var tidak dipakai di source code)
+- **`TOKEN_ENCRYPTION_KEY` tidak terdokumentasi di README** — variabel wajib ini sekarang muncul di tabel Environment Variables dengan keterangan cara generate-nya
+- **GitHub Actions menggunakan ref yang salah** — `deploy.yml` dan `pr.yml` menggunakan pinned version tags (`@v4`, `@v7`, dst.) yang tidak konsisten dengan pendekatan proyek. Semua `uses:` sekarang menggunakan mutable branch ref yang sudah diverifikasi via `git ls-remote` (`actions/checkout@main`, `docker/*@master`, `appleboy/*@master`, `oven-sh/setup-bun@main`)
+- **`token-crypto.ts` baca `process.env.TOKEN_ENCRYPTION_KEY` langsung** — sekarang baca dari `config.security.tokenEncryptionKey` sesuai aturan CONTRIBUTING
+- **`logger.ts` baca `process.env.NODE_ENV` langsung** — sekarang baca dari `config.env` sesuai aturan CONTRIBUTING
+- **`docker-compose.yml` bergantung pada `yura-network` tanpa dokumentasi** — panduan `docker network create yura-network` ditambahkan ke README bagian Self-Hosting
+
+### Added
+
+- `config.env` — centralize `NODE_ENV` ke `src/config.ts`
+- `src/test-setup.ts` — preload file untuk test runner (set env vars sebelum config.ts dievaluasi)
+- `src/utils/token-crypto.test.ts` — unit tests untuk enkripsi/dekripsi token (round-trip, format, IV randomness, backward compat)
+- Script `test` di `package.json`: `bun test --preload ./src/test-setup.ts`
+
+### Removed
+
+- `ecosystem.config.cjs` — file PM2 legacy yang sudah tidak dipakai sejak migrasi ke Docker; dihapus untuk menghindari kebingungan kontributor baru
+
+
 - Inkonsistensi default `CLAIM_HOUR`: sekarang konsisten `0` di `config.ts` dan `.env.example`
 - Validasi range `CLAIM_HOUR` (0–23) dan `CLAIM_MINUTE` (0–59) — nilai di luar range fallback ke `0`
 - Pesan konfirmasi setup Hoyolab kini menampilkan waktu claim dinamis sesuai config, bukan hardcode `00:00 UTC+8`

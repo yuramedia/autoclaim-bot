@@ -103,6 +103,7 @@ Bot Discord untuk auto-claim daily rewards dari:
 | `CR_PASSWORD`       |    —     | Password akun Crunchyroll                                                    |
 | `U2_RSS_URL`        |    —     | Full RSS URL dari U2 BDMV (termasuk passkey). Feed dinonaktifkan jika kosong |
 | `AMENZB_API_KEY`    |    —     | API key dari [amenzb.moe](https://amenzb.moe/profile)                        |
+| `TOKEN_ENCRYPTION_KEY` | ✅    | Kunci enkripsi token di database. Generate dengan: `openssl rand -hex 32`    |
 
 > Waktu claim menggunakan timezone **UTC+8 (Asia/Singapore)**. `CLAIM_HOUR=0` dan `CLAIM_MINUTE=0` berarti pukul **00:00 UTC+8** (tengah malam).
 
@@ -131,6 +132,26 @@ Bot Discord untuk auto-claim daily rewards dari:
 ## Deployment
 
 Lihat [CONTRIBUTING.md](CONTRIBUTING.md) untuk panduan development dan deployment.
+
+### Self-Hosting dengan Docker
+
+`docker-compose.yml` (production) menggunakan external Docker network `yura-network`. Buat network ini sekali sebelum menjalankan bot:
+
+```bash
+docker network create yura-network
+```
+
+Lalu jalankan bot:
+
+```bash
+docker compose up -d
+```
+
+Untuk development lokal, gunakan `docker-compose.dev.yml` yang sudah self-contained (tidak butuh external network):
+
+```bash
+docker compose -f docker-compose.dev.yml up
+```
 
 ## License
 

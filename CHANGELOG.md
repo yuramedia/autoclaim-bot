@@ -27,7 +27,6 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - `ecosystem.config.cjs` — file PM2 legacy yang sudah tidak dipakai sejak migrasi ke Docker; dihapus untuk menghindari kebingungan kontributor baru
 
-
 - Inkonsistensi default `CLAIM_HOUR`: sekarang konsisten `0` di `config.ts` dan `.env.example`
 - Validasi range `CLAIM_HOUR` (0–23) dan `CLAIM_MINUTE` (0–59) — nilai di luar range fallback ke `0`
 - Pesan konfirmasi setup Hoyolab kini menampilkan waktu claim dinamis sesuai config, bukan hardcode `00:00 UTC+8`

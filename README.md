@@ -92,18 +92,18 @@ Bot Discord untuk auto-claim daily rewards dari:
 
 ## Environment Variables
 
-| Variable            | Required | Description                                                                  |
-| ------------------- | :------: | ---------------------------------------------------------------------------- |
-| `DISCORD_TOKEN`     |    ✅    | Bot token dari Discord Developer Portal                                      |
-| `DISCORD_CLIENT_ID` |    ✅    | Application ID dari Discord Developer Portal                                 |
-| `MONGODB_URI`       |    ✅    | MongoDB connection string                                                    |
-| `CLAIM_HOUR`        |    —     | Jam claim otomatis, format 24 jam (0–23). Default: `0`                       |
-| `CLAIM_MINUTE`      |    —     | Menit claim otomatis (0–59). Default: `0`                                    |
-| `CR_EMAIL`          |    —     | Email akun Crunchyroll (untuk fitur subtitle download)                       |
-| `CR_PASSWORD`       |    —     | Password akun Crunchyroll                                                    |
-| `U2_RSS_URL`        |    —     | Full RSS URL dari U2 BDMV (termasuk passkey). Feed dinonaktifkan jika kosong |
-| `AMENZB_API_KEY`    |    —     | API key dari [amenzb.moe](https://amenzb.moe/profile)                        |
-| `TOKEN_ENCRYPTION_KEY` | ✅    | Kunci enkripsi token di database. Generate dengan: `openssl rand -hex 32`    |
+| Variable               | Required | Description                                                                  |
+| ---------------------- | :------: | ---------------------------------------------------------------------------- |
+| `DISCORD_TOKEN`        |    ✅    | Bot token dari Discord Developer Portal                                      |
+| `DISCORD_CLIENT_ID`    |    ✅    | Application ID dari Discord Developer Portal                                 |
+| `MONGODB_URI`          |    ✅    | MongoDB connection string                                                    |
+| `CLAIM_HOUR`           |    —     | Jam claim otomatis, format 24 jam (0–23). Default: `0`                       |
+| `CLAIM_MINUTE`         |    —     | Menit claim otomatis (0–59). Default: `0`                                    |
+| `CR_EMAIL`             |    —     | Email akun Crunchyroll (untuk fitur subtitle download)                       |
+| `CR_PASSWORD`          |    —     | Password akun Crunchyroll                                                    |
+| `U2_RSS_URL`           |    —     | Full RSS URL dari U2 BDMV (termasuk passkey). Feed dinonaktifkan jika kosong |
+| `AMENZB_API_KEY`       |    —     | API key dari [amenzb.moe](https://amenzb.moe/profile)                        |
+| `TOKEN_ENCRYPTION_KEY` |    ✅    | Kunci enkripsi token di database. Generate dengan: `openssl rand -hex 32`    |
 
 > Waktu claim menggunakan timezone **UTC+8 (Asia/Singapore)**. `CLAIM_HOUR=0` dan `CLAIM_MINUTE=0` berarti pukul **00:00 UTC+8** (tengah malam).
 

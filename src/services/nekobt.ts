@@ -1,5 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import { fetchAnilistCoverByTitle, fetchAnimeImages } from "./amenzb";
+import { fetchTsukihimeImagesByBtih } from "./tsukihime";
 
 export interface NekoBTTorrentResponse {
     error: boolean;
@@ -118,29 +119,47 @@ export async function buildNekoBTEmbed(url: string) {
         )
         .setTimestamp(data.uploaded_at);
 
-    // Fetch ameNZB images for thumbnail and cover
+    // Fetch anime images: try Tsukihime first, then ameNZB fallback
     if (data.infohash && data.infohash !== "Unknown" && data.animetosho !== "skipped") {
-        const images = await fetchAnimeImages(data.infohash);
+        // Try Tsukihime first by btih
+        const tsukiImages = await fetchTsukihimeImagesByBtih(data.infohash);
 
-        if (images.cover) {
-            embed.setThumbnail(images.cover);
-        } else {
-            const fallbackCover = await fetchAnilistCoverByTitle(data.title);
-            if (fallbackCover) {
-                embed.setThumbnail(fallbackCover);
+        if (tsukiImages?.cover) {
+            // Tsukihime provided a cover — use it as thumbnail
+            embed.setThumbnail(tsukiImages.cover);
+
+            // Try ameNZB for screenshots as main image
+            const images = await fetchAnimeImages(data.infohash);
+            if (images.screenshots.length > 0) {
+                embed.setImage(images.screenshots[0] || null);
             } else if (data.screenshots && data.screenshots.length > 0) {
-                embed.setThumbnail(data.screenshots[0] || null);
-            } else if (images.screenshots.length > 1) {
-                embed.setThumbnail(images.screenshots[1] || null);
+                embed.setImage(data.screenshots[0] || null);
+            }
+        } else {
+            // Tsukihime miss — fall back to ameNZB
+            const images = await fetchAnimeImages(data.infohash);
+
+            if (images.cover) {
+                embed.setThumbnail(images.cover);
+            } else {
+                const fallbackCover = await fetchAnilistCoverByTitle(data.title);
+                if (fallbackCover) {
+                    embed.setThumbnail(fallbackCover);
+                } else if (data.screenshots && data.screenshots.length > 0) {
+                    embed.setThumbnail(data.screenshots[0] || null);
+                } else if (images.screenshots.length > 1) {
+                    embed.setThumbnail(images.screenshots[1] || null);
+                }
+            }
+
+            if (images.screenshots.length > 0) {
+                embed.setImage(images.screenshots[0] || null);
+            } else if (data.screenshots && data.screenshots.length > 1) {
+                embed.setImage(data.screenshots[1] || null);
             }
         }
-
-        if (images.screenshots.length > 0) {
-            embed.setImage(images.screenshots[0] || null);
-        } else if (data.screenshots && data.screenshots.length > 1) {
-            embed.setImage(data.screenshots[1] || null);
-        }
     } else {
+        // No infohash or skipped — try Anilist cover fallback
         const fallbackCover = await fetchAnilistCoverByTitle(data.title);
         if (fallbackCover) {
             embed.setThumbnail(fallbackCover);

@@ -119,14 +119,15 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                         commentData.torrentTitle,
                         processed.originalUrl,
                         provider,
-                        commentData.infoHash
+                        commentData.infoHash,
+                        viewId
                     );
                     embeds.push(...commentEmbeds);
                 }
             } else {
                 const nyaaInfo = await fetchNyaaInfo(viewId, provider);
                 if (nyaaInfo) {
-                    const nyaaEmbeds = await buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider);
+                    const nyaaEmbeds = await buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider, viewId);
                     embeds.push(...nyaaEmbeds);
                 }
             }

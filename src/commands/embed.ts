@@ -139,7 +139,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                                     commentData.torrentTitle,
                                     url,
                                     provider,
-                                    commentData.infoHash
+                                    commentData.infoHash,
+                                    viewId
                                 );
                                 embeds.push(...commentEmbeds);
                             }
@@ -147,7 +148,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                             // Torrent page embed
                             const info = await fetchNyaaInfo(viewId, provider);
                             if (info) {
-                                const nyaaEmbeds = await buildNyaaEmbed(info, url, provider);
+                                const nyaaEmbeds = await buildNyaaEmbed(info, url, provider, viewId);
                                 embeds.push(...nyaaEmbeds);
                             }
                         }

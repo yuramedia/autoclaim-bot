@@ -265,24 +265,6 @@ export async function buildTsukihimeEmbed(torrentId: number, originalUrl: string
         fields.push({ name: "ℹ️ Info Hash", value: `\`${torrent.btih}\``, inline: false });
     }
 
-    // Mirrors / Source Links
-    const mirrorLinks: string[] = [];
-    if (torrent.nyaa_id > 0) {
-        mirrorLinks.push(`[Nyaa.si](https://nyaa.si/view/${torrent.nyaa_id})`);
-    }
-    if (torrent.sukebei_id > 0) {
-        mirrorLinks.push(`[Sukebei](https://sukebei.nyaa.si/view/${torrent.sukebei_id})`);
-    }
-    if (torrent.nekobt_id > 0) {
-        mirrorLinks.push(`[NekoBT](https://nekobt.to/torrents/${torrent.nekobt_id})`);
-    }
-    if (torrent.has_nzb === 1) {
-        mirrorLinks.push(`[NZB Download](${TSUKIHIME_API_BASE_URL}/torrents/${torrent.id}/nzb)`);
-    }
-    if (mirrorLinks.length > 0) {
-        fields.push({ name: "Mirrors / Sources", value: mirrorLinks.join(" | "), inline: false });
-    }
-
     // Database links
     if (torrent.anime) {
         const dbLinks: string[] = [];
@@ -312,17 +294,35 @@ export async function buildTsukihimeEmbed(torrentId: number, originalUrl: string
     }
 
     // Buttons
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setLabel("View on Tsukihime").setURL(originalUrl).setStyle(ButtonStyle.Link)
-    );
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    let hasButtons = false;
 
-    if (torrent.has_nzb === 1) {
+    if (torrent.files && torrent.files.length > 0 && torrent.files[0]?.links) {
+        const fileLinks = torrent.files[0].links;
+        const entries = Object.entries(fileLinks).slice(0, 5);
+        for (const [provider, downloadUrl] of entries) {
+            if (downloadUrl) {
+                row.addComponents(
+                    new ButtonBuilder().setLabel(provider).setURL(downloadUrl).setStyle(ButtonStyle.Link)
+                );
+                hasButtons = true;
+            }
+        }
+    }
+
+    // Fallback if no files or no direct download links
+    if (!hasButtons) {
         row.addComponents(
-            new ButtonBuilder()
-                .setLabel("Download NZB")
-                .setURL(`${TSUKIHIME_API_BASE_URL}/torrents/${torrent.id}/nzb`)
-                .setStyle(ButtonStyle.Link)
+            new ButtonBuilder().setLabel("View on Tsukihime").setURL(originalUrl).setStyle(ButtonStyle.Link)
         );
+        if (torrent.has_nzb === 1) {
+            row.addComponents(
+                new ButtonBuilder()
+                    .setLabel("Download NZB")
+                    .setURL(`${TSUKIHIME_API_BASE_URL}/torrents/${torrent.id}/nzb`)
+                    .setStyle(ButtonStyle.Link)
+            );
+        }
     }
 
     return { embeds: [embed], components: [row] };

@@ -152,6 +152,20 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
             embeds.push(amenzbEmbed);
         }
     }
+    // Custom flow for Tsukihime
+    else if (processed.platform.id === PlatformId.TSUKIHIME && processed.postId) {
+        const { buildTsukihimeEmbed } = await import("../services/tsukihime");
+        const torrentId = parseInt(processed.postId, 10);
+        if (!isNaN(torrentId)) {
+            const tsukihimeEmbed = await buildTsukihimeEmbed(torrentId, processed.originalUrl);
+            if (tsukihimeEmbed) {
+                embeds.push(...tsukihimeEmbed.embeds);
+                if (tsukihimeEmbed.components) {
+                    components.push(...tsukihimeEmbed.components);
+                }
+            }
+        }
+    }
     // Try to fetch rich post info for other platforms
     else if (settings.embedFix.richEmbeds) {
         const postInfo = await fetchPostInfo(processed.fixedUrl, processed.platform, processed.postId);

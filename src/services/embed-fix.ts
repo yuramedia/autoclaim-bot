@@ -119,6 +119,10 @@ export function extractPostId(url: string, platform: PlatformConfig): string | n
             const amenzbMatch = url.match(/\/(release|download)\/(\d+)/);
             return amenzbMatch?.[2] ?? null;
         }
+        case PlatformId.TSUKIHIME: {
+            const tsukiMatch = url.match(/\/torrents\/(\d+)/);
+            return tsukiMatch?.[1] ?? null;
+        }
         default:
             return null;
     }

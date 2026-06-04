@@ -169,6 +169,24 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 break;
             }
 
+            // Tsukihime torrent embeds
+            case PlatformId.TSUKIHIME: {
+                if (postId) {
+                    const torrentId = parseInt(postId, 10);
+                    if (!isNaN(torrentId)) {
+                        const { buildTsukihimeEmbed } = await import("../services/tsukihime");
+                        const tsukihimeData = await buildTsukihimeEmbed(torrentId, url);
+                        if (tsukihimeData) {
+                            embeds.push(...tsukihimeData.embeds);
+                            if (tsukihimeData.components) {
+                                components.push(...tsukihimeData.components);
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+
             // All other platforms: rich embed + optional media download
             default: {
                 const info = await fetchPostInfo(url, platform, postId);

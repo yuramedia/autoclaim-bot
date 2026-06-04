@@ -18,7 +18,8 @@ export enum PlatformId {
     PLURK = "plurk",
     NYAA = "nyaa",
     NEKOBT = "nekobt",
-    AMENZB = "amenzb"
+    AMENZB = "amenzb",
+    TSUKIHIME = "tsukihime"
 }
 
 /** Configuration for a specific platform */

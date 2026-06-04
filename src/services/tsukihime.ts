@@ -10,7 +10,7 @@ import { TSUKIHIME_API_BASE_URL, TSUKIHIME_EMBED_COLOR } from "../constants/tsuk
 import { BROWSER_USER_AGENT } from "../constants/anime.js";
 import type { TsukihimeTorrent, TsukihimeImages } from "../types/tsukihime.js";
 import { formatBytes } from "./nekobt.js";
-import { fetchAnimeImages } from "./amenzb.js";
+import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./amenzb.js";
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 
 /**
@@ -214,15 +214,24 @@ export async function buildTsukihimeEmbed(torrentId: number, originalUrl: string
             url: authorUrl
         });
 
-    if (torrent.anime) {
-        if (torrent.anime.thumbnail) {
-            embed.setThumbnail(torrent.anime.thumbnail);
+    let thumbnail: string | null = null;
+    if (torrent.anime?.thumbnail) {
+        thumbnail = torrent.anime.thumbnail;
+    } else if (torrent.btih) {
+        const images = await fetchAnimeImages(torrent.btih);
+        if (images.cover) {
+            thumbnail = images.cover;
+        } else if (images.screenshots.length > 1) {
+            thumbnail = images.screenshots[1]!;
         }
-        if (torrent.anime.synopsis) {
-            const cleanSynopsis = torrent.anime.synopsis.slice(0, 400);
-            const displaySynopsis = torrent.anime.synopsis.length > 400 ? `${cleanSynopsis}...` : cleanSynopsis;
-            embed.setDescription(displaySynopsis);
-        }
+    }
+
+    if (!thumbnail) {
+        thumbnail = await fetchAnilistCoverByTitle(torrent.name);
+    }
+
+    if (thumbnail) {
+        embed.setThumbnail(thumbnail);
     }
 
     // Add fields

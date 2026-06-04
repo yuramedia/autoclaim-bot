@@ -151,7 +151,7 @@ export const PLATFORMS: PlatformConfig[] = [
         id: PlatformId.TSUKIHIME,
         name: "Tsukihime",
         color: TSUKIHIME_EMBED_COLOR,
-        patterns: [/https?:\/\/(www\.)?tsukihime\.org\/torrents\/\d+/i],
+        patterns: [/https?:\/\/(www\.)?tsukihime\.org\/(torrents|view)\/\d+/i],
         fixes: [] // Rich embed only
     }
 ];

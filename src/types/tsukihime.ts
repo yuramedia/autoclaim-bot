@@ -165,4 +165,6 @@ export interface TsukihimeImages {
     studios: string[];
     /** Release group name */
     groupName: string | null;
+    /** Screenshot URLs extracted from vidframes */
+    screenshots: string[];
 }

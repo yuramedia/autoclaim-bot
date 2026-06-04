@@ -93,7 +93,8 @@ export function extractTsukihimeImages(torrent: TsukihimeTorrent): TsukihimeImag
         animeTitle: null,
         genres: [],
         studios: [],
-        groupName: null
+        groupName: null,
+        screenshots: []
     };
 
     if (torrent.anime) {
@@ -105,6 +106,17 @@ export function extractTsukihimeImages(torrent: TsukihimeTorrent): TsukihimeImag
 
     if (torrent.group) {
         result.groupName = torrent.group.name || null;
+    }
+
+    // Extract screenshots
+    if (torrent.files && torrent.files.length > 0) {
+        const file = torrent.files[0];
+        if (file && file.id && file.vidframes && file.vidframes.length > 0) {
+            const hexId = file.id.toString(16).toLowerCase().padStart(8, "0");
+            result.screenshots = file.vidframes.map(
+                frame => `https://storage.tsukihime.org/sframes/${hexId}_${frame}.webp`
+            );
+        }
     }
 
     return result;
@@ -214,24 +226,20 @@ export async function buildTsukihimeEmbed(torrentId: number, originalUrl: string
             url: authorUrl
         });
 
-    let thumbnail: string | null = null;
+    let coverImage: string | null = null;
     if (torrent.anime?.thumbnail) {
-        thumbnail = torrent.anime.thumbnail;
+        coverImage = torrent.anime.thumbnail;
     } else if (torrent.btih) {
         const images = await fetchAnimeImages(torrent.btih);
         if (images.cover) {
-            thumbnail = images.cover;
+            coverImage = images.cover;
         } else if (images.screenshots.length > 1) {
-            thumbnail = images.screenshots[1]!;
+            coverImage = images.screenshots[1]!;
         }
     }
 
-    if (!thumbnail) {
-        thumbnail = await fetchAnilistCoverByTitle(torrent.name);
-    }
-
-    if (thumbnail) {
-        embed.setThumbnail(thumbnail);
+    if (!coverImage) {
+        coverImage = await fetchAnilistCoverByTitle(torrent.name);
     }
 
     // Add fields
@@ -294,12 +302,33 @@ export async function buildTsukihimeEmbed(torrentId: number, originalUrl: string
     embed.addFields(fields);
     embed.setTimestamp(torrent.added_date * 1000);
 
-    // Try fetching screenshots via ameNZB infohash lookup
-    if (torrent.btih) {
+    // Resolve main image (large image) and small thumbnail
+    const tsukiImages = extractTsukihimeImages(torrent);
+    let mainImage: string | null = null;
+    let finalThumbnail: string | null = null;
+
+    if (tsukiImages.screenshots.length > 0) {
+        mainImage = tsukiImages.screenshots[0] || null;
+        finalThumbnail = coverImage;
+    } else if (torrent.btih) {
         const images = await fetchAnimeImages(torrent.btih);
         if (images.screenshots.length > 0) {
-            embed.setImage(images.screenshots[0] || null);
+            mainImage = images.screenshots[0] || null;
+            finalThumbnail = coverImage;
         }
+    }
+
+    // Fallback: if no main image was found, use the cover image as the large main image
+    if (!mainImage && coverImage) {
+        mainImage = coverImage;
+        finalThumbnail = null;
+    }
+
+    if (mainImage) {
+        embed.setImage(mainImage);
+    }
+    if (finalThumbnail) {
+        embed.setThumbnail(finalThumbnail);
     }
 
     // Buttons

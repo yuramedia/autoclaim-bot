@@ -120,8 +120,8 @@ export function extractPostId(url: string, platform: PlatformConfig): string | n
             return amenzbMatch?.[2] ?? null;
         }
         case PlatformId.TSUKIHIME: {
-            const tsukiMatch = url.match(/\/torrents\/(\d+)/);
-            return tsukiMatch?.[1] ?? null;
+            const tsukiMatch = url.match(/\/(torrents|view)\/(\d+)/);
+            return tsukiMatch?.[2] ?? null;
         }
         default:
             return null;

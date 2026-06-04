@@ -119,14 +119,15 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                         commentData.torrentTitle,
                         processed.originalUrl,
                         provider,
-                        commentData.infoHash
+                        commentData.infoHash,
+                        viewId
                     );
                     embeds.push(...commentEmbeds);
                 }
             } else {
                 const nyaaInfo = await fetchNyaaInfo(viewId, provider);
                 if (nyaaInfo) {
-                    const nyaaEmbeds = await buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider);
+                    const nyaaEmbeds = await buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider, viewId);
                     embeds.push(...nyaaEmbeds);
                 }
             }
@@ -149,6 +150,20 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
         const amenzbEmbed = await buildAmeNZBEmbed(processed.postId, processed.originalUrl);
         if (amenzbEmbed) {
             embeds.push(amenzbEmbed);
+        }
+    }
+    // Custom flow for Tsukihime
+    else if (processed.platform.id === PlatformId.TSUKIHIME && processed.postId) {
+        const { buildTsukihimeEmbed } = await import("../services/tsukihime");
+        const torrentId = parseInt(processed.postId, 10);
+        if (!isNaN(torrentId)) {
+            const tsukihimeEmbed = await buildTsukihimeEmbed(torrentId, processed.originalUrl);
+            if (tsukihimeEmbed) {
+                embeds.push(...tsukihimeEmbed.embeds);
+                if (tsukihimeEmbed.components) {
+                    components.push(...tsukihimeEmbed.components);
+                }
+            }
         }
     }
     // Try to fetch rich post info for other platforms

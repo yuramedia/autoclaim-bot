@@ -10,6 +10,7 @@ import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
 import { BROWSER_USER_AGENT } from "../constants/anime";
 import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./amenzb";
+import { fetchTsukihimeImagesByNyaa, fetchTsukihimeImagesBySukebei } from "./tsukihime";
 
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
 
@@ -137,7 +138,8 @@ export async function buildNyaaCommentEmbed(
     torrentTitle: string,
     url: string,
     provider: "nyaa" | "sukebei" = "nyaa",
-    infoHash?: string
+    infoHash?: string,
+    viewId?: string
 ): Promise<EmbedBuilder[]> {
     const domain = provider === "sukebei" ? "sukebei.nyaa.si" : "nyaa.si";
 
@@ -175,22 +177,47 @@ export async function buildNyaaCommentEmbed(
         }
     } catch {}
 
-    // Fetch ameNZB images if infoHash is provided
-    if (infoHash && infoHash !== "Unknown") {
+    // Try Tsukihime first for cover image
+    let tsukihimeCover: string | null = null;
+    if (viewId) {
+        const numericId = parseInt(viewId, 10);
+        if (!isNaN(numericId)) {
+            const tsukiImages =
+                provider === "sukebei"
+                    ? await fetchTsukihimeImagesBySukebei(numericId)
+                    : await fetchTsukihimeImagesByNyaa(numericId);
+            if (tsukiImages?.cover) {
+                tsukihimeCover = tsukiImages.cover;
+            }
+        }
+    }
+
+    if (tsukihimeCover) {
+        // Tsukihime provided a cover — use it as thumbnail
+        if (!firstImageUrl) {
+            // No comment image: set cover as thumbnail, try ameNZB for main screenshot
+            embed.setThumbnail(tsukihimeCover);
+            if (infoHash && infoHash !== "Unknown") {
+                const images = await fetchAnimeImages(infoHash);
+                if (images.screenshots.length > 0) {
+                    embed.setImage(images.screenshots[0]!);
+                }
+            }
+        } else {
+            embed.setThumbnail(tsukihimeCover);
+        }
+    } else if (infoHash && infoHash !== "Unknown") {
+        // Tsukihime miss — fall back to ameNZB
         const images = await fetchAnimeImages(infoHash);
 
-        // If the comment doesn't already have an image from markdown, apply primary screenshot
         if (!firstImageUrl && images.screenshots.length > 0) {
             embed.setImage(images.screenshots[0]!);
-
-            // Use cover as thumbnail if available, or secondary screenshot
             if (images.cover) {
                 embed.setThumbnail(images.cover);
             } else if (images.screenshots.length > 1) {
                 embed.setThumbnail(images.screenshots[1]!);
             }
         } else {
-            // Main image already set from markdown, use cover for thumbnail
             if (images.cover) {
                 embed.setThumbnail(images.cover);
             } else {
@@ -215,7 +242,8 @@ export async function buildNyaaCommentEmbed(
 export async function buildNyaaEmbed(
     info: NyaaTorrentInfo,
     url: string,
-    provider: "nyaa" | "sukebei" = "nyaa"
+    provider: "nyaa" | "sukebei" = "nyaa",
+    viewId?: string
 ): Promise<EmbedBuilder[]> {
     const domain = provider === "sukebei" ? "sukebei.nyaa.si" : "nyaa.si";
 
@@ -276,11 +304,41 @@ export async function buildNyaaEmbed(
     let mainImage: string | null = descriptionImages.length > 0 ? descriptionImages[0]! : null;
     let thumbnail: string | null = null;
 
-    // Fetch ameNZB images for better quality
-    if (info.infoHash && info.infoHash !== "Unknown") {
+    // Try Tsukihime first for cover/thumbnail
+    let tsukihimeCover: string | null = null;
+    if (viewId) {
+        const numericId = parseInt(viewId, 10);
+        if (!isNaN(numericId)) {
+            const tsukiImages =
+                provider === "sukebei"
+                    ? await fetchTsukihimeImagesBySukebei(numericId)
+                    : await fetchTsukihimeImagesByNyaa(numericId);
+            if (tsukiImages?.cover) {
+                tsukihimeCover = tsukiImages.cover;
+            }
+        }
+    }
+
+    if (tsukihimeCover) {
+        // Tsukihime provided a cover — use it as thumbnail, try ameNZB for main screenshot
+        thumbnail = tsukihimeCover;
+
+        if (!mainImage && info.infoHash && info.infoHash !== "Unknown") {
+            const images = await fetchAnimeImages(info.infoHash);
+            if (images.screenshots.length > 0) {
+                mainImage = images.screenshots[0]!;
+            }
+        }
+
+        if (!mainImage) {
+            // No screenshots found — use Tsukihime cover as main image instead
+            mainImage = tsukihimeCover;
+            thumbnail = null;
+        }
+    } else if (info.infoHash && info.infoHash !== "Unknown") {
+        // Tsukihime miss — fall back to ameNZB
         const images = await fetchAnimeImages(info.infoHash);
 
-        // Determine best main image if not from description
         if (!mainImage) {
             if (images.screenshots.length > 0) {
                 mainImage = images.screenshots[0]!;
@@ -291,7 +349,6 @@ export async function buildNyaaEmbed(
             }
         }
 
-        // Determine best thumbnail (prefer cover if main image is a screenshot)
         if (images.cover && images.cover !== mainImage) {
             thumbnail = images.cover;
         } else if (images.screenshots.length > 1 && images.screenshots[1] !== mainImage) {

@@ -139,7 +139,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                                     commentData.torrentTitle,
                                     url,
                                     provider,
-                                    commentData.infoHash
+                                    commentData.infoHash,
+                                    viewId
                                 );
                                 embeds.push(...commentEmbeds);
                             }
@@ -147,7 +148,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                             // Torrent page embed
                             const info = await fetchNyaaInfo(viewId, provider);
                             if (info) {
-                                const nyaaEmbeds = await buildNyaaEmbed(info, url, provider);
+                                const nyaaEmbeds = await buildNyaaEmbed(info, url, provider, viewId);
                                 embeds.push(...nyaaEmbeds);
                             }
                         }
@@ -163,6 +164,24 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     embeds.push(...nekoData.embeds);
                     if (nekoData.components) {
                         components.push(...nekoData.components);
+                    }
+                }
+                break;
+            }
+
+            // Tsukihime torrent embeds
+            case PlatformId.TSUKIHIME: {
+                if (postId) {
+                    const torrentId = parseInt(postId, 10);
+                    if (!isNaN(torrentId)) {
+                        const { buildTsukihimeEmbed } = await import("../services/tsukihime");
+                        const tsukihimeData = await buildTsukihimeEmbed(torrentId, url);
+                        if (tsukihimeData) {
+                            embeds.push(...tsukihimeData.embeds);
+                            if (tsukihimeData.components) {
+                                components.push(...tsukihimeData.components);
+                            }
+                        }
                     }
                 }
                 break;

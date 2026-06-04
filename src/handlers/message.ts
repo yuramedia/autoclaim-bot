@@ -163,6 +163,9 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                 if (tsukihimeEmbed.components) {
                     components.push(...tsukihimeEmbed.components);
                 }
+                if (tsukihimeEmbed.files) {
+                    files.push(...tsukihimeEmbed.files);
+                }
             }
         }
     }

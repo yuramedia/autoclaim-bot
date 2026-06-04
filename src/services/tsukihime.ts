@@ -11,7 +11,7 @@ import { BROWSER_USER_AGENT } from "../constants/anime.js";
 import type { TsukihimeTorrent, TsukihimeImages } from "../types/tsukihime.js";
 import { formatBytes } from "./nekobt.js";
 import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./amenzb.js";
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from "discord.js";
 
 /**
  * Common headers for Tsukihime API requests
@@ -324,9 +324,33 @@ export async function buildTsukihimeEmbed(torrentId: number, originalUrl: string
         finalThumbnail = null;
     }
 
+    const files: AttachmentBuilder[] = [];
+
     if (mainImage) {
-        embed.setImage(mainImage);
+        if (mainImage.includes("tsukihime.org")) {
+            try {
+                const response = await axios.get(mainImage, {
+                    headers: { "User-Agent": BROWSER_USER_AGENT },
+                    responseType: "arraybuffer",
+                    timeout: 8000
+                });
+                if (response.status === 200 && response.data) {
+                    const buffer = Buffer.from(response.data);
+                    const attachment = new AttachmentBuilder(buffer, { name: "screenshot.webp" });
+                    files.push(attachment);
+                    embed.setImage("attachment://screenshot.webp");
+                } else {
+                    embed.setImage(mainImage);
+                }
+            } catch (error) {
+                console.error("[Tsukihime] Failed to download screenshot:", error);
+                embed.setImage(mainImage);
+            }
+        } else {
+            embed.setImage(mainImage);
+        }
     }
+
     if (finalThumbnail) {
         embed.setThumbnail(finalThumbnail);
     }
@@ -363,5 +387,5 @@ export async function buildTsukihimeEmbed(torrentId: number, originalUrl: string
         }
     }
 
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [row], files };
 }

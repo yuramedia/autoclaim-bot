@@ -181,6 +181,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                             if (tsukihimeData.components) {
                                 components.push(...tsukihimeData.components);
                             }
+                            if (tsukihimeData.files) {
+                                files.push(...tsukihimeData.files);
+                            }
                         }
                     }
                 }

@@ -63,7 +63,7 @@ export function decryptToken(value: string): string {
         if (parts.length !== 3) return value;
 
         const [ivHex, authTagHex, encryptedHex] = parts;
-        if (!ivHex || !authTagHex || !encryptedHex) return value;
+        if (!ivHex || !authTagHex || encryptedHex === undefined) return value;
         const key = getKey();
         const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, "hex"));
         decipher.setAuthTag(Buffer.from(authTagHex, "hex"));

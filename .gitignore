@@ -37,3 +37,5 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Debug/test scripts (one-off runners, not part of the test suite)
 test-*.ts
 src/test-*.ts
+# ...except the official test runner preload
+!src/test-setup.ts

@@ -4,8 +4,17 @@ import { getCooldownRemaining, setCooldown, formatCooldown } from "../utils/cool
 
 const SPEEDTEST_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes per user
 
+/**
+ * Slash command data for the speedtest command.
+ */
 export const data = new SlashCommandBuilder().setName("speedtest").setDescription("Check hosting server network speed");
 
+/**
+ * Executes the speedtest command to measure the hosting server network upload, download, and latency.
+ *
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when the command finishes.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     // Per-user cooldown — speedtest is resource-intensive (~30s, consumes bandwidth)
     const remaining = getCooldownRemaining("speedtest", interaction.user.id, SPEEDTEST_COOLDOWN_MS);

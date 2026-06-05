@@ -15,6 +15,9 @@ import { getGuildSettings } from "../database/models/GuildSettings";
 import type { IU2FeedSettings } from "../types/u2-feed";
 import { U2_DEFAULT_FILTER } from "../constants/u2-feed";
 
+/**
+ * Slash command data for the u2-feed command.
+ */
 export const data = new SlashCommandBuilder()
     .setName("u2-feed")
     .setDescription("Konfigurasi notifikasi feed torrent U2 BDMV")
@@ -40,6 +43,12 @@ export const data = new SlashCommandBuilder()
     .addSubcommand(sub => sub.setName("disable").setDescription("Nonaktifkan notifikasi feed U2 BDMV"))
     .addSubcommand(sub => sub.setName("status").setDescription("Lihat status konfigurasi feed U2 saat ini"));
 
+/**
+ * Executes the u2-feed command to configure feed notifications.
+ *
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when the command finishes.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const guildId = interaction.guildId;
     if (!guildId) {
@@ -134,10 +143,15 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         }
     } catch (error) {
         console.error("U2 feed command failed:", error);
-        const reply = (interaction.deferred ? interaction.editReply : interaction.reply) as any;
-        await reply.call(interaction, {
-            content: "❌ Terjadi kesalahan saat memproses perintah.",
-            ephemeral: true
-        });
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({
+                content: "❌ Terjadi kesalahan saat memproses perintah."
+            });
+        } else {
+            await interaction.reply({
+                content: "❌ Terjadi kesalahan saat memproses perintah.",
+                ephemeral: true
+            });
+        }
     }
 }

@@ -79,6 +79,12 @@ export class CrunchyrollService {
         }
     }
 
+    /**
+     * Fetch the latest episodes from Crunchyroll browse API.
+     * @param lang - Locale parameter for language preference.
+     * @param count - Number of episodes to return.
+     * @returns A promise resolving to an array of Crunchyroll episodes.
+     */
     async fetchLatestEpisodes(lang = "", count = CR_RELEASE_ITEMS_PER_PAGE): Promise<CrunchyrollEpisode[]> {
         const auth = await this.getAuth();
         if (!auth) return [];
@@ -175,6 +181,11 @@ export class CrunchyrollService {
         }
     }
 
+    /**
+     * Fetch multiple Crunchyroll episodes by their unique IDs.
+     * @param episodeIds - Array of episode ID strings.
+     * @returns A promise resolving to an array of matching Crunchyroll episodes.
+     */
     async fetchEpisodesByIds(episodeIds: string[]): Promise<CrunchyrollEpisode[]> {
         const auth = await this.getAuth();
         if (!auth) return [];
@@ -400,18 +411,23 @@ export class CrunchyrollService {
         episodes: FormattedEpisode[],
         rawEpisodes: CrunchyrollEpisode[]
     ): Promise<FormattedEpisode[]> {
-        await this.fetchRssPublishers();
+        try {
+            await this.fetchRssPublishers();
 
-        return episodes.map((ep, index) => {
-            const raw = rawEpisodes[index];
-            if (raw?.external_id) {
-                const publisher = this.getPublisher(raw.external_id);
-                if (publisher) {
-                    return { ...ep, publisher };
+            return episodes.map((ep, index) => {
+                const raw = rawEpisodes[index];
+                if (raw?.external_id) {
+                    const publisher = this.getPublisher(raw.external_id);
+                    if (publisher) {
+                        return { ...ep, publisher };
+                    }
                 }
-            }
-            return ep;
-        });
+                return ep;
+            });
+        } catch (error) {
+            console.error("Error enriching with publisher:", error);
+            return episodes;
+        }
     }
 
     /**
@@ -441,7 +457,20 @@ export class CrunchyrollService {
                 return undefined;
             }
 
-            const data = (await response.json()) as any;
+            interface PosterImage {
+                height: number;
+                width: number;
+                source: string;
+            }
+            interface SeriesObject {
+                images?: {
+                    poster_tall?: PosterImage[][];
+                };
+            }
+            interface SeriesResponse {
+                data?: SeriesObject[];
+            }
+            const data = (await response.json()) as SeriesResponse;
             const images = data?.data?.[0]?.images?.poster_tall; // Array of arrays of images
 
             if (images && images.length > 0) {
@@ -449,7 +478,7 @@ export class CrunchyrollService {
                 const imageGroup = images[images.length - 1];
                 if (imageGroup && imageGroup.length > 0) {
                     // Sort by height descending just to be sure
-                    const sorted = imageGroup.toSorted((a: any, b: any) => b.height - a.height);
+                    const sorted = imageGroup.toSorted((a: PosterImage, b: PosterImage) => b.height - a.height);
                     // Prefer height around 400-800 for Discord thumbnail, but largest is usually fine
                     const poster = sorted[0]?.source;
                     if (poster) {
@@ -470,19 +499,24 @@ export class CrunchyrollService {
      * Enrich episodes with series posters
      */
     async enrichWithSeriesPoster(episodes: FormattedEpisode[]): Promise<FormattedEpisode[]> {
-        // Collect unique series IDs
-        const seriesIds = [...new Set(episodes.map(ep => ep.seriesId))];
+        try {
+            // Collect unique series IDs
+            const seriesIds = [...new Set(episodes.map(ep => ep.seriesId))];
 
-        // Fetch posters in parallel (with limit if needed, but usually fine for small batches)
-        await Promise.all(seriesIds.map(id => this.getSeriesPoster(id)));
+            // Fetch posters in parallel (with limit if needed, but usually fine for small batches)
+            await Promise.all(seriesIds.map(id => this.getSeriesPoster(id)));
 
-        return episodes.map(ep => {
-            const poster = CrunchyrollService.seriesCache.get(ep.seriesId);
-            if (poster) {
-                return { ...ep, seriesPoster: poster };
-            }
-            return ep;
-        });
+            return episodes.map(ep => {
+                const poster = CrunchyrollService.seriesCache.get(ep.seriesId);
+                if (poster) {
+                    return { ...ep, seriesPoster: poster };
+                }
+                return ep;
+            });
+        } catch (error) {
+            console.error("Error enriching with series poster:", error);
+            return episodes;
+        }
     }
 
     /**

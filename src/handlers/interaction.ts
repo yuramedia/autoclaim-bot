@@ -24,32 +24,38 @@ for (const command of commands) {
 }
 
 /**
- * Main interaction handler
- * Routes interactions to appropriate handlers
+ * Main interaction handler.
+ * Routes incoming Discord interactions to their respective sub-handlers (commands, autocomplete, modals, select menus).
+ * @param interaction - The incoming Discord interaction
+ * @returns A promise that resolves when routing is complete
  */
 export async function handleInteraction(interaction: Interaction): Promise<void> {
-    // Handle slash commands
-    if (interaction.isChatInputCommand()) {
-        await handleCommand(interaction);
-        return;
-    }
+    try {
+        // Handle slash commands
+        if (interaction.isChatInputCommand()) {
+            await handleCommand(interaction);
+            return;
+        }
 
-    // Handle autocomplete
-    if (interaction.isAutocomplete()) {
-        await handleAutocomplete(interaction);
-        return;
-    }
+        // Handle autocomplete
+        if (interaction.isAutocomplete()) {
+            await handleAutocomplete(interaction);
+            return;
+        }
 
-    // Handle modal submissions
-    if (interaction.isModalSubmit()) {
-        await handleModal(interaction);
-        return;
-    }
+        // Handle modal submissions
+        if (interaction.isModalSubmit()) {
+            await handleModal(interaction);
+            return;
+        }
 
-    // Handle select menus
-    if (interaction.isStringSelectMenu()) {
-        await handleSelectMenu(interaction);
-        return;
+        // Handle select menus
+        if (interaction.isStringSelectMenu()) {
+            await handleSelectMenu(interaction);
+            return;
+        }
+    } catch (error: unknown) {
+        console.error("[handleInteraction] Unexpected interaction handling error:", error);
     }
 }
 
@@ -66,7 +72,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
 
     try {
         await command.execute(interaction);
-    } catch (error) {
+    } catch (error: unknown) {
         await handleInteractionError(interaction, error, "❌ An error occurred while executing this command.");
     }
 }
@@ -88,7 +94,7 @@ async function handleModal(interaction: Interaction): Promise<void> {
             default:
                 console.warn(`[Modal] Unknown modal: ${interaction.customId}`);
         }
-    } catch (error) {
+    } catch (error: unknown) {
         await handleInteractionError(interaction, error, "❌ An error occurred while processing your input.");
     }
 }
@@ -110,7 +116,7 @@ async function handleSelectMenu(interaction: StringSelectMenuInteraction): Promi
             default:
                 console.warn(`[SelectMenu] Unknown select menu: ${interaction.customId}`);
         }
-    } catch (error) {
+    } catch (error: unknown) {
         await handleInteractionError(interaction, error, "❌ Error processing selection.");
     }
 }
@@ -127,7 +133,7 @@ async function handleAutocomplete(interaction: AutocompleteInteraction): Promise
 
     try {
         await command.autocomplete(interaction);
-    } catch (error) {
+    } catch (error: unknown) {
         console.error(`[Autocomplete] Error for ${interaction.commandName}:`, error);
     }
 }

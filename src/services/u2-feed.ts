@@ -12,6 +12,8 @@ import { U2_IMAGE_PATTERN, U2_ATTACH_IMAGE_PATTERN } from "../constants/u2-feed"
 /**
  * Light-escape special characters in URLs before fetching
  * Matches Rimuru-Bot's lightEscapeURL() extension
+ * @param url - The URL to light escape
+ * @returns The escaped URL string
  */
 function lightEscapeURL(url: string): string {
     return url
@@ -24,6 +26,8 @@ function lightEscapeURL(url: string): string {
 
 /**
  * Extract content from a CDATA section or plain text XML tag
+ * @param raw - Raw XML content
+ * @returns Plaint text within CDATA or stripped content
  */
 function extractCDATA(raw: string): string {
     const cdataMatch = raw.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
@@ -34,15 +38,20 @@ function extractCDATA(raw: string): string {
 
 /**
  * Extract a single XML tag value from a block of XML
+ * @param xml - The XML content
+ * @param tag - Tag name to extract
+ * @returns Tag text value
  */
 function extractTag(xml: string, tag: string): string {
-    const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i");
+    const regex = new RegExp(`<${tag}[&>]*>([\\s\\S]*?)</${tag}>`, "i");
     const match = xml.match(regex);
     return match ? extractCDATA(match[1]!) : "";
 }
 
 /**
  * Format bytes to human-readable size
+ * @param bytes - Size in bytes
+ * @returns Formatted size string
  */
 function formatBytes(bytes: number): string {
     if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GiB`;
@@ -51,9 +60,14 @@ function formatBytes(bytes: number): string {
     return `${bytes} B`;
 }
 
+/**
+ * Service to fetch, parse, and format the U2 RSS feed.
+ */
 export class U2FeedService {
     /**
-     * Fetch and parse RSS feed from U2
+     * Fetch and parse RSS feed from U2.
+     * @param feedUrl - The U2 RSS feed URL.
+     * @returns A promise resolving to an array of U2 feed items.
      */
     async fetchFeed(feedUrl: string): Promise<U2FeedItem[]> {
         try {
@@ -82,7 +96,9 @@ export class U2FeedService {
     }
 
     /**
-     * Parse RSS XML into U2FeedItem array
+     * Parse RSS XML into U2FeedItem array.
+     * @param xml - Raw RSS XML string.
+     * @returns Array of parsed U2FeedItems.
      */
     private parseItems(xml: string): U2FeedItem[] {
         const items: U2FeedItem[] = [];
@@ -126,8 +142,10 @@ export class U2FeedService {
     }
 
     /**
-     * Extract first image URL from HTML description
-     * Matches Rimuru-Bot's FeedItem.getImage()
+     * Extract first image URL from HTML description.
+     * Matches Rimuru-Bot's FeedItem.getImage().
+     * @param description - HTML description content.
+     * @returns The extracted image URL, or null if not found.
      */
     extractImage(description?: string): string | null {
         if (!description || description.trim() === "") return null;
@@ -164,8 +182,10 @@ export class U2FeedService {
     }
 
     /**
-     * Extract uploader name from author field
+     * Extract uploader name from author field.
      * Format: "username@u2.dmhy.org (username)"
+     * @param author - Author field content.
+     * @returns The extracted uploader name.
      */
     private extractUploader(author?: string): string {
         if (!author) return "Unknown";
@@ -181,7 +201,10 @@ export class U2FeedService {
     }
 
     /**
-     * Get human-readable size from enclosure bytes or title fallback
+     * Get human-readable size from enclosure bytes or title fallback.
+     * @param sizeBytes - Torrent size in bytes.
+     * @param title - Title content for fallback.
+     * @returns Human-readable size string.
      */
     private getSize(sizeBytes: number | null, title?: string): string {
         if (sizeBytes && sizeBytes > 0) {
@@ -196,8 +219,10 @@ export class U2FeedService {
     }
 
     /**
-     * Parse pubDate string (RFC 2822) to unix timestamp
-     * Matches Rimuru-Bot's getUnixPubTime()
+     * Parse pubDate string (RFC 2822) to unix timestamp.
+     * Matches Rimuru-Bot's getUnixPubTime().
+     * @param pubDate - RFC 2822 format date string.
+     * @returns Unix timestamp.
      */
     getUnixPubTime(pubDate: string): number {
         if (!pubDate || pubDate.trim() === "") return 0;
@@ -209,8 +234,10 @@ export class U2FeedService {
     }
 
     /**
-     * Format a raw feed item for Discord embed
-     * Matches Rimuru-Bot's FeedItem data class
+     * Format a raw feed item for Discord embed.
+     * Matches Rimuru-Bot's FeedItem data class.
+     * @param item - The raw U2 feed item.
+     * @returns The formatted feed item.
      */
     formatItem(item: U2FeedItem): FormattedU2Item {
         const rawTitle = item.title || "Unknown Title";

@@ -15,10 +15,12 @@ import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fi
 import { downloadMedia, downloadDirect } from "../services/media-downloader";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
 import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
-import { getGuildSettings } from "../database/models/GuildSettings";
+import { getGuildSettings, type IGuildSettings } from "../database/models/GuildSettings";
 import { getMaxDownloadSize } from "../constants/media-downloader";
 
-// Cache for storing video URLs for interactive resolution selection
+/**
+ * Cache for storing video URLs and format details for interactive resolution selection.
+ */
 export const videoSelectionCache = new Map<
     string,
     { url: string; platform: PlatformId; formats?: import("../types/media-downloader").VKRFormat[] }
@@ -29,170 +31,227 @@ const processedMessages = new Set<string>();
 const CACHE_TTL = 60000; // 1 minute
 
 /**
- * Handle message create event
+ * Handles the messageCreate event. Checks if the message contains social media URLs,
+ * retrieves the appropriate rich embeds or media files according to guild settings,
+ * posts them as a reply, and suppresses the original embeds.
+ * @param message - The Discord message created
+ * @returns A promise that resolves when handling is complete
  */
 export async function handleMessage(message: Message): Promise<void> {
-    // Skip if no guild (DMs)
-    if (!message.guild) return;
-
-    // Skip bot messages
-    if (message.author.bot) return;
-
-    // Skip webhook messages
-    if (message.webhookId) return;
-
-    // Skip if already processed
-    if (processedMessages.has(message.id)) return;
-    processedMessages.add(message.id);
-    setTimeout(() => processedMessages.delete(message.id), CACHE_TTL);
-
-    // Get guild settings
-    const settings = await getGuildSettings(message.guild.id);
-
-    // Skip if embed fix is disabled
-    if (!settings.embedFix.enabled) return;
-
-    // Process URLs in message
-    const processedUrls = processUrls(message.content, settings.embedFix.disabledPlatforms as PlatformId[]);
-
-    // Skip if no URLs found
-    if (processedUrls.length === 0) return;
-
     try {
-        // Process each URL in parallel
-        await Promise.all(processedUrls.map(processed => processUrl(message, processed, settings)));
+        // Skip if no guild (DMs)
+        if (!message.guild) return;
 
-        // Suppress original embeds after bot has replied
-        // Wait briefly for Discord to generate the original embed
-        setTimeout(async () => {
-            try {
-                const updatedMessage = await message.fetch();
-                if (updatedMessage.embeds.length > 0) {
-                    await updatedMessage.suppressEmbeds(true);
+        // Skip bot messages
+        if (message.author.bot) return;
+
+        // Skip webhook messages
+        if (message.webhookId) return;
+
+        // Skip if already processed
+        if (processedMessages.has(message.id)) return;
+        processedMessages.add(message.id);
+        setTimeout(() => processedMessages.delete(message.id), CACHE_TTL);
+
+        // Get guild settings
+        const settings = await getGuildSettings(message.guild.id);
+
+        // Skip if embed fix is disabled
+        if (!settings.embedFix.enabled) return;
+
+        // Process URLs in message
+        const processedUrls = processUrls(message.content, settings.embedFix.disabledPlatforms as PlatformId[]);
+
+        // Skip if no URLs found
+        if (processedUrls.length === 0) return;
+
+        try {
+            // Process each URL in parallel
+            await Promise.all(processedUrls.map(processed => processUrl(message, processed, settings)));
+
+            // Suppress original embeds after bot has replied
+            // Wait briefly for Discord to generate the original embed
+            setTimeout(async () => {
+                try {
+                    const updatedMessage = await message.fetch();
+                    if (updatedMessage.embeds.length > 0) {
+                        await updatedMessage.suppressEmbeds(true);
+                    }
+                } catch {
+                    // Ignore if we don't have permission (Manage Messages required)
                 }
-            } catch {
-                // Ignore if we don't have permission (Manage Messages required)
-            }
-        }, 2000);
-    } catch (error) {
-        console.error("Error processing embed fix:", error);
+            }, 2000);
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error("Error processing embed fix:", msg);
+        }
+    } catch (outerError: unknown) {
+        const msg = outerError instanceof Error ? outerError.message : String(outerError);
+        console.error("Unexpected error in handleMessage:", msg);
     }
 }
 
 /**
- * Process a single URL
+ * Processes a single URL found in a message.
+ * Depending on the platform, builds rich embeds, downloads and attaches media files,
+ * or attaches resolution selection menus if the video size exceeds the server's limit.
+ * @param message - The original Discord message
+ * @param processed - The processed URL details
+ * @param settings - The guild settings configuration
+ * @returns A promise that resolves when processing is complete
  */
-async function processUrl(message: Message, processed: ProcessedUrl, settings: any): Promise<void> {
-    const embeds: EmbedBuilder[] = [];
-    const files: AttachmentBuilder[] = [];
-    const components: any[] = [];
-    let content = "";
+async function processUrl(message: Message, processed: ProcessedUrl, settings: IGuildSettings): Promise<void> {
+    try {
+        const embeds: EmbedBuilder[] = [];
+        const files: AttachmentBuilder[] = [];
+        const components: Array<ActionRowBuilder<StringSelectMenuBuilder | import("discord.js").ButtonBuilder>> = [];
+        let content = "";
 
-    // Platforms that VKrDownloader supports (video platforms only)
-    const DOWNLOADABLE_PLATFORMS: PlatformId[] = [
-        PlatformId.TWITTER,
-        PlatformId.TIKTOK,
-        PlatformId.INSTAGRAM,
-        PlatformId.REDDIT,
-        PlatformId.FACEBOOK,
-        PlatformId.THREADS
-    ];
+        // Platforms that VKrDownloader supports (video platforms only)
+        const DOWNLOADABLE_PLATFORMS: PlatformId[] = [
+            PlatformId.TWITTER,
+            PlatformId.TIKTOK,
+            PlatformId.INSTAGRAM,
+            PlatformId.REDDIT,
+            PlatformId.FACEBOOK,
+            PlatformId.THREADS
+        ];
 
-    const canDownload = DOWNLOADABLE_PLATFORMS.includes(processed.platform.id);
-    const maxSizeLimit = getMaxDownloadSize(message.guild?.premiumTier);
+        const canDownload = DOWNLOADABLE_PLATFORMS.includes(processed.platform.id);
+        const maxSizeLimit = getMaxDownloadSize(message.guild?.premiumTier);
 
-    // Custom flow for Nyaa.si
-    if (processed.platform.id === PlatformId.NYAA && processed.postId) {
-        // postId format: "nyaa:1273100" or "sukebei:4181966#com-15"
-        const match = processed.postId.match(/^(nyaa|sukebei):(\d+)(?:(#com-\d+))?$/);
-        if (match) {
-            const provider = match[1] as "nyaa" | "sukebei";
-            const viewId = match[2]!;
-            const commentIdKey = match[3];
+        // Custom flow for Nyaa.si
+        if (processed.platform.id === PlatformId.NYAA && processed.postId) {
+            // postId format: "nyaa:1273100" or "sukebei:4181966#com-15"
+            const match = processed.postId.match(/^(nyaa|sukebei):(\d+)(?:(#com-\d+))?$/);
+            if (match) {
+                const provider = match[1] as "nyaa" | "sukebei";
+                const viewId = match[2]!;
+                const commentIdKey = match[3];
 
-            if (commentIdKey) {
-                const commentId = commentIdKey.replace("#com-", "");
-                const commentData = await fetchNyaaComment(viewId, commentId, provider);
-                if (commentData) {
-                    const commentEmbeds = await buildNyaaCommentEmbed(
-                        commentData.comment,
-                        commentData.torrentTitle,
-                        processed.originalUrl,
-                        provider,
-                        commentData.infoHash,
-                        viewId
-                    );
-                    embeds.push(...commentEmbeds);
-                }
-            } else {
-                const nyaaInfo = await fetchNyaaInfo(viewId, provider);
-                if (nyaaInfo) {
-                    const nyaaEmbeds = await buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider, viewId);
-                    embeds.push(...nyaaEmbeds);
-                }
-            }
-        }
-    }
-    // Custom flow for NekoBT
-    else if (processed.platform.id === PlatformId.NEKOBT && processed.postId) {
-        const { buildNekoBTEmbed } = await import("../services/nekobt");
-        const nekobtEmbeds = await buildNekoBTEmbed(processed.originalUrl);
-        if (nekobtEmbeds) {
-            embeds.push(...nekobtEmbeds.embeds);
-            if (nekobtEmbeds.components) {
-                components.push(...nekobtEmbeds.components);
-            }
-        }
-    }
-    // Custom flow for AmeNZB
-    else if (processed.platform.id === PlatformId.AMENZB && processed.postId) {
-        const { buildAmeNZBEmbed } = await import("../services/amenzb");
-        const amenzbEmbed = await buildAmeNZBEmbed(processed.postId, processed.originalUrl);
-        if (amenzbEmbed) {
-            embeds.push(amenzbEmbed);
-        }
-    }
-    // Custom flow for Tsukihime
-    else if (processed.platform.id === PlatformId.TSUKIHIME && processed.postId) {
-        const { buildTsukihimeEmbed } = await import("../services/tsukihime");
-        const torrentId = parseInt(processed.postId, 10);
-        if (!isNaN(torrentId)) {
-            const tsukihimeEmbed = await buildTsukihimeEmbed(torrentId, processed.originalUrl);
-            if (tsukihimeEmbed) {
-                embeds.push(...tsukihimeEmbed.embeds);
-                if (tsukihimeEmbed.components) {
-                    components.push(...tsukihimeEmbed.components);
-                }
-                if (tsukihimeEmbed.files) {
-                    files.push(...tsukihimeEmbed.files);
-                }
-            }
-        }
-    }
-    // Try to fetch rich post info for other platforms
-    else if (settings.embedFix.richEmbeds) {
-        const postInfo = await fetchPostInfo(processed.fixedUrl, processed.platform, processed.postId);
-
-        if (postInfo) {
-            const richEmbeds = buildRichEmbed(postInfo, processed.platform, processed.originalUrl);
-            embeds.push(...richEmbeds);
-
-            // Try to download and upload media if enabled (only for supported platforms)
-            if (settings.embedFix.autoUpload && postInfo.video && canDownload) {
-                let downloadResult;
-
-                if (processed.platform.id === PlatformId.FACEBOOK) {
-                    // Facebook video URLs from our scraper are direct mp4 links
-                    downloadResult = await downloadDirect(postInfo.video, "facebook_video.mp4", maxSizeLimit);
-
-                    // If direct download fails (e.g. maxContentLength exceeded), fallback to VKrDownloader
-                    // which might offer lower resolutions via the select menu
-                    if (!downloadResult.success) {
-                        downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
+                if (commentIdKey) {
+                    const commentId = commentIdKey.replace("#com-", "");
+                    const commentData = await fetchNyaaComment(viewId, commentId, provider);
+                    if (commentData) {
+                        const commentEmbeds = await buildNyaaCommentEmbed(
+                            commentData.comment,
+                            commentData.torrentTitle,
+                            processed.originalUrl,
+                            provider,
+                            commentData.infoHash,
+                            viewId
+                        );
+                        embeds.push(...commentEmbeds);
                     }
                 } else {
-                    downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
+                    const nyaaInfo = await fetchNyaaInfo(viewId, provider);
+                    if (nyaaInfo) {
+                        const nyaaEmbeds = await buildNyaaEmbed(nyaaInfo, processed.originalUrl, provider, viewId);
+                        embeds.push(...nyaaEmbeds);
+                    }
                 }
+            }
+        }
+        // Custom flow for NekoBT
+        else if (processed.platform.id === PlatformId.NEKOBT && processed.postId) {
+            const { buildNekoBTEmbed } = await import("../services/nekobt");
+            const nekobtEmbeds = await buildNekoBTEmbed(processed.originalUrl);
+            if (nekobtEmbeds) {
+                embeds.push(...nekobtEmbeds.embeds);
+                if (nekobtEmbeds.components) {
+                    components.push(...nekobtEmbeds.components);
+                }
+            }
+        }
+        // Custom flow for AmeNZB
+        else if (processed.platform.id === PlatformId.AMENZB && processed.postId) {
+            const { buildAmeNZBEmbed } = await import("../services/amenzb");
+            const amenzbEmbed = await buildAmeNZBEmbed(processed.postId, processed.originalUrl);
+            if (amenzbEmbed) {
+                embeds.push(amenzbEmbed);
+            }
+        }
+        // Custom flow for Tsukihime
+        else if (processed.platform.id === PlatformId.TSUKIHIME && processed.postId) {
+            const { buildTsukihimeEmbed } = await import("../services/tsukihime");
+            const torrentId = parseInt(processed.postId, 10);
+            if (!isNaN(torrentId)) {
+                const tsukihimeEmbed = await buildTsukihimeEmbed(torrentId, processed.originalUrl);
+                if (tsukihimeEmbed) {
+                    embeds.push(...tsukihimeEmbed.embeds);
+                    if (tsukihimeEmbed.components) {
+                        components.push(...tsukihimeEmbed.components);
+                    }
+                    if (tsukihimeEmbed.files) {
+                        files.push(...tsukihimeEmbed.files);
+                    }
+                }
+            }
+        }
+        // Try to fetch rich post info for other platforms
+        else if (settings.embedFix.richEmbeds) {
+            const postInfo = await fetchPostInfo(processed.fixedUrl, processed.platform, processed.postId);
+
+            if (postInfo) {
+                const richEmbeds = buildRichEmbed(postInfo, processed.platform, processed.originalUrl);
+                embeds.push(...richEmbeds);
+
+                // Try to download and upload media if enabled (only for supported platforms)
+                if (settings.embedFix.autoUpload && postInfo.video && canDownload) {
+                    let downloadResult;
+
+                    if (processed.platform.id === PlatformId.FACEBOOK) {
+                        // Facebook video URLs from our scraper are direct mp4 links
+                        downloadResult = await downloadDirect(postInfo.video, "facebook_video.mp4", maxSizeLimit);
+
+                        // If direct download fails (e.g. maxContentLength exceeded), fallback to VKrDownloader
+                        // which might offer lower resolutions via the select menu
+                        if (!downloadResult.success) {
+                            downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
+                        }
+                    } else {
+                        downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
+                    }
+
+                    if (downloadResult.success && downloadResult.buffer) {
+                        const attachment = new AttachmentBuilder(downloadResult.buffer, {
+                            name: processed.spoilered ? `SPOILER_${downloadResult.filename}` : downloadResult.filename
+                        });
+                        files.push(attachment);
+                    } else if (downloadResult.oversized && downloadResult.availableFormats) {
+                        const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+                        videoSelectionCache.set(selectionId, {
+                            url: processed.originalUrl,
+                            platform: processed.platform.id,
+                            formats: downloadResult.availableFormats
+                        });
+                        setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
+
+                        const selectMenu = new StringSelectMenuBuilder()
+                            .setCustomId(`res_select|${selectionId}`)
+                            .setPlaceholder("Video too large. Select a smaller resolution.")
+                            .addOptions(
+                                downloadResult.availableFormats
+                                    .slice(0, 25)
+                                    .map((fmt, idx) =>
+                                        new StringSelectMenuOptionBuilder()
+                                            .setLabel(
+                                                `${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`
+                                            )
+                                            .setValue(idx.toString())
+                                    )
+                            );
+                        components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
+                    }
+                }
+            }
+        }
+
+        // If no rich embed, use fixed URL or try download
+        if (embeds.length === 0) {
+            // For platforms with download support, try to download media
+            if (settings.embedFix.autoUpload && canDownload) {
+                const downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
 
                 if (downloadResult.success && downloadResult.buffer) {
                     const attachment = new AttachmentBuilder(downloadResult.buffer, {
@@ -221,63 +280,29 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: a
                                 )
                         );
                     components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
+                } else if (processed.fixedUrl !== processed.originalUrl) {
+                    // Fallback to fixed URL
+                    content = processed.spoilered ? `||${processed.fixedUrl}||` : processed.fixedUrl;
                 }
-            }
-        }
-    }
-
-    // If no rich embed, use fixed URL or try download
-    if (embeds.length === 0) {
-        // For platforms with download support, try to download media
-        if (settings.embedFix.autoUpload && canDownload) {
-            const downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
-
-            if (downloadResult.success && downloadResult.buffer) {
-                const attachment = new AttachmentBuilder(downloadResult.buffer, {
-                    name: processed.spoilered ? `SPOILER_${downloadResult.filename}` : downloadResult.filename
-                });
-                files.push(attachment);
-            } else if (downloadResult.oversized && downloadResult.availableFormats) {
-                const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-                videoSelectionCache.set(selectionId, {
-                    url: processed.originalUrl,
-                    platform: processed.platform.id,
-                    formats: downloadResult.availableFormats
-                });
-                setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
-
-                const selectMenu = new StringSelectMenuBuilder()
-                    .setCustomId(`res_select|${selectionId}`)
-                    .setPlaceholder("Video too large. Select a smaller resolution.")
-                    .addOptions(
-                        downloadResult.availableFormats
-                            .slice(0, 25)
-                            .map((fmt, idx) =>
-                                new StringSelectMenuOptionBuilder()
-                                    .setLabel(`${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`)
-                                    .setValue(idx.toString())
-                            )
-                    );
-                components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
             } else if (processed.fixedUrl !== processed.originalUrl) {
-                // Fallback to fixed URL
+                // Just send fixed URL (for Pixiv, Bluesky, etc.)
                 content = processed.spoilered ? `||${processed.fixedUrl}||` : processed.fixedUrl;
             }
-        } else if (processed.fixedUrl !== processed.originalUrl) {
-            // Just send fixed URL (for Pixiv, Bluesky, etc.)
-            content = processed.spoilered ? `||${processed.fixedUrl}||` : processed.fixedUrl;
         }
+
+        // Skip if nothing to send
+        if (!content && embeds.length === 0 && files.length === 0 && components.length === 0) return;
+
+        // Reply to the message
+        await message.reply({
+            content: content || undefined,
+            embeds,
+            files,
+            components: components.length > 0 ? components : undefined,
+            allowedMentions: { repliedUser: false }
+        });
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`[processUrl] Error processing URL ${processed.originalUrl}:`, msg);
     }
-
-    // Skip if nothing to send
-    if (!content && embeds.length === 0 && files.length === 0 && components.length === 0) return;
-
-    // Reply to the message
-    await message.reply({
-        content: content || undefined,
-        embeds,
-        files,
-        components: components.length > 0 ? components : undefined,
-        allowedMentions: { repliedUser: false }
-    });
 }

@@ -117,8 +117,9 @@ export async function fetchAnimeImages(infohash: string): Promise<AmeNZBImages> 
         }
 
         return result;
-    } catch (error) {
-        console.error(`[ameNZB] Error fetching images for ${infohash}:`, error);
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`[ameNZB] Error fetching images for ${infohash}:`, msg);
         return result;
     }
 }
@@ -183,8 +184,9 @@ export async function buildAmeNZBEmbed(releaseId: string, url: string): Promise<
         }
 
         return embed;
-    } catch (error) {
-        console.error(`[ameNZB] Error building embed for ${releaseId}:`, error);
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`[ameNZB] Error building embed for ${releaseId}:`, msg);
         return null;
     }
 }
@@ -437,11 +439,14 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
             return target.coverImage?.extraLarge || null;
         }
         return null;
-    } catch (error: any) {
-        console.error(
-            `[Anilist Cover] Error fetching cover for title ${cleanTitle}:`,
-            error?.response?.data || error.message
-        );
+    } catch (error: unknown) {
+        let errorMessage = "Unknown error";
+        if (axios.isAxiosError(error)) {
+            errorMessage = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+        } else if (error instanceof Error) {
+            errorMessage = error.message;
+        }
+        console.error(`[Anilist Cover] Error fetching cover for title ${cleanTitle}:`, errorMessage);
         return null;
     }
 }
@@ -450,57 +455,65 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
  * Finds the ameNZB release ID and associated info for a given infohash
  */
 async function findReleaseInfoByHash(infohash: string): Promise<SearchResult | null> {
-    // Try API first if API key is available
-    if (AMENZB_API_KEY) {
-        try {
-            const searchUrl = `${AMENZB_BASE_URL}${AMENZB_API_PATH}?t=search&apikey=${AMENZB_API_KEY}&info_hash=${infohash.toLowerCase()}`;
-            const response = await axios.get(searchUrl, { timeout: 15000, headers: AMENZB_HEADERS });
+    try {
+        // Try API first if API key is available
+        if (AMENZB_API_KEY) {
+            try {
+                const searchUrl = `${AMENZB_BASE_URL}${AMENZB_API_PATH}?t=search&apikey=${AMENZB_API_KEY}&info_hash=${infohash.toLowerCase()}`;
+                const response = await axios.get(searchUrl, { timeout: 15000, headers: AMENZB_HEADERS });
 
-            const xml = response.data as string;
-            const releaseId = extractReleaseId(xml);
-            if (releaseId) {
+                const xml = response.data as string;
+                const releaseId = extractReleaseId(xml);
+                if (releaseId) {
+                    return {
+                        releaseId,
+                        title: extractTitleFromXml(xml) || undefined
+                    };
+                }
+            } catch (error: unknown) {
+                const msg = error instanceof Error ? error.message : String(error);
+                console.error("[ameNZB API] Search failed:", msg);
+            }
+        }
+
+        // Fallback to scraping the browse page
+        try {
+            const response = await axios.get(`${AMENZB_BASE_URL}/browse?q=${infohash}`, {
+                timeout: 15000,
+                headers: AMENZB_HEADERS
+            });
+
+            // Check if axios followed a redirect to a release page
+            const finalUrl = response.request?.res?.responseUrl || response.config?.url || "";
+            const idMatch = finalUrl.match(/\/(release|download)\/(\d+)/);
+            if (idMatch?.[2]) {
                 return {
-                    releaseId,
-                    title: extractTitleFromXml(xml) || undefined
+                    releaseId: idMatch[2],
+                    html: response.data as string
                 };
             }
-        } catch (error) {
-            console.error("[ameNZB API] Search failed:", error);
+
+            const $ = cheerio.load(response.data);
+            const releaseLink = $("a[href^='/release/']").first();
+            const releaseHref = releaseLink.attr("href");
+
+            if (releaseHref) {
+                return {
+                    releaseId: releaseHref.split("/").pop() || "",
+                    title: releaseLink.text().trim() || undefined
+                };
+            }
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error("[ameNZB Scrape] Search failed:", msg);
         }
+
+        return null;
+    } catch (outerError: unknown) {
+        const msg = outerError instanceof Error ? outerError.message : String(outerError);
+        console.error("[ameNZB findReleaseInfoByHash] Outer failure:", msg);
+        return null;
     }
-
-    // Fallback to scraping the browse page
-    try {
-        const response = await axios.get(`${AMENZB_BASE_URL}/browse?q=${infohash}`, {
-            timeout: 15000,
-            headers: AMENZB_HEADERS
-        });
-
-        // Check if axios followed a redirect to a release page
-        const finalUrl = response.request?.res?.responseUrl || response.config?.url || "";
-        const idMatch = finalUrl.match(/\/(release|download)\/(\d+)/);
-        if (idMatch?.[2]) {
-            return {
-                releaseId: idMatch[2],
-                html: response.data as string
-            };
-        }
-
-        const $ = cheerio.load(response.data);
-        const releaseLink = $("a[href^='/release/']").first();
-        const releaseHref = releaseLink.attr("href");
-
-        if (releaseHref) {
-            return {
-                releaseId: releaseHref.split("/").pop() || "",
-                title: releaseLink.text().trim() || undefined
-            };
-        }
-    } catch (error) {
-        console.error("[ameNZB Scrape] Search failed:", error);
-    }
-
-    return null;
 }
 
 /**
@@ -556,8 +569,9 @@ export async function fetchAnilistCover(anidbId: number | string): Promise<strin
 
         const coverUrl = aniResponse.data?.data?.Media?.coverImage?.extraLarge;
         return coverUrl || null;
-    } catch (error) {
-        console.error(`[Anilist Cover] Error fetching cover for AniDB ${anidbId}:`, error);
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`[Anilist Cover] Error fetching cover for AniDB ${anidbId}:`, msg);
         return null;
     }
 }

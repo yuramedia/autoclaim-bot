@@ -12,8 +12,8 @@ import { HOYOLAB_GAMES, HOYOLAB_HEADERS, HOYOLAB_REDEEM_URLS, HOYOLAB_DS_SALT } 
 export type { ClaimResult, GameAccount };
 
 /**
- * Service class for interacting with Hoyolab API
- * Handles authentication, daily claims, and code redemption
+ * Service class for interacting with Hoyolab API.
+ * Handles authentication, daily claims, and code redemption.
  */
 export class HoyolabService {
     private client: AxiosInstance;
@@ -103,11 +103,12 @@ export class HoyolabService {
                 game: game.name,
                 message: data.message || "Unknown error"
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const err = error as { message?: string };
             return {
                 success: false,
                 game: game.name,
-                message: error.message || "Request failed"
+                message: err.message || "Request failed"
             };
         }
     }
@@ -118,21 +119,26 @@ export class HoyolabService {
      * @returns Array of claim results for each game
      */
     async claimAll(enabledGames: Record<string, boolean>): Promise<ClaimResult[]> {
-        const results: ClaimResult[] = [];
+        try {
+            const results: ClaimResult[] = [];
 
-        for (const [gameKey, enabled] of Object.entries(enabledGames)) {
-            if (!enabled) continue;
+            for (const [gameKey, enabled] of Object.entries(enabledGames)) {
+                if (!enabled) continue;
 
-            // Add delay between requests to avoid rate limiting
-            if (results.length > 0) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Add delay between requests to avoid rate limiting
+                if (results.length > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+
+                const result = await this.claimGame(gameKey);
+                results.push(result);
             }
 
-            const result = await this.claimGame(gameKey);
-            results.push(result);
+            return results;
+        } catch (error) {
+            console.error("Error in claimAll:", error);
+            return [];
         }
-
-        return results;
     }
 
     /**
@@ -151,8 +157,9 @@ export class HoyolabService {
             }
 
             return { valid: false, message: response.data.message || "Invalid token" };
-        } catch (error: any) {
-            return { valid: false, message: error.message || "Validation failed" };
+        } catch (error: unknown) {
+            const err = error as { message?: string };
+            return { valid: false, message: err.message || "Validation failed" };
         }
     }
 
@@ -236,8 +243,9 @@ export class HoyolabService {
             }
 
             return { success: false, message: data.message };
-        } catch (error: any) {
-            return { success: false, message: error.message || "Request failed" };
+        } catch (error: unknown) {
+            const err = error as { message?: string };
+            return { success: false, message: err.message || "Request failed" };
         }
     }
 }

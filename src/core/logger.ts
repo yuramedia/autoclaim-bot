@@ -3,7 +3,10 @@ import { config } from "../config";
 
 const isProduction = config.env === "production";
 
-// Configure pino logger
+/**
+ * Configure and export the global Pino logger instance.
+ * Automatically switches log levels and transport depending on environment settings (production vs. development).
+ */
 export const logger = pino({
     level: isProduction ? "info" : "debug",
     transport: isProduction

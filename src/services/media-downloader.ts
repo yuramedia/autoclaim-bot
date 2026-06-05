@@ -45,8 +45,9 @@ export async function fetchMediaInfo(videoUrl: string): Promise<VKRResponse | nu
         });
 
         return response.data;
-    } catch (error) {
-        console.error("VKrDownloader API error:", error);
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error("VKrDownloader API error:", msg);
         return null;
     }
 }
@@ -156,10 +157,11 @@ export async function downloadMedia(
             availableFormats: sortedFormats, // Show all so they can try lower ones
             title: info.title
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : "Download failed";
         return {
             success: false,
-            error: error.message || "Download failed"
+            error: msg
         };
     }
 }
@@ -195,10 +197,11 @@ export async function downloadDirect(
             buffer,
             filename: defaultFilename
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : "Direct download failed or exceeded size limit";
         return {
             success: false,
-            error: error.message || "Direct download failed or exceeded size limit"
+            error: msg
         };
     }
 }

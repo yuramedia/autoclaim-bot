@@ -5,6 +5,9 @@ import { logger } from "../../core/logger";
 import type { FormattedEpisode } from "../../types/crunchyroll";
 import { LANG_MAP, CRUNCHYROLL_COLOR, MESSAGE_DELAY } from "../../constants";
 
+/**
+ * Event data interface for new Crunchyroll episodes sent over the event bus.
+ */
 export interface CrunchyrollEpisodesEvent {
     episodes: {
         episode: FormattedEpisode;
@@ -107,22 +110,28 @@ function buildEpisodeEmbed(episode: FormattedEpisode, isEdited: boolean): EmbedB
     return embed;
 }
 
-ramen.subscribe<CrunchyrollEpisodesEvent>("crunchyroll:new_episodes", async data => {
-    const { episodes, targetChannelIds } = data;
+ramen.subscribe<CrunchyrollEpisodesEvent>("crunchyroll:new_episodes", async (data): Promise<void> => {
+    try {
+        const { episodes, targetChannelIds } = data;
 
-    for (const channelId of targetChannelIds) {
-        try {
-            const channel = client.channels.cache.get(channelId);
-            if (channel && channel instanceof TextChannel) {
-                for (const { episode, isEdited } of episodes) {
-                    const embed = buildEpisodeEmbed(episode, isEdited);
-                    await channel.send({ embeds: [embed] });
-                    await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
+        for (const channelId of targetChannelIds) {
+            try {
+                const channel = client.channels.cache.get(channelId);
+                if (channel && channel instanceof TextChannel) {
+                    for (const { episode, isEdited } of episodes) {
+                        const embed = buildEpisodeEmbed(episode, isEdited);
+                        await channel.send({ embeds: [embed] });
+                        await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
+                    }
                 }
+            } catch (error: unknown) {
+                const err = error instanceof Error ? error : new Error(String(error));
+                logger.error(err, `RAMEN: Failed to send crunchyroll embedded update to channel ${channelId}`);
             }
-        } catch (error) {
-            logger.error(error as Error, `RAMEN: Failed to send crunchyroll embedded update to channel ${channelId}`);
         }
+    } catch (outerError: unknown) {
+        const err = outerError instanceof Error ? outerError : new Error(String(outerError));
+        logger.error(err, "RAMEN: Unexpected error in crunchyroll:new_episodes subscriber");
     }
 });
 logger.info("🍜 RAMEN Subscriber registered: crunchyroll:new_episodes");

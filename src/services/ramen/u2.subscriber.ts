@@ -5,11 +5,17 @@ import { logger } from "../../core/logger";
 import type { FormattedU2Item } from "../../types/u2-feed";
 import { U2_COLOR, U2_ICON } from "../../constants/u2-feed";
 
+/**
+ * Interface representing target channel and filter settings for U2 feed alerts.
+ */
 export interface U2Target {
     channelId: string;
     filter: string;
 }
 
+/**
+ * Event data interface for new U2 torrents sent over the event bus.
+ */
 export interface U2TorrentsEvent {
     items: FormattedU2Item[];
     targets: U2Target[];
@@ -54,33 +60,39 @@ function buildItemEmbed(item: FormattedU2Item): EmbedBuilder {
     return embed;
 }
 
-ramen.subscribe<U2TorrentsEvent>("u2:new_torrents", async data => {
-    const { items, targets } = data;
+ramen.subscribe<U2TorrentsEvent>("u2:new_torrents", async (data): Promise<void> => {
+    try {
+        const { items, targets } = data;
 
-    for (const target of targets) {
-        try {
-            const channel = client.channels.cache.get(target.channelId);
-            if (channel && channel instanceof TextChannel) {
-                // Apply guild's filter regex
-                const filterRegex = new RegExp(target.filter, "i");
+        for (const target of targets) {
+            try {
+                const channel = client.channels.cache.get(target.channelId);
+                if (channel && channel instanceof TextChannel) {
+                    // Apply guild's filter regex
+                    const filterRegex = new RegExp(target.filter, "i");
 
-                for (const item of items) {
-                    if (!filterRegex.test(item.title)) continue;
+                    for (const item of items) {
+                        if (!filterRegex.test(item.title)) continue;
 
-                    const embed = buildItemEmbed(item);
-                    const message = await channel.send({ embeds: [embed] });
+                        const embed = buildItemEmbed(item);
+                        const message = await channel.send({ embeds: [embed] });
 
-                    // Cross-post if the channel is an announcement channel
-                    try {
-                        await message.crosspost();
-                    } catch {
-                        // Not an announcement channel or no permissions — ignore
+                        // Cross-post if the channel is an announcement channel
+                        try {
+                            await message.crosspost();
+                        } catch {
+                            // Not an announcement channel or no permissions — ignore
+                        }
                     }
                 }
+            } catch (error: unknown) {
+                const err = error instanceof Error ? error : new Error(String(error));
+                logger.error(err, `RAMEN: Failed to send U2 feed to channel ${target.channelId}`);
             }
-        } catch (error) {
-            logger.error(error as Error, `RAMEN: Failed to send U2 feed to channel ${target.channelId}`);
         }
+    } catch (outerError: unknown) {
+        const err = outerError instanceof Error ? outerError : new Error(String(outerError));
+        logger.error(err, "RAMEN: Unexpected error in u2:new_torrents subscriber");
     }
 });
 

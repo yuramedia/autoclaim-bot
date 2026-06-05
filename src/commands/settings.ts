@@ -6,6 +6,9 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import { User } from "../database/models/user";
 
+/**
+ * Slash command data for the settings command.
+ */
 export const data = new SlashCommandBuilder()
     .setName("settings")
     .setDescription("Manage your auto-claim settings")
@@ -18,29 +21,51 @@ export const data = new SlashCommandBuilder()
             )
     );
 
+/**
+ * Executes the settings command to configure preferences such as DM notifications.
+ *
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when the command finishes.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const subcommand = interaction.options.getSubcommand();
+        const subcommand = interaction.options.getSubcommand();
 
-    if (subcommand === "notify") {
-        const enabled = interaction.options.getBoolean("enabled", true);
+        if (subcommand === "notify") {
+            const enabled = interaction.options.getBoolean("enabled", true);
 
-        await User.findOneAndUpdate(
-            { discordId: interaction.user.id },
-            {
-                $set: {
-                    username: interaction.user.username,
-                    "settings.notifyOnClaim": enabled
-                }
-            },
-            { upsert: true }
-        );
+            await User.findOneAndUpdate(
+                { discordId: interaction.user.id },
+                {
+                    $set: {
+                        username: interaction.user.username,
+                        "settings.notifyOnClaim": enabled
+                    }
+                },
+                { upsert: true }
+            );
 
-        await interaction.editReply({
-            content: enabled
-                ? "✅ DM notifications enabled. You will receive claim results via DM."
-                : "❌ DM notifications disabled. You will no longer receive claim results."
-        });
+            await interaction.editReply({
+                content: enabled
+                    ? "✅ DM notifications enabled. You will receive claim results via DM."
+                    : "❌ DM notifications disabled. You will no longer receive claim results."
+            });
+        }
+    } catch (error) {
+        console.error("Settings command failed:", error);
+        try {
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: "❌ An error occurred while updating settings." });
+            } else {
+                await interaction.reply({
+                    content: "❌ An error occurred while updating settings.",
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        } catch (e) {
+            console.error("Failed to send error reply:", e);
+        }
     }
 }

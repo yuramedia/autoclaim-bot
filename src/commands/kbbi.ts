@@ -1,24 +1,34 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, type ChatInputCommandInteraction } from "discord.js";
 import { searchKbbi } from "../services/kbbi";
 import { KBBI_BASE_URL } from "../constants/kbbi";
 
+/**
+ * Slash command data for the kbbi command.
+ */
 export const data = new SlashCommandBuilder()
     .setName("kbbi")
     .setDescription("Cari definisi kata di Kamus Besar Bahasa Indonesia (KBBI)")
     .addStringOption(option => option.setName("kata").setDescription("Kata yang ingin dicari").setRequired(true));
 
-export async function execute(interaction: any) {
+/**
+ * Executes the kbbi command to search Indonesian definitions in KBBI.
+ *
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when the command finishes.
+ */
+export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply();
 
-    const word = interaction.options.getString("kata");
+    const word = interaction.options.getString("kata", true);
 
     try {
         const result = await searchKbbi(word);
 
         if (!result) {
-            return interaction.editReply({
+            await interaction.editReply({
                 content: `Kata **"${word}"** tidak ditemukan di KBBI.`
             });
+            return;
         }
 
         const embed = new EmbedBuilder()

@@ -19,6 +19,9 @@ import * as u2Feed from "./u2-feed";
 import * as crrelease from "./crrelease";
 import * as embedCommand from "./embed";
 
+/**
+ * A list of all available command modules.
+ */
 export const commands = [
     setupHoyolab,
     setupEndfield,
@@ -42,4 +45,7 @@ export const commands = [
     embedCommand
 ];
 
+/**
+ * A list of slash command JSON data objects for registration.
+ */
 export const commandsData = commands.map(cmd => cmd.data);

@@ -1,8 +1,11 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, type ChatInputCommandInteraction } from "discord.js";
 import { searchJisho } from "../services/jisho";
 import { JISHO_COLOR, JISHO_ICON_URL } from "../constants/jisho";
 import type { JishoWord } from "../types/jisho";
 
+/**
+ * Slash command data for the jisho command.
+ */
 export const data = new SlashCommandBuilder()
     .setName("jisho")
     .setDescription("Cari arti kata/kanji di kamus Jisho (Jepang-Inggris)")
@@ -10,26 +13,34 @@ export const data = new SlashCommandBuilder()
         option.setName("kata").setDescription("Kata atau kanji yang ingin dicari").setRequired(true)
     );
 
-export async function execute(interaction: any) {
+/**
+ * Executes the jisho command to search Japanese-English dictionary.
+ *
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when the command finishes.
+ */
+export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply();
 
-    const keyword = interaction.options.getString("kata");
+    const keyword = interaction.options.getString("kata", true);
 
     try {
         const results = await searchJisho(keyword);
 
         if (!results || results.length === 0) {
-            return interaction.editReply({
+            await interaction.editReply({
                 content: `Tidak ditemukan hasil untuk kata **"${keyword}"**.`
             });
+            return;
         }
 
         // Display the first result
         const firstResult = results[0];
         if (!firstResult) {
-            return interaction.editReply({
+            await interaction.editReply({
                 content: `Tidak ditemukan hasil untuk kata **"${keyword}"**.`
             });
+            return;
         }
         const embed = createJishoEmbed(firstResult);
 

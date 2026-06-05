@@ -9,6 +9,9 @@ import { HoyolabService, type GameAccount } from "../services/hoyolab";
 import { getCodes } from "../services/code-source";
 import { getGameDisplayName } from "../constants";
 
+/**
+ * Slash command data for the redeem command.
+ */
 export const data = new SlashCommandBuilder()
     .setName("redeem")
     .setDescription("Redeem gift codes for your HoYoverse accounts")
@@ -39,28 +42,46 @@ async function redeemForUser(
     codes: string[],
     accounts?: GameAccount[]
 ): Promise<string[]> {
-    if (!accounts) {
-        accounts = await hoyolab.getGameAccounts(gameKey);
-    }
-
-    if (accounts.length === 0) return [`No accounts found for ${getGameDisplayName(gameKey)}`];
-
-    const results: string[] = [];
-
-    for (const account of accounts) {
-        const gameName = getGameDisplayName(gameKey);
-        const accInfo = `${gameName} [${account.region_name} - ${account.nickname}]`;
-        for (const code of codes) {
-            // Rate limit delay (5 seconds to avoid -1048 and cooldown errors)
-            await new Promise(r => setTimeout(r, 5000));
-            const result = await hoyolab.redeemCode(gameKey, account, code);
-            const icon = result.success ? "✅" : "❌";
-            results.push(`${icon} **${accInfo}** (${code}): ${result.message}`);
+    try {
+        if (!accounts) {
+            accounts = await hoyolab.getGameAccounts(gameKey);
         }
+
+        if (accounts.length === 0) return [`No accounts found for ${getGameDisplayName(gameKey)}`];
+
+        const results: string[] = [];
+
+        for (const account of accounts) {
+            const gameName = getGameDisplayName(gameKey);
+            const accInfo = `${gameName} [${account.region_name} - ${account.nickname}]`;
+            for (const code of codes) {
+                // Rate limit delay (5 seconds to avoid -1048 and cooldown errors)
+                await new Promise(r => setTimeout(r, 5000));
+                try {
+                    const result = await hoyolab.redeemCode(gameKey, account, code);
+                    const icon = result.success ? "✅" : "❌";
+                    results.push(`${icon} **${accInfo}** (${code}): ${result.message}`);
+                } catch (codeErr) {
+                    console.error(`Failed to redeem code ${code} for ${accInfo}:`, codeErr);
+                    results.push(
+                        `❌ **${accInfo}** (${code}): ${codeErr instanceof Error ? codeErr.message : String(codeErr)}`
+                    );
+                }
+            }
+        }
+        return results;
+    } catch (error) {
+        console.error("redeemForUser helper failed:", error);
+        return [`Error running code redemption: ${error instanceof Error ? error.message : String(error)}`];
     }
-    return results;
 }
 
+/**
+ * Executes the redeem command to perform manual or automatic gift code redemption.
+ *
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when the command finishes.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply({ ephemeral: true });
 
@@ -140,10 +161,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 await interaction.editReply({ content: null, embeds: [embed] });
             }
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("Redeem command error:", error);
         await interaction.editReply({
-            content: `❌ An error occurred: ${error.message}`
+            content: `❌ An error occurred: ${errorMessage}`
         });
     }
 }

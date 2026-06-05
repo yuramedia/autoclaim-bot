@@ -17,15 +17,24 @@ export * from "./nekobt";
 export * from "./amenzb";
 export * from "./tsukihime";
 
+/**
+ * Discord Channel configurations.
+ */
 export const CHANNELS = {
     // Channel IDs will be loaded from env or config
     // For now, we keep them flexible
 };
 
+/**
+ * Discord Role configurations.
+ */
 export const ROLES = {
     // Role IDs
 };
 
+/**
+ * Common system emojis used in bot responses.
+ */
 export const EMOJIS = {
     // Common emojis
     SUCCESS: "✅",
@@ -33,6 +42,9 @@ export const EMOJIS = {
     loading: "⏳"
 };
 
+/**
+ * Color codes for Discord embeds.
+ */
 export const COLORS = {
     SUCCESS: 0x00ff00,
     ERROR: 0xff0000,

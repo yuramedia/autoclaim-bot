@@ -1,5 +1,8 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+/**
+ * Interface representing the Hoyolab daily auto-claim credentials and configuration data.
+ */
 export interface IHoyolabData {
     token: string;
     accountName: string;
@@ -14,6 +17,9 @@ export interface IHoyolabData {
     lastClaimResult?: string;
 }
 
+/**
+ * Interface representing the Endfield daily auto-claim credentials and configuration data.
+ */
 export interface IEndfieldData {
     /** ACCOUNT_TOKEN from web-api.skport.com/cookie_store/account_token */
     accountToken: string;
@@ -23,6 +29,9 @@ export interface IEndfieldData {
     lastClaimResult?: string;
 }
 
+/**
+ * Interface representing the core User document structure stored in MongoDB.
+ */
 export interface IUser extends Document {
     discordId: string;
     username: string;
@@ -71,4 +80,7 @@ const UserSchema = new Schema<IUser>(
     }
 );
 
+/**
+ * The Mongoose model for User documents, providing access to Hoyolab and Endfield credentials.
+ */
 export const User = mongoose.model<IUser>("User", UserSchema);

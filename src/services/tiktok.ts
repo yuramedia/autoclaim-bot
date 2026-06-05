@@ -77,9 +77,10 @@ export async function fetchTikTokInfo(url: string): Promise<PostInfo | null> {
                 reposts: parseStat(repostsMatch?.[2])
             }
         };
-    } catch (error: any) {
-        if (error.response?.status !== 404) {
-            console.error(`Error fetching TikTok info for ${url}:`, error.message);
+    } catch (error: unknown) {
+        const err = error as { response?: { status?: number }; message?: string };
+        if (err.response?.status !== 404) {
+            console.error(`Error fetching TikTok info for ${url}:`, err.message);
         }
         return null;
     }

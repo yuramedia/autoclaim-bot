@@ -31,7 +31,9 @@ function itemEquals(a: FormattedU2Item, b: FormattedU2Item): boolean {
 }
 
 /**
- * Start the U2 feed scheduler
+ * Start the U2 feed scheduler.
+ * Polls the U2 RSS feed for new items at standard intervals and handles notifications.
+ * @param client - Discord client instance.
  */
 export function startU2Feed(client: Client): void {
     const feedUrl = config.u2.rssUrl;
@@ -47,15 +49,23 @@ export function startU2Feed(client: Client): void {
 
     // First check after a small delay (shard-guarded)
     setTimeout(async () => {
-        if (client.shard && client.shard.ids[0] !== 0) return;
-        await checkFeed(service, feedUrl);
+        try {
+            if (client.shard && client.shard.ids[0] !== 0) return;
+            await checkFeed(service, feedUrl);
+        } catch (error) {
+            logger.error(error, "U2 Feed initial check failed:");
+        }
     }, 5000);
 
     // Poll at configured interval
     setInterval(async () => {
-        // Only run on Shard 0 or un-sharded clients
-        if (client.shard && client.shard.ids[0] !== 0) return;
-        await checkFeed(service, feedUrl);
+        try {
+            // Only run on Shard 0 or un-sharded clients
+            if (client.shard && client.shard.ids[0] !== 0) return;
+            await checkFeed(service, feedUrl);
+        } catch (error) {
+            logger.error(error, "U2 Feed poll check failed:");
+        }
     }, U2_POLL_INTERVAL);
 }
 
@@ -116,34 +126,45 @@ async function checkFeed(service: U2FeedService, feedUrl: string): Promise<void>
     }
 }
 
+interface U2FeedGuild {
+    u2Feed: {
+        channelId: string | null;
+        filter?: string | null;
+    };
+}
+
 /**
  * Post unposted items to subscribed channels
  * Matches Rimuru-Bot's Feed.postNew()
  */
 async function postNewItems(): Promise<void> {
-    // Get all guilds with U2 feed enabled
-    const guilds = await GuildSettings.find({
-        "u2Feed.enabled": true,
-        "u2Feed.channelId": { $ne: null }
-    }).lean();
+    try {
+        // Get all guilds with U2 feed enabled
+        const guilds = (await GuildSettings.find({
+            "u2Feed.enabled": true,
+            "u2Feed.channelId": { $ne: null }
+        }).lean()) as unknown as U2FeedGuild[];
 
-    if (guilds.length === 0) return;
+        if (guilds.length === 0) return;
 
-    const targets = guilds.map(g => ({
-        channelId: g.u2Feed.channelId!,
-        filter: g.u2Feed.filter || U2_DEFAULT_FILTER
-    }));
+        const targets = guilds.map((g: U2FeedGuild) => ({
+            channelId: g.u2Feed.channelId!,
+            filter: g.u2Feed.filter || U2_DEFAULT_FILTER
+        }));
 
-    const newItems = cachedItems.filter(item => !item.wasPosted);
+        const newItems = cachedItems.filter(item => !item.wasPosted);
 
-    if (newItems.length > 0) {
-        ramen.publish("u2:new_torrents", {
-            items: newItems,
-            targets
-        });
+        if (newItems.length > 0) {
+            ramen.publish("u2:new_torrents", {
+                items: newItems,
+                targets
+            });
 
-        for (const item of newItems) {
-            item.wasPosted = true;
+            for (const item of newItems) {
+                item.wasPosted = true;
+            }
         }
+    } catch (error) {
+        logger.error(error, "U2 feed postNewItems error:");
     }
 }

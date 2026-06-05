@@ -159,6 +159,12 @@ const searchThesaurus = async (url: string): Promise<{ class: string; words: str
     }
 };
 
+/**
+ * Searches the KBBI (Kamus Besar Bahasa Indonesia) for the definitions of a given word.
+ * Also parses synonyms and other word details from the response HTML.
+ * @param word - The word to look up in the dictionary.
+ * @returns A promise that resolves to the KBBI search result or null if not found.
+ */
 export const searchKbbi = async (word: string): Promise<KbbiResult | null> => {
     try {
         const url = `${KBBI_BASE_URL}${encodeURIComponent(word)}`;

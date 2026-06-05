@@ -7,6 +7,9 @@ import mongoose, { Schema, Document } from "mongoose";
 
 import type { PlatformId } from "../../types/embed-fix";
 
+/**
+ * Settings configuration for the social media embed fixer.
+ */
 export interface IEmbedFixSettings {
     enabled: boolean;
     autoUpload: boolean;
@@ -15,17 +18,26 @@ export interface IEmbedFixSettings {
     deleteReaction: string;
 }
 
+/**
+ * Settings configuration for the Crunchyroll release monitoring feed.
+ */
 export interface ICrunchyrollFeedSettings {
     enabled: boolean;
     channelId: string | null;
 }
 
+/**
+ * Settings configuration for the U2 torrent release feed.
+ */
 export interface IU2FeedSettings {
     enabled: boolean;
     channelId: string | null;
     filter: string;
 }
 
+/**
+ * Document interface representing guild-specific configuration settings stored in MongoDB.
+ */
 export interface IGuildSettings extends Document {
     guildId: string;
     embedFix: IEmbedFixSettings;
@@ -66,17 +78,25 @@ const GuildSettingsSchema = new Schema<IGuildSettings>(
     }
 );
 
+/**
+ * Mongoose model for GuildSettings documents.
+ */
 export const GuildSettings = mongoose.model<IGuildSettings>("GuildSettings", GuildSettingsSchema);
 
 /**
  * Get guild settings, creating default if not exists
  */
 export async function getGuildSettings(guildId: string): Promise<IGuildSettings> {
-    let settings = await GuildSettings.findOne({ guildId });
-    if (!settings) {
-        settings = await GuildSettings.create({ guildId });
+    try {
+        let settings = await GuildSettings.findOne({ guildId });
+        if (!settings) {
+            settings = await GuildSettings.create({ guildId });
+        }
+        return settings;
+    } catch (error: unknown) {
+        console.error(`[getGuildSettings] Failed to fetch settings for guild ${guildId}:`, error);
+        throw error;
     }
-    return settings;
 }
 
 /**
@@ -86,14 +106,19 @@ export async function updateEmbedFixSettings(
     guildId: string,
     updates: Partial<IEmbedFixSettings>
 ): Promise<IGuildSettings> {
-    const settings = await getGuildSettings(guildId);
+    try {
+        const settings = await getGuildSettings(guildId);
 
-    if (updates.enabled !== undefined) settings.embedFix.enabled = updates.enabled;
-    if (updates.autoUpload !== undefined) settings.embedFix.autoUpload = updates.autoUpload;
-    if (updates.richEmbeds !== undefined) settings.embedFix.richEmbeds = updates.richEmbeds;
-    if (updates.disabledPlatforms !== undefined) settings.embedFix.disabledPlatforms = updates.disabledPlatforms;
-    if (updates.deleteReaction !== undefined) settings.embedFix.deleteReaction = updates.deleteReaction;
+        if (updates.enabled !== undefined) settings.embedFix.enabled = updates.enabled;
+        if (updates.autoUpload !== undefined) settings.embedFix.autoUpload = updates.autoUpload;
+        if (updates.richEmbeds !== undefined) settings.embedFix.richEmbeds = updates.richEmbeds;
+        if (updates.disabledPlatforms !== undefined) settings.embedFix.disabledPlatforms = updates.disabledPlatforms;
+        if (updates.deleteReaction !== undefined) settings.embedFix.deleteReaction = updates.deleteReaction;
 
-    await settings.save();
-    return settings;
+        await settings.save();
+        return settings;
+    } catch (error: unknown) {
+        console.error(`[updateEmbedFixSettings] Failed to update settings for guild ${guildId}:`, error);
+        throw error;
+    }
 }

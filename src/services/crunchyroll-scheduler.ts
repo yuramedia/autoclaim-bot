@@ -4,7 +4,7 @@
  */
 
 import { Client } from "discord.js";
-import { GuildSettings } from "../database/models/GuildSettings";
+import { GuildSettings } from "../database/models/guild-settings";
 import { CrunchyrollService } from "./crunchyroll";
 import { ramen } from "../core/ramen";
 import {
@@ -31,6 +31,11 @@ function pruneSeenEpisodes(): void {
     }
 }
 
+/**
+ * Start the Crunchyroll feed scheduler.
+ * Polls Crunchyroll for new episodes at regular intervals and publishes them to the RAMEN bus.
+ * @param client - Discord client instance.
+ */
 export function startCrunchyrollFeed(client: Client): void {
     console.log("📺 Starting Crunchyroll feed scheduler...");
 
@@ -41,18 +46,22 @@ export function startCrunchyrollFeed(client: Client): void {
 
     // Poll every interval
     setInterval(async () => {
-        // Only run on Shard 0 to prevent duplicates
-        if (client.shard && client.shard.ids[0] !== 0) {
-            return;
-        }
+        try {
+            // Only run on Shard 0 to prevent duplicates
+            if (client.shard && client.shard.ids[0] !== 0) {
+                return;
+            }
 
-        // Skip if a previous check is still running
-        if (feedLock.isChecking) {
-            console.log("📺 Skipping feed check — previous run still in progress");
-            return;
-        }
+            // Skip if a previous check is still running
+            if (feedLock.isChecking) {
+                console.log("📺 Skipping feed check — previous run still in progress");
+                return;
+            }
 
-        await checkForNewEpisodes(client, service);
+            await checkForNewEpisodes(client, service);
+        } catch (error) {
+            console.error("Error in Crunchyroll feed poll:", error);
+        }
     }, CRUNCHYROLL_POLL_INTERVAL);
 }
 

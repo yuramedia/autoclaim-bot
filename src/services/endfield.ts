@@ -30,6 +30,11 @@ export type { EndfieldClaimResult, EndfieldServiceOptions };
 /**
  * Compute sign for SKPORT API requests (HMAC-SHA256 + MD5)
  * Reference: computeSign() from nano-shino/EndfieldCheckin
+ * @param path - API path
+ * @param body - Request body
+ * @param timestamp - Request timestamp
+ * @param signToken - Secret sign token
+ * @returns Computed signature string
  */
 function computeSign(path: string, body: string, timestamp: string, signToken: string): string {
     const headerObj = {
@@ -48,145 +53,191 @@ function computeSign(path: string, body: string, timestamp: string, signToken: s
 /**
  * Step 1: Exchange ACCOUNT_TOKEN for an OAuth code
  * POST https://as.gryphline.com/user/oauth2/v2/grant
+ * @param accountToken - The user's account token
+ * @returns OAuth code string or null if failed
  */
 async function getOAuthCode(accountToken: string): Promise<string | null> {
-    const payload = { token: accountToken, appCode: ENDFIELD_APP_CODE, type: 0 };
-    const response = await fetch(ENDFIELD_GRANT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
-    const json = (await response.json()) as { status?: number; data?: { code?: string } };
-    return json.status === 0 && json.data?.code ? json.data.code : null;
+    try {
+        const payload = { token: accountToken, appCode: ENDFIELD_APP_CODE, type: 0 };
+        const response = await fetch(ENDFIELD_GRANT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        const json = (await response.json()) as { status?: number; data?: { code?: string } };
+        return json.status === 0 && json.data?.code ? json.data.code : null;
+    } catch (error) {
+        console.error("[Endfield] getOAuthCode error:", error);
+        return null;
+    }
 }
 
 /**
  * Step 2: Exchange OAuth code for a cred (session credential)
  * POST https://zonai.skport.com/web/v1/user/auth/generate_cred_by_code
+ * @param oauthCode - The OAuth code obtained from getOAuthCode
+ * @returns Session credential string or null if failed
  */
 async function getCred(oauthCode: string): Promise<string | null> {
-    const payload = { kind: 1, code: oauthCode };
-    const response = await fetch(ENDFIELD_GENERATE_CRED_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
-    const json = (await response.json()) as { code?: number; data?: { cred?: string } };
-    return json.code === 0 && json.data?.cred ? json.data.cred : null;
+    try {
+        const payload = { kind: 1, code: oauthCode };
+        const response = await fetch(ENDFIELD_GENERATE_CRED_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        const json = (await response.json()) as { code?: number; data?: { cred?: string } };
+        return json.code === 0 && json.data?.cred ? json.data.cred : null;
+    } catch (error) {
+        console.error("[Endfield] getCred error:", error);
+        return null;
+    }
 }
 
 /**
  * Step 3: Refresh to get a signToken for signing requests
  * GET https://zonai.skport.com/web/v1/auth/refresh
+ * @param cred - The session credential
+ * @returns Sign token string or null if failed
  */
 async function getSignToken(cred: string): Promise<string | null> {
-    const timestamp = String(Math.floor(Date.now() / 1000));
-    const headers: Record<string, string> = {
-        cred,
-        platform: ENDFIELD_PLATFORM,
-        vname: ENDFIELD_VERSION,
-        timestamp,
-        "sk-language": "en"
-    };
-    const response = await fetch(ENDFIELD_REFRESH_TOKEN_URL, {
-        method: "GET",
-        headers
-    });
-    const json = (await response.json()) as { code?: number; data?: { token?: string } };
-    return json.code === 0 && json.data?.token ? json.data.token : null;
+    try {
+        const timestamp = String(Math.floor(Date.now() / 1000));
+        const headers: Record<string, string> = {
+            cred,
+            platform: ENDFIELD_PLATFORM,
+            vname: ENDFIELD_VERSION,
+            timestamp,
+            "sk-language": "en"
+        };
+        const response = await fetch(ENDFIELD_REFRESH_TOKEN_URL, {
+            method: "GET",
+            headers
+        });
+        const json = (await response.json()) as { code?: number; data?: { token?: string } };
+        return json.code === 0 && json.data?.token ? json.data.token : null;
+    } catch (error) {
+        console.error("[Endfield] getSignToken error:", error);
+        return null;
+    }
 }
 
 /**
  * Step 4: Get player bindings to find all Endfield game roles
  * GET https://zonai.skport.com/api/v1/game/player/binding
  * Returns array of game role strings like "3_{roleId}_{serverId}"
+ * @param cred - The session credential
+ * @param signToken - The sign token
+ * @returns Array of role strings
  */
 async function getPlayerBindings(cred: string, signToken: string): Promise<string[]> {
-    const timestamp = String(Math.floor(Date.now() / 1000));
-    const signature = computeSign(ENDFIELD_BINDING_PATH, "", timestamp, signToken);
-    const headers: Record<string, string> = {
-        cred,
-        platform: ENDFIELD_PLATFORM,
-        vname: ENDFIELD_VERSION,
-        timestamp,
-        "sk-language": "en",
-        sign: signature
-    };
-    const response = await fetch(ENDFIELD_BINDING_URL, {
-        method: "GET",
-        headers
-    });
+    try {
+        const timestamp = String(Math.floor(Date.now() / 1000));
+        const signature = computeSign(ENDFIELD_BINDING_PATH, "", timestamp, signToken);
+        const headers: Record<string, string> = {
+            cred,
+            platform: ENDFIELD_PLATFORM,
+            vname: ENDFIELD_VERSION,
+            timestamp,
+            "sk-language": "en",
+            sign: signature
+        };
+        const response = await fetch(ENDFIELD_BINDING_URL, {
+            method: "GET",
+            headers
+        });
 
-    interface BindingRole {
-        roleId: string;
-        serverId: string;
-    }
-    interface BindingApp {
-        appCode: string;
-        bindingList?: Array<{ roles: BindingRole[] }>;
-    }
-    interface BindingResponse {
-        code?: number;
-        data?: { list?: BindingApp[] };
-    }
+        interface BindingRole {
+            roleId: string;
+            serverId: string;
+        }
+        interface BindingApp {
+            appCode: string;
+            bindingList?: Array<{ roles: BindingRole[] }>;
+        }
+        interface BindingResponse {
+            code?: number;
+            data?: { list?: BindingApp[] };
+        }
 
-    const json = (await response.json()) as BindingResponse;
-    const roles: string[] = [];
+        const json = (await response.json()) as BindingResponse;
+        const roles: string[] = [];
 
-    if (json.code === 0 && json.data?.list) {
-        for (const app of json.data.list) {
-            if (app.appCode === "endfield" && app.bindingList) {
-                for (const binding of app.bindingList) {
-                    for (const role of binding.roles) {
-                        roles.push(`${ENDFIELD_GAME_ID}_${role.roleId}_${role.serverId}`);
+        if (json.code === 0 && json.data?.list) {
+            for (const app of json.data.list) {
+                if (app.appCode === "endfield" && app.bindingList) {
+                    for (const binding of app.bindingList) {
+                        for (const role of binding.roles) {
+                            roles.push(`${ENDFIELD_GAME_ID}_${role.roleId}_${role.serverId}`);
+                        }
                     }
                 }
             }
         }
+        return roles;
+    } catch (error) {
+        console.error("[Endfield] getPlayerBindings error:", error);
+        return [];
     }
-    return roles;
 }
 
 // ── Attendance ──────────────────────────────────────────────────────────
 
 /**
  * Send attendance request for a single game role
+ * @param cred - The session credential
+ * @param signToken - The sign token
+ * @param gameRole - Game role identifier
+ * @param language - Language code for reward names
+ * @returns Promise with API response
  */
 async function sendAttendanceRequest(
     cred: string,
     signToken: string,
     gameRole: string,
     language: string
-): Promise<{ code?: number; message?: string; data?: any }> {
-    const timestamp = String(Math.floor(Date.now() / 1000));
-    const signature = computeSign(ENDFIELD_ATTENDANCE_PATH, "", timestamp, signToken);
-    const headers: Record<string, string> = {
-        cred,
-        platform: ENDFIELD_PLATFORM,
-        vname: ENDFIELD_VERSION,
-        timestamp,
-        "sk-language": language,
-        sign: signature,
-        "Content-Type": "application/json",
-        "sk-game-role": gameRole
-    };
-    const response = await fetch(ENDFIELD_ATTENDANCE_URL, {
-        method: "POST",
-        headers
-    });
-    return (await response.json()) as { code?: number; message?: string; data?: any };
+): Promise<{ code?: number; message?: string; data?: unknown }> {
+    try {
+        const timestamp = String(Math.floor(Date.now() / 1000));
+        const signature = computeSign(ENDFIELD_ATTENDANCE_PATH, "", timestamp, signToken);
+        const headers: Record<string, string> = {
+            cred,
+            platform: ENDFIELD_PLATFORM,
+            vname: ENDFIELD_VERSION,
+            timestamp,
+            "sk-language": language,
+            sign: signature,
+            "Content-Type": "application/json",
+            "sk-game-role": gameRole
+        };
+        const response = await fetch(ENDFIELD_ATTENDANCE_URL, {
+            method: "POST",
+            headers
+        });
+        return (await response.json()) as { code?: number; message?: string; data?: unknown };
+    } catch (error) {
+        console.error("[Endfield] sendAttendanceRequest error:", error);
+        return { code: -1, message: "Network error in sendAttendanceRequest" };
+    }
 }
 
 /**
  * Parse rewards from attendance response data
+ * @param data - The API response data object
+ * @returns Rewards description string
  */
-function parseRewards(data: any): string {
-    if (!data) return "Unknown";
-    if (data.reward) return `${data.reward.name} x${data.reward.count}`;
-    if (data.awardIds && data.resourceInfoMap) {
+function parseRewards(data: unknown): string {
+    if (!data) return "No rewards data";
+    const d = data as {
+        reward?: { name: string; count: number };
+        awardIds?: Array<{ id: string }>;
+        resourceInfoMap?: Record<string, { name: string; count: number }>;
+    };
+    if (d.reward) return `${d.reward.name} x${d.reward.count}`;
+    if (d.awardIds && d.resourceInfoMap) {
         const items: string[] = [];
-        for (const award of data.awardIds) {
-            const info = data.resourceInfoMap[award.id];
+        for (const award of d.awardIds) {
+            const info = d.resourceInfoMap[award.id];
             if (info) items.push(`${info.name} x${info.count}`);
         }
         return items.length > 0 ? items.join(", ") : "No rewards data";
@@ -197,8 +248,8 @@ function parseRewards(data: any): string {
 // ── Service Class ───────────────────────────────────────────────────────
 
 /**
- * Service class for SKPORT/Endfield auto-claim
- * Uses ACCOUNT_TOKEN for dynamic auth (no daily expiry)
+ * Service class for SKPORT/Endfield auto-claim.
+ * Uses ACCOUNT_TOKEN for dynamic auth (no daily expiry).
  */
 export class EndfieldService {
     private accountToken: string;
@@ -210,7 +261,9 @@ export class EndfieldService {
     }
 
     /**
-     * Validate ACCOUNT_TOKEN format
+     * Validate ACCOUNT_TOKEN format.
+     * @param accountToken - The token to validate.
+     * @returns Validation result.
      */
     static validateParams(accountToken: string): EndfieldValidation {
         if (!accountToken || accountToken.trim().length < 10) {
@@ -220,7 +273,8 @@ export class EndfieldService {
     }
 
     /**
-     * Run the full auth pipeline and claim daily rewards for all game roles
+     * Run the full auth pipeline and claim daily rewards for all game roles.
+     * @returns Claim results.
      */
     async claim(): Promise<EndfieldClaimResult> {
         console.log("[Endfield] Starting auth pipeline...");
@@ -266,12 +320,13 @@ export class EndfieldService {
                 console.log(`[Endfield] Role ${gameRole} response:`, JSON.stringify(response));
 
                 return this.handleResponse(gameRole, response);
-            } catch (error: any) {
-                console.error(`[Endfield] Role ${gameRole} error:`, error.message);
+            } catch (error: unknown) {
+                const err = error as { message?: string };
+                console.error(`[Endfield] Role ${gameRole} error:`, err.message);
                 return {
                     gameRole,
                     success: false,
-                    message: error.message || "Network error"
+                    message: err.message || "Network error"
                 };
             }
         });
@@ -291,12 +346,15 @@ export class EndfieldService {
     }
 
     /**
-     * Handle attendance response for a single role
+     * Handle attendance response for a single role.
      * Reference: handleResponse() from nano-shino/EndfieldCheckin
+     * @param gameRole - Game role identifier.
+     * @param json - Parsed JSON response.
+     * @returns Role check-in result.
      */
     private handleResponse(
         gameRole: string,
-        json: { code?: number; message?: string; data?: any }
+        json: { code?: number; message?: string; data?: unknown }
     ): EndfieldRoleResult {
         const code = json.code;
         const msg = json.message || "";
@@ -330,7 +388,9 @@ export class EndfieldService {
 // ── Formatting ──────────────────────────────────────────────────────────
 
 /**
- * Format claim result for display
+ * Format claim result for display.
+ * @param result - Claim results.
+ * @returns Human-readable formatted string.
  */
 export function formatEndfieldResult(result: EndfieldClaimResult): string {
     const gameName = ENDFIELD.name;

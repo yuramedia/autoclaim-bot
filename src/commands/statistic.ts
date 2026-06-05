@@ -15,84 +15,109 @@ import os from "os";
 import { version as nodeVersion } from "process";
 import { formatUptimeSeconds } from "../utils/time";
 
+/**
+ * Slash command data for the statistic command.
+ */
 export const data = new SlashCommandBuilder()
     .setName("statistic")
     .setDescription("Displays detailed bot and system statistics");
 
+/**
+ * Executes the statistic command to retrieve system usage and bot stats (for bot owners).
+ *
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when the command finishes.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const client = interaction.client;
+        const client = interaction.client;
 
-    // Fetch application owner info if not already cached
-    if (!client.application?.owner) await client.application?.fetch();
-    const owner = client.application?.owner;
+        // Fetch application owner info if not already cached
+        if (!client.application?.owner) await client.application?.fetch();
+        const owner = client.application?.owner;
 
-    // Determine if the caller is the bot owner.
-    // client.application.owner is either a User (single owner) or a Team.
-    const isOwner = owner
-        ? owner instanceof Team
-            ? owner.members.has(interaction.user.id)
-            : owner.id === interaction.user.id
-        : false;
+        // Determine if the caller is the bot owner.
+        // client.application.owner is either a User (single owner) or a Team.
+        const isOwner = owner
+            ? owner instanceof Team
+                ? owner.members.has(interaction.user.id)
+                : owner.id === interaction.user.id
+            : false;
 
-    if (!isOwner) {
-        await interaction.editReply({
-            content: "❌ This command is restricted to the bot owner."
-        });
-        return;
-    }
+        if (!isOwner) {
+            await interaction.editReply({
+                content: "❌ This command is restricted to the bot owner."
+            });
+            return;
+        }
 
-    // Get system stats
-    const cpu = os.cpus()[0];
-    const totalMem = os.totalmem();
-    const freeMem = os.freemem();
-    const usedMem = totalMem - freeMem;
-    const memUsage = (usedMem / 1024 / 1024).toFixed(2);
-    const osUptime = os.uptime();
+        // Get system stats
+        const cpu = os.cpus()[0];
+        const totalMem = os.totalmem();
+        const freeMem = os.freemem();
+        const usedMem = totalMem - freeMem;
+        const memUsage = (usedMem / 1024 / 1024).toFixed(2);
+        const osUptime = os.uptime();
 
-    // Get bot stats (with sharding support)
-    let totalGuilds = client.guilds.cache.size;
-    let totalUsers = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
-    let totalChannels = client.channels.cache.size;
+        // Get bot stats (with sharding support)
+        let totalGuilds = client.guilds.cache.size;
+        let totalUsers = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
+        let totalChannels = client.channels.cache.size;
 
-    if (client.shard) {
+        if (client.shard) {
+            try {
+                const results = await client.shard.broadcastEval(c => ({
+                    guilds: c.guilds.cache.size,
+                    users: c.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0),
+                    channels: c.channels.cache.size
+                }));
+
+                totalGuilds = results.reduce((acc, val) => acc + val.guilds, 0);
+                totalUsers = results.reduce((acc, val) => acc + val.users, 0);
+                totalChannels = results.reduce((acc, val) => acc + val.channels, 0);
+            } catch (error) {
+                console.error("[Statistic] Error fetching shard stats:", error);
+            }
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle(`${client.user?.username} Statistics`)
+            .setColor(0x0099ff)
+            .addFields(
+                { name: "• Owner", value: owner?.toString() || "Unknown", inline: false },
+                { name: "• Total Users", value: totalUsers.toLocaleString(), inline: true },
+                { name: "• Total Guilds", value: totalGuilds.toLocaleString(), inline: true },
+                { name: "• Total Channels", value: totalChannels.toLocaleString(), inline: true },
+                { name: "• Total Shards", value: client.shard ? client.shard.count.toString() : "1", inline: true },
+                { name: "• Uptime", value: formatUptimeSeconds(process.uptime()), inline: true },
+                { name: "• Network Latency", value: `${client.ws.ping}ms`, inline: true },
+                { name: "• Memory Usage", value: `${memUsage} MB`, inline: true },
+                { name: "• CPU", value: `${os.cpus().length} cores - ${os.arch()}`, inline: true },
+                { name: "• Model", value: cpu?.model || "Unknown", inline: false },
+                { name: "• Free Memory", value: `${(freeMem / 1024 / 1024).toFixed(0)} MB`, inline: true },
+                { name: "• Platform", value: `${os.platform()} ${os.release()}`, inline: true },
+                { name: "• Node.js", value: nodeVersion, inline: true },
+                { name: "• Discord.js", value: `v${djsVersion}`, inline: true },
+                { name: "• OS Uptime", value: formatUptimeSeconds(osUptime), inline: true }
+            )
+            .setTimestamp();
+
+        await interaction.editReply({ embeds: [embed] });
+    } catch (error) {
+        console.error("Statistic command failed:", error);
         try {
-            const results = await client.shard.broadcastEval(c => ({
-                guilds: c.guilds.cache.size,
-                users: c.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0),
-                channels: c.channels.cache.size
-            }));
-
-            totalGuilds = results.reduce((acc, val) => acc + val.guilds, 0);
-            totalUsers = results.reduce((acc, val) => acc + val.users, 0);
-            totalChannels = results.reduce((acc, val) => acc + val.channels, 0);
-        } catch (error) {
-            console.error("[Statistic] Error fetching shard stats:", error);
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: "❌ Failed to retrieve bot statistics." });
+            } else {
+                await interaction.reply({
+                    content: "❌ Failed to retrieve bot statistics.",
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        } catch (e) {
+            console.error("Failed to send error reply:", e);
         }
     }
-
-    const embed = new EmbedBuilder()
-        .setTitle(`${client.user?.username} Statistics`)
-        .setColor(0x0099ff)
-        .addFields(
-            { name: "• Owner", value: owner?.toString() || "Unknown", inline: false },
-            { name: "• Total Users", value: totalUsers.toLocaleString(), inline: true },
-            { name: "• Total Guilds", value: totalGuilds.toLocaleString(), inline: true },
-            { name: "• Total Channels", value: totalChannels.toLocaleString(), inline: true },
-            { name: "• Total Shards", value: client.shard ? client.shard.count.toString() : "1", inline: true },
-            { name: "• Uptime", value: formatUptimeSeconds(process.uptime()), inline: true },
-            { name: "• Network Latency", value: `${client.ws.ping}ms`, inline: true },
-            { name: "• Memory Usage", value: `${memUsage} MB`, inline: true },
-            { name: "• CPU", value: `${os.cpus().length} cores - ${os.arch()}`, inline: true },
-            { name: "• Model", value: cpu?.model || "Unknown", inline: false },
-            { name: "• Free Memory", value: `${(freeMem / 1024 / 1024).toFixed(0)} MB`, inline: true },
-            { name: "• Platform", value: `${os.platform()} ${os.release()}`, inline: true },
-            { name: "• Node.js", value: nodeVersion, inline: true },
-            { name: "• Discord.js", value: `v${djsVersion}`, inline: true },
-            { name: "• OS Uptime", value: formatUptimeSeconds(osUptime), inline: true }
-        )
-        .setTimestamp();
-
-    await interaction.editReply({ embeds: [embed] });
 }

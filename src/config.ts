@@ -11,6 +11,10 @@ const claimMinute = !isNaN(rawMinute) && rawMinute >= 0 && rawMinute <= 59 ? raw
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
+/**
+ * Global configuration settings for the bot, including Discord, MongoDB,
+ * scheduler, Crunchyroll, and encryption keys.
+ */
 export const config = {
     /** Runtime environment. Controls log level and transport. */
     env: process.env.NODE_ENV || "development",

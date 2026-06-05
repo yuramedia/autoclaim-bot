@@ -6,11 +6,20 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
 import type { AnimeRelease, AnimeEntry } from "../types/bestrelease";
 
+/**
+ * Slash command data for the bestrelease command.
+ */
 export const data = new SlashCommandBuilder()
     .setName("bestrelease")
     .setDescription("Cari rilis subtitle Indonesia terbaik untuk anime")
     .addStringOption(opt => opt.setName("anime").setDescription("Nama anime yang ingin dicari").setRequired(true));
 
+/**
+ * Executes the bestrelease command to search for Indonesian subtitle releases.
+ *
+ * @param interaction The command interaction from Discord.
+ * @returns A promise that resolves when the command is executed.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply();
 

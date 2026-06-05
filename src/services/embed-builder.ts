@@ -126,7 +126,7 @@ export async function fetchTwitterInfo(statusId: string): Promise<PostInfo | nul
                 url: `https://twitter.com/${tweet.author?.screen_name}`
             },
             content: tweet.text || "",
-            images: tweet.media?.photos?.map((p: any) => p.url) || [],
+            images: tweet.media?.photos?.map((p: { url?: string }) => p.url).filter(Boolean) || [],
             video: tweet.media?.videos?.[0]?.url,
             stats: {
                 likes: tweet.likes || 0,
@@ -321,17 +321,21 @@ export async function fetchPostInfo(
     platform: PlatformConfig,
     postId: string | null
 ): Promise<PostInfo | null> {
-    switch (platform.id) {
-        case PlatformId.TWITTER:
-            if (postId) return fetchTwitterInfo(postId);
-            break;
-        case PlatformId.BLUESKY:
-            return fetchBlueskyInfo(url);
-        case PlatformId.FACEBOOK:
-            return fetchFacebookInfo(url);
-        case PlatformId.TIKTOK:
-            return fetchTikTokInfo(url);
-        // Add more platforms as needed
+    try {
+        switch (platform.id) {
+            case PlatformId.TWITTER:
+                if (postId) return fetchTwitterInfo(postId);
+                break;
+            case PlatformId.BLUESKY:
+                return fetchBlueskyInfo(url);
+            case PlatformId.FACEBOOK:
+                return fetchFacebookInfo(url);
+            case PlatformId.TIKTOK:
+                return fetchTikTokInfo(url);
+            // Add more platforms as needed
+        }
+    } catch (error) {
+        console.error(`Error fetching post info for platform ${platform.id}:`, error);
     }
     return null;
 }

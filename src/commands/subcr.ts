@@ -46,6 +46,9 @@ function parseCrunchyrollUrl(input: string): ParsedUrl | null {
     return null;
 }
 
+/**
+ * Slash command data for the subcr command.
+ */
 export const data = new SlashCommandBuilder()
     .setName("subcr")
     .setDescription("Download subtitle dari episode Crunchyroll")
@@ -73,7 +76,13 @@ export const data = new SlashCommandBuilder()
             )
     );
 
-export async function autocomplete(interaction: AutocompleteInteraction) {
+/**
+ * Autocomplete handler for selecting series in subcr command.
+ *
+ * @param interaction Autocomplete interaction.
+ * @returns A promise that resolves when autocomplete is handled.
+ */
+export async function autocomplete(interaction: AutocompleteInteraction): Promise<void> {
     const focusedValue = interaction.options.getFocused();
     if (!focusedValue) {
         await interaction.respond([]);
@@ -89,6 +98,12 @@ export async function autocomplete(interaction: AutocompleteInteraction) {
     }
 }
 
+/**
+ * Executes the subcr command to query and download subtitles from Crunchyroll.
+ *
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when the command finishes.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const urlInput = interaction.options.getString("url");
     const animeInput = interaction.options.getString("anime");
@@ -322,38 +337,46 @@ async function downloadAndSend(
     episodeTitle: string,
     format: string
 ): Promise<void> {
-    const content = await service.downloadSubtitle(url);
-    if (!content) {
+    try {
+        const content = await service.downloadSubtitle(url);
+        if (!content) {
+            await interaction.editReply({
+                content: "❌ Gagal mendownload file subtitle.",
+                components: []
+            });
+            return;
+        }
+
+        // Build filename: EpisodeID_lang.ass
+        const ext = format === "ass" ? "ass" : format === "vtt" ? "vtt" : "srt";
+        const filename = `${episodeId}_${lang}.${ext}`;
+
+        // Create attachment from buffer (no temp file needed)
+        const buffer = Buffer.from(content, "utf-8");
+        const attachment = new AttachmentBuilder(buffer, { name: filename });
+
+        const embed = new EmbedBuilder()
+            .setColor(CRUNCHYROLL_COLOR)
+            .setTitle("✅ Subtitle Downloaded")
+            .setDescription(
+                `**${episodeTitle}**\n\n` +
+                    `🌐 Bahasa: **${LANG_MAP[lang] || lang}** (\`${lang}\`)\n` +
+                    `📄 Format: **${format.toUpperCase()}**\n` +
+                    `📦 File: \`${filename}\``
+            )
+            .setFooter({ text: "Crunchyroll Subtitle Downloader" })
+            .setTimestamp();
+
         await interaction.editReply({
-            content: "❌ Gagal mendownload file subtitle.",
+            embeds: [embed],
+            files: [attachment],
             components: []
         });
-        return;
+    } catch (error) {
+        console.error("downloadAndSend failed:", error);
+        await interaction.editReply({
+            content: "❌ Gagal mendownload dan mengirim file subtitle.",
+            components: []
+        });
     }
-
-    // Build filename: EpisodeID_lang.ass
-    const ext = format === "ass" ? "ass" : format === "vtt" ? "vtt" : "srt";
-    const filename = `${episodeId}_${lang}.${ext}`;
-
-    // Create attachment from buffer (no temp file needed)
-    const buffer = Buffer.from(content, "utf-8");
-    const attachment = new AttachmentBuilder(buffer, { name: filename });
-
-    const embed = new EmbedBuilder()
-        .setColor(CRUNCHYROLL_COLOR)
-        .setTitle("✅ Subtitle Downloaded")
-        .setDescription(
-            `**${episodeTitle}**\n\n` +
-                `🌐 Bahasa: **${LANG_MAP[lang] || lang}** (\`${lang}\`)\n` +
-                `📄 Format: **${format.toUpperCase()}**\n` +
-                `📦 File: \`${filename}\``
-        )
-        .setFooter({ text: "Crunchyroll Subtitle Downloader" })
-        .setTimestamp();
-
-    await interaction.editReply({
-        embeds: [embed],
-        files: [attachment],
-        components: []
-    });
 }

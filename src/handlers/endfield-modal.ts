@@ -5,48 +5,72 @@
  */
 
 import { type ModalSubmitInteraction, MessageFlags } from "discord.js";
-import { User } from "../database/models/User";
+import { User } from "../database/models/user";
 import { EndfieldService } from "../services/endfield";
 import { encryptToken } from "../utils/token-crypto";
 
+/**
+ * Handles the modal submission for the Endfield token setup command.
+ * Validates the provided credentials, encrypts them, and updates or inserts the user database record.
+ * @param interaction - The modal submit interaction from Discord
+ * @returns A promise that resolves when the interaction handling is complete
+ */
 export async function handleEndfieldModal(interaction: ModalSubmitInteraction): Promise<void> {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const accountToken = interaction.fields.getTextInputValue("endfield-account-token").trim();
-    const nickname = interaction.fields.getTextInputValue("endfield-nickname")?.trim() || "Unknown";
+        const accountToken = interaction.fields.getTextInputValue("endfield-account-token").trim();
+        const nickname = interaction.fields.getTextInputValue("endfield-nickname")?.trim() || "Unknown";
 
-    // Validate token
-    const validation = EndfieldService.validateParams(accountToken);
-    if (!validation.valid) {
-        await interaction.editReply({
-            content: validation.message || "❌ Invalid parameters."
-        });
-        return;
-    }
+        // Validate token
+        const validation = EndfieldService.validateParams(accountToken);
+        if (!validation.valid) {
+            await interaction.editReply({
+                content: validation.message || "❌ Invalid parameters."
+            });
+            return;
+        }
 
-    // Save to database — encrypt token before storage
-    await User.findOneAndUpdate(
-        { discordId: interaction.user.id },
-        {
-            $set: {
-                username: interaction.user.username,
-                endfield: {
-                    accountToken: encryptToken(accountToken),
-                    accountName: nickname
+        // Save to database — encrypt token before storage
+        await User.findOneAndUpdate(
+            { discordId: interaction.user.id },
+            {
+                $set: {
+                    username: interaction.user.username,
+                    endfield: {
+                        accountToken: encryptToken(accountToken),
+                        accountName: nickname
+                    }
+                },
+                $setOnInsert: {
+                    settings: { notifyOnClaim: true }
                 }
             },
-            $setOnInsert: {
-                settings: { notifyOnClaim: true }
-            }
-        },
-        { upsert: true, new: true }
-    );
+            { upsert: true, new: true }
+        );
 
-    await interaction.editReply({
-        content:
-            `✅ **Endfield token saved!**\n\n` +
-            `**Account**: ${nickname}\n\n` +
-            `UID dan server akan otomatis terdeteksi saat claim.\n` +
-            `⚠️ Gunakan \`/claim endfield\` untuk test apakah token berfungsi.`
-    });
+        await interaction.editReply({
+            content:
+                `✅ **Endfield token saved!**\n\n` +
+                `**Account**: ${nickname}\n\n` +
+                `UID dan server akan otomatis terdeteksi saat claim.\n` +
+                `⚠️ Gunakan \`/claim endfield\` untuk test apakah token berfungsi.`
+        });
+    } catch (error: unknown) {
+        console.error("[handleEndfieldModal] Failed to process Endfield modal submission:", error);
+        try {
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({
+                    content: "❌ An error occurred while saving your Endfield credentials."
+                });
+            } else {
+                await interaction.reply({
+                    content: "❌ An error occurred while saving your Endfield credentials.",
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        } catch (replyError) {
+            console.error("[handleEndfieldModal] Failed to send error response:", replyError);
+        }
+    }
 }

@@ -6,8 +6,8 @@
 import cron from "node-cron";
 import { Client } from "discord.js";
 import { ramen } from "../core/ramen";
-import { User } from "../database/models/User";
-import type { IUser } from "../database/models/User";
+import { User } from "../database/models/user";
+import type { IUser } from "../database/models/user";
 import { HoyolabService, formatHoyolabResults } from "./hoyolab";
 import { EndfieldService, formatEndfieldResult } from "./endfield";
 import { config } from "../config";
@@ -33,13 +33,17 @@ export function startScheduler(client: Client): void {
     cron.schedule(
         cronExpression,
         async () => {
-            // Only run on Shard 0 to prevent duplicate claims
-            if (client.shard && client.shard.ids[0] !== 0) {
-                return;
-            }
+            try {
+                // Only run on Shard 0 to prevent duplicate claims
+                if (client.shard && client.shard.ids[0] !== 0) {
+                    return;
+                }
 
-            logger.info("🔄 Running scheduled daily claims (Shard 0)...");
-            await runDailyClaims();
+                logger.info("🔄 Running scheduled daily claims (Shard 0)...");
+                await runDailyClaims();
+            } catch (error) {
+                logger.error(error, "[Scheduler] Error in scheduled cron job:");
+            }
         },
         {
             timezone: "Asia/Singapore" // UTC+8
@@ -48,7 +52,9 @@ export function startScheduler(client: Client): void {
 }
 
 /**
- * Run daily claims for all users
+ * Run daily claims for all users.
+ * Reads users with active tokens and processes them in batches.
+ * @returns A promise that resolves when all daily claims are processed.
  */
 export async function runDailyClaims(): Promise<void> {
     try {
@@ -90,86 +96,95 @@ export async function runDailyClaims(): Promise<void> {
 /**
  * Process claims for a single user
  * @param user - User document from database
+ * @returns A promise that resolves when processing is complete
  */
 async function processUserClaim(user: IUser): Promise<void> {
-    const results: string[] = [];
-    const claimPromises: Promise<void>[] = [];
-
-    // Claim Hoyolab
-    if (user.hoyolab?.token) {
-        claimPromises.push(
-            (async () => {
-                try {
-                    const hoyolab = new HoyolabService(decryptToken(user.hoyolab!.token));
-                    const hoyolabResults = await hoyolab.claimAll(user.hoyolab!.games);
-                    const resultText = formatHoyolabResults(hoyolabResults);
-                    results.push("**Hoyolab**\n" + resultText);
-
-                    // Update last claim
-                    user.hoyolab!.lastClaim = new Date();
-                    user.hoyolab!.lastClaimResult = resultText;
-                } catch (error: any) {
-                    logger.error({
-                        msg: `[Scheduler] Hoyolab claim error for ${user.discordId}:`,
-                        detail: error.message
-                    });
-                    results.push("**Hoyolab**\n❌ Error: " + error.message);
-                }
-            })()
-        );
-    }
-
-    // Claim Endfield
-    if (user.endfield?.accountToken) {
-        claimPromises.push(
-            (async () => {
-                try {
-                    const endfield = new EndfieldService({
-                        accountToken: decryptToken(user.endfield!.accountToken)
-                    });
-                    const endfieldResult = await endfield.claim();
-                    const resultText = formatEndfieldResult(endfieldResult);
-                    results.push("**SKPORT/Endfield**\n" + resultText);
-
-                    // Update last claim
-                    user.endfield!.lastClaim = new Date();
-                    user.endfield!.lastClaimResult = resultText;
-                } catch (error: any) {
-                    logger.error({
-                        msg: `[Scheduler] Endfield claim error for ${user.discordId}:`,
-                        detail: error.message
-                    });
-                    results.push("**SKPORT/Endfield**\n❌ Error: " + error.message);
-                }
-            })()
-        );
-    }
-
-    // Wait for all claims to finish
-    if (claimPromises.length > 0) {
-        await Promise.all(claimPromises);
-    }
-
-    // Save updates
     try {
-        await user.save();
-    } catch (saveError) {
-        logger.error(saveError, `[Scheduler] Failed to save user ${user.discordId}:`);
-    }
+        const results: string[] = [];
+        const claimPromises: Promise<void>[] = [];
 
-    // Detect token errors — notify regardless of notifyOnClaim preference
-    const TOKEN_ERROR_PATTERNS = ["expired", "invalid token", "ACCOUNT_TOKEN", "cookie_token"];
-    const hasTokenError = results.some(r => TOKEN_ERROR_PATTERNS.some(p => r.toLowerCase().includes(p.toLowerCase())));
+        // Claim Hoyolab
+        if (user.hoyolab?.token) {
+            claimPromises.push(
+                (async () => {
+                    try {
+                        const hoyolab = new HoyolabService(decryptToken(user.hoyolab!.token));
+                        const hoyolabResults = await hoyolab.claimAll(user.hoyolab!.games);
+                        const resultText = formatHoyolabResults(hoyolabResults);
+                        results.push("**Hoyolab**\n" + resultText);
 
-    // Publish to RAMEN:
-    // - always if there is a token error (user must know even if notifications are off)
-    // - conditionally if notifyOnClaim is enabled
-    if (results.length > 0 && (user.settings.notifyOnClaim || hasTokenError)) {
-        ramen.publish("account:claim_result", {
-            discordId: user.discordId,
-            results,
-            isTokenError: hasTokenError
-        });
+                        // Update last claim
+                        user.hoyolab!.lastClaim = new Date();
+                        user.hoyolab!.lastClaimResult = resultText;
+                    } catch (error: unknown) {
+                        const err = error as { message?: string };
+                        logger.error({
+                            msg: `[Scheduler] Hoyolab claim error for ${user.discordId}:`,
+                            detail: err.message
+                        });
+                        results.push("**Hoyolab**\n❌ Error: " + err.message);
+                    }
+                })()
+            );
+        }
+
+        // Claim Endfield
+        if (user.endfield?.accountToken) {
+            claimPromises.push(
+                (async () => {
+                    try {
+                        const endfield = new EndfieldService({
+                            accountToken: decryptToken(user.endfield!.accountToken)
+                        });
+                        const endfieldResult = await endfield.claim();
+                        const resultText = formatEndfieldResult(endfieldResult);
+                        results.push("**SKPORT/Endfield**\n" + resultText);
+
+                        // Update last claim
+                        user.endfield!.lastClaim = new Date();
+                        user.endfield!.lastClaimResult = resultText;
+                    } catch (error: unknown) {
+                        const err = error as { message?: string };
+                        logger.error({
+                            msg: `[Scheduler] Endfield claim error for ${user.discordId}:`,
+                            detail: err.message
+                        });
+                        results.push("**SKPORT/Endfield**\n❌ Error: " + err.message);
+                    }
+                })()
+            );
+        }
+
+        // Wait for all claims to finish
+        if (claimPromises.length > 0) {
+            await Promise.all(claimPromises);
+        }
+
+        // Save updates
+        try {
+            await user.save();
+        } catch (saveError) {
+            logger.error(saveError, `[Scheduler] Failed to save user ${user.discordId}:`);
+        }
+
+        // Detect token errors — notify regardless of notifyOnClaim preference
+        const TOKEN_ERROR_PATTERNS = ["expired", "invalid token", "ACCOUNT_TOKEN", "cookie_token"];
+        const hasTokenError = results.some(r =>
+            TOKEN_ERROR_PATTERNS.some(p => r.toLowerCase().includes(p.toLowerCase()))
+        );
+
+        // Publish to RAMEN:
+        // - always if there is a token error (user must know even if notifications are off)
+        // - conditionally if notifyOnClaim is enabled
+        if (results.length > 0 && (user.settings.notifyOnClaim || hasTokenError)) {
+            ramen.publish("account:claim_result", {
+                discordId: user.discordId,
+                results,
+                isTokenError: hasTokenError
+            });
+        }
+    } catch (err) {
+        logger.error(err, `[Scheduler] Fatal error processing claim for user ${user.discordId}:`);
     }
 }
 

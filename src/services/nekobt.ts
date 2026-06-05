@@ -2,6 +2,9 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "disc
 import { fetchAnilistCoverByTitle, fetchAnimeImages } from "./amenzb";
 import { fetchTsukihimeImagesByBtih } from "./tsukihime";
 
+/**
+ * Represents the response structure from NekoBT torrent API
+ */
 export interface NekoBTTorrentResponse {
     error: boolean;
     message?: string;
@@ -29,18 +32,28 @@ export interface NekoBTTorrentResponse {
             display_name: string;
             pfp_hash: string | null;
         }>;
-        animetosho: any[] | string;
+        animetosho: unknown[] | string;
         animetosho_fetch_time: string | null;
     };
 }
 
 import { NEKOBT_API_URL, NEKOBT_EMBED_COLOR, NEKOBT_TORRENT_REGEX } from "../constants";
 
+/**
+ * Extracts NekoBT torrent ID from a given URL.
+ * @param url - The NekoBT torrent URL
+ * @returns The torrent ID string or null if not matched
+ */
 export function extractNekoBTId(url: string): string | null {
     const match = url.match(NEKOBT_TORRENT_REGEX);
     return match?.[2] ?? null;
 }
 
+/**
+ * Fetches NekoBT torrent metadata from NekoBT API.
+ * @param id - The NekoBT torrent ID
+ * @returns NekoBTTorrentResponse or null if fetch fails
+ */
 export async function fetchNekoBTTorrent(id: string): Promise<NekoBTTorrentResponse | null> {
     try {
         const res = await fetch(`${NEKOBT_API_URL}/torrents/${id}`, {
@@ -65,7 +78,13 @@ export async function fetchNekoBTTorrent(id: string): Promise<NekoBTTorrentRespo
     }
 }
 
-export function formatBytes(bytes: number, decimals = 2) {
+/**
+ * Formats a number of bytes into a human-readable string.
+ * @param bytes - The number of bytes
+ * @param decimals - The number of decimal places to keep
+ * @returns The formatted string (e.g. "12.34 MiB")
+ */
+export function formatBytes(bytes: number, decimals = 2): string {
     if (!+bytes) return "0 Bytes";
     const k = 1024;
     const dm = decimals < 0 ? 0 : decimals;
@@ -74,103 +93,115 @@ export function formatBytes(bytes: number, decimals = 2) {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
-export async function buildNekoBTEmbed(url: string) {
-    const id = extractNekoBTId(url);
-    if (!id) return null;
+/**
+ * Builds a rich Discord embed and components from a NekoBT torrent URL.
+ * @param url - The NekoBT torrent URL
+ * @returns Object containing embeds and components, or null if building fails
+ */
+export async function buildNekoBTEmbed(
+    url: string
+): Promise<{ embeds: EmbedBuilder[]; components: ActionRowBuilder<ButtonBuilder>[] } | null> {
+    try {
+        const id = extractNekoBTId(url);
+        if (!id) return null;
 
-    const torrentResponse = await fetchNekoBTTorrent(id);
-    if (!torrentResponse || !torrentResponse.data) return null;
+        const torrentResponse = await fetchNekoBTTorrent(id);
+        if (!torrentResponse || !torrentResponse.data) return null;
 
-    const data = torrentResponse.data;
+        const data = torrentResponse.data;
 
-    // Determine uploader string and urls
-    let uploaderName = data.uploader?.display_name || data.uploader?.username || "Anonymous";
-    let authorUrl = data.uploader?.id ? `https://nekobt.to/users/${data.uploader.id}` : "https://nekobt.to";
-    let authorIcon = data.uploader?.pfp_hash
-        ? `https://nekobt.to/cdn/pfp/${data.uploader.pfp_hash}`
-        : "https://avatars.githubusercontent.com/u/221218851?v=4";
+        // Determine uploader string and urls
+        let uploaderName = data.uploader?.display_name || data.uploader?.username || "Anonymous";
+        let authorUrl = data.uploader?.id ? `https://nekobt.to/users/${data.uploader.id}` : "https://nekobt.to";
+        let authorIcon = data.uploader?.pfp_hash
+            ? `https://nekobt.to/cdn/pfp/${data.uploader.pfp_hash}`
+            : "https://avatars.githubusercontent.com/u/221218851?v=4";
 
-    if (data.groups && data.groups.length > 0) {
-        const group = data.groups[0];
-        if (group) {
-            uploaderName = group.display_name ?? uploaderName;
-            if (group.id) authorUrl = `https://nekobt.to/groups/${group.id}`;
-            if (group.pfp_hash) authorIcon = `https://nekobt.to/cdn/pfp/${group.pfp_hash}`;
-        }
-    }
-
-    const humanSize = formatBytes(parseInt(data.filesize, 10));
-
-    const embed = new EmbedBuilder()
-        .setTitle(data.title.substring(0, 256))
-        .setURL(url)
-        .setColor(NEKOBT_EMBED_COLOR) // NekoBT pinkish color
-        .setAuthor({
-            name: uploaderName,
-            iconURL: authorIcon,
-            url: authorUrl
-        })
-        .addFields(
-            { name: "Seeders", value: data.seeders || "0", inline: true },
-            { name: "Leechers", value: data.leechers || "0", inline: true },
-            { name: "File Size", value: humanSize, inline: true },
-            { name: "Uploaded By", value: uploaderName, inline: true },
-            { name: "ℹ️ Info Hash", value: `\`${data.infohash}\``, inline: false }
-        )
-        .setTimestamp(data.uploaded_at);
-
-    // Fetch anime images: try Tsukihime first, then ameNZB fallback
-    if (data.infohash && data.infohash !== "Unknown" && data.animetosho !== "skipped") {
-        // Try Tsukihime first by btih
-        const tsukiImages = await fetchTsukihimeImagesByBtih(data.infohash);
-
-        if (tsukiImages?.cover) {
-            // Tsukihime provided a cover — use it as thumbnail
-            embed.setThumbnail(tsukiImages.cover);
-
-            // Try ameNZB for screenshots as main image
-            const images = await fetchAnimeImages(data.infohash);
-            if (images.screenshots.length > 0) {
-                embed.setImage(images.screenshots[0] || null);
-            } else if (data.screenshots && data.screenshots.length > 0) {
-                embed.setImage(data.screenshots[0] || null);
+        if (data.groups && data.groups.length > 0) {
+            const group = data.groups[0];
+            if (group) {
+                uploaderName = group.display_name ?? uploaderName;
+                if (group.id) authorUrl = `https://nekobt.to/groups/${group.id}`;
+                if (group.pfp_hash) authorIcon = `https://nekobt.to/cdn/pfp/${group.pfp_hash}`;
             }
-        } else {
-            // Tsukihime miss — fall back to ameNZB
-            const images = await fetchAnimeImages(data.infohash);
+        }
 
-            if (images.cover) {
-                embed.setThumbnail(images.cover);
-            } else {
-                const fallbackCover = await fetchAnilistCoverByTitle(data.title);
-                if (fallbackCover) {
-                    embed.setThumbnail(fallbackCover);
+        const humanSize = formatBytes(parseInt(data.filesize, 10));
+
+        const embed = new EmbedBuilder()
+            .setTitle(data.title.substring(0, 256))
+            .setURL(url)
+            .setColor(NEKOBT_EMBED_COLOR) // NekoBT pinkish color
+            .setAuthor({
+                name: uploaderName,
+                iconURL: authorIcon,
+                url: authorUrl
+            })
+            .addFields(
+                { name: "Seeders", value: data.seeders || "0", inline: true },
+                { name: "Leechers", value: data.leechers || "0", inline: true },
+                { name: "File Size", value: humanSize, inline: true },
+                { name: "Uploaded By", value: uploaderName, inline: true },
+                { name: "ℹ️ Info Hash", value: `\`${data.infohash}\``, inline: false }
+            )
+            .setTimestamp(data.uploaded_at);
+
+        // Fetch anime images: try Tsukihime first, then ameNZB fallback
+        if (data.infohash && data.infohash !== "Unknown" && data.animetosho !== "skipped") {
+            // Try Tsukihime first by btih
+            const tsukiImages = await fetchTsukihimeImagesByBtih(data.infohash);
+
+            if (tsukiImages?.cover) {
+                // Tsukihime provided a cover — use it as thumbnail
+                embed.setThumbnail(tsukiImages.cover);
+
+                // Try ameNZB for screenshots as main image
+                const images = await fetchAnimeImages(data.infohash);
+                if (images.screenshots.length > 0) {
+                    embed.setImage(images.screenshots[0] || null);
                 } else if (data.screenshots && data.screenshots.length > 0) {
-                    embed.setThumbnail(data.screenshots[0] || null);
-                } else if (images.screenshots.length > 1) {
-                    embed.setThumbnail(images.screenshots[1] || null);
+                    embed.setImage(data.screenshots[0] || null);
+                }
+            } else {
+                // Tsukihime miss — fall back to ameNZB
+                const images = await fetchAnimeImages(data.infohash);
+
+                if (images.cover) {
+                    embed.setThumbnail(images.cover);
+                } else {
+                    const fallbackCover = await fetchAnilistCoverByTitle(data.title);
+                    if (fallbackCover) {
+                        embed.setThumbnail(fallbackCover);
+                    } else if (data.screenshots && data.screenshots.length > 0) {
+                        embed.setThumbnail(data.screenshots[0] || null);
+                    } else if (images.screenshots.length > 1) {
+                        embed.setThumbnail(images.screenshots[1] || null);
+                    }
+                }
+
+                if (images.screenshots.length > 0) {
+                    embed.setImage(images.screenshots[0] || null);
+                } else if (data.screenshots && data.screenshots.length > 1) {
+                    embed.setImage(data.screenshots[1] || null);
                 }
             }
-
-            if (images.screenshots.length > 0) {
-                embed.setImage(images.screenshots[0] || null);
-            } else if (data.screenshots && data.screenshots.length > 1) {
-                embed.setImage(data.screenshots[1] || null);
+        } else {
+            // No infohash or skipped — try Anilist cover fallback
+            const fallbackCover = await fetchAnilistCoverByTitle(data.title);
+            if (fallbackCover) {
+                embed.setThumbnail(fallbackCover);
+            } else if (data.screenshots && data.screenshots.length > 0) {
+                embed.setThumbnail(data.screenshots[0] || null);
             }
         }
-    } else {
-        // No infohash or skipped — try Anilist cover fallback
-        const fallbackCover = await fetchAnilistCoverByTitle(data.title);
-        if (fallbackCover) {
-            embed.setThumbnail(fallbackCover);
-        } else if (data.screenshots && data.screenshots.length > 0) {
-            embed.setThumbnail(data.screenshots[0] || null);
-        }
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setLabel("View on NekoBT").setURL(url).setStyle(ButtonStyle.Link)
+        );
+
+        return { embeds: [embed], components: [row] };
+    } catch (error) {
+        console.error(`[NekoBT] Error building embed for ${url}:`, error);
+        return null;
     }
-
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setLabel("View on NekoBT").setURL(url).setStyle(ButtonStyle.Link)
-    );
-
-    return { embeds: [embed], components: [row] };
 }

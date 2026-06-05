@@ -4,10 +4,13 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits } from "discord.js";
-import { getGuildSettings, updateEmbedFixSettings } from "../database/models/GuildSettings";
+import { getGuildSettings, updateEmbedFixSettings } from "../database/models/guild-settings";
 import { PLATFORMS } from "../constants";
 import { PlatformId } from "../types";
 
+/**
+ * Slash command data for the embed-settings command.
+ */
 export const data = new SlashCommandBuilder()
     .setName("embed-settings")
     .setDescription("Configure embed fix settings for this server")
@@ -41,130 +44,154 @@ export const data = new SlashCommandBuilder()
     )
     .addSubcommand(sub => sub.setName("status").setDescription("Show current embed fix settings"));
 
+/**
+ * Executes the embed-settings command to configure embed fixing options.
+ *
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when the command is finished.
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    if (!interaction.guildId) {
-        await interaction.reply({
-            content: "❌ This command can only be used in a server.",
-            ephemeral: true
-        });
-        return;
-    }
-
-    await interaction.deferReply({ ephemeral: true });
-
-    const subcommand = interaction.options.getSubcommand();
-    const settings = await getGuildSettings(interaction.guildId);
-
-    switch (subcommand) {
-        case "enable": {
-            await updateEmbedFixSettings(interaction.guildId, { enabled: true });
-            await interaction.editReply({
-                content: "✅ Embed fix has been **enabled** for this server."
+    try {
+        if (!interaction.guildId) {
+            await interaction.reply({
+                content: "❌ This command can only be used in a server.",
+                ephemeral: true
             });
-            break;
+            return;
         }
 
-        case "disable": {
-            await updateEmbedFixSettings(interaction.guildId, { enabled: false });
-            await interaction.editReply({
-                content: "❌ Embed fix has been **disabled** for this server."
-            });
-            break;
-        }
+        await interaction.deferReply({ ephemeral: true });
 
-        case "auto-upload": {
-            const enabled = interaction.options.getBoolean("enabled", true);
-            await updateEmbedFixSettings(interaction.guildId, { autoUpload: enabled });
-            await interaction.editReply({
-                content: enabled
-                    ? "✅ Auto upload has been **enabled**. Media under 10MB will be downloaded and uploaded to Discord."
-                    : "❌ Auto upload has been **disabled**. Only embed fix links will be shown."
-            });
-            break;
-        }
+        const subcommand = interaction.options.getSubcommand();
+        const settings = await getGuildSettings(interaction.guildId);
 
-        case "rich-embeds": {
-            const enabled = interaction.options.getBoolean("enabled", true);
-            await updateEmbedFixSettings(interaction.guildId, { richEmbeds: enabled });
-            await interaction.editReply({
-                content: enabled
-                    ? "✅ Rich embeds have been **enabled**. Posts will show author info and engagement stats."
-                    : "❌ Rich embeds have been **disabled**. Only embed fix links will be shown."
-            });
-            break;
-        }
-
-        case "platform": {
-            const platformId = interaction.options.getString("name", true) as PlatformId;
-            const enabled = interaction.options.getBoolean("enabled", true);
-            const platform = PLATFORMS.find(p => p.id === platformId);
-
-            if (!platform) {
+        switch (subcommand) {
+            case "enable": {
+                await updateEmbedFixSettings(interaction.guildId, { enabled: true });
                 await interaction.editReply({
-                    content: "❌ Unknown platform."
+                    content: "✅ Embed fix has been **enabled** for this server."
                 });
-                return;
+                break;
             }
 
-            const disabledPlatforms = [...settings.embedFix.disabledPlatforms];
-
-            if (enabled) {
-                // Remove from disabled list
-                const index = disabledPlatforms.indexOf(platformId as PlatformId);
-                if (index > -1) {
-                    disabledPlatforms.splice(index, 1);
-                }
-            } else {
-                // Add to disabled list
-                if (!disabledPlatforms.includes(platformId as PlatformId)) {
-                    disabledPlatforms.push(platformId as PlatformId);
-                }
+            case "disable": {
+                await updateEmbedFixSettings(interaction.guildId, { enabled: false });
+                await interaction.editReply({
+                    content: "❌ Embed fix has been **disabled** for this server."
+                });
+                break;
             }
 
-            await updateEmbedFixSettings(interaction.guildId, { disabledPlatforms });
-            await interaction.editReply({
-                content: enabled
-                    ? `✅ **${platform.name}** embed fix has been **enabled**.`
-                    : `❌ **${platform.name}** embed fix has been **disabled**.`
-            });
-            break;
-        }
+            case "auto-upload": {
+                const enabled = interaction.options.getBoolean("enabled", true);
+                await updateEmbedFixSettings(interaction.guildId, { autoUpload: enabled });
+                await interaction.editReply({
+                    content: enabled
+                        ? "✅ Auto upload has been **enabled**. Media under 10MB will be downloaded and uploaded to Discord."
+                        : "❌ Auto upload has been **disabled**. Only embed fix links will be shown."
+                });
+                break;
+            }
 
-        case "status": {
-            const embed = new EmbedBuilder()
-                .setTitle("🔧 Embed Fix Settings")
-                .setColor(0x5865f2)
-                .addFields(
-                    {
-                        name: "Status",
-                        value: settings.embedFix.enabled ? "✅ Enabled" : "❌ Disabled",
-                        inline: true
-                    },
-                    {
-                        name: "Auto Upload",
-                        value: settings.embedFix.autoUpload ? "✅ Enabled" : "❌ Disabled",
-                        inline: true
-                    },
-                    {
-                        name: "Rich Embeds",
-                        value: settings.embedFix.richEmbeds ? "✅ Enabled" : "❌ Disabled",
-                        inline: true
+            case "rich-embeds": {
+                const enabled = interaction.options.getBoolean("enabled", true);
+                await updateEmbedFixSettings(interaction.guildId, { richEmbeds: enabled });
+                await interaction.editReply({
+                    content: enabled
+                        ? "✅ Rich embeds have been **enabled**. Posts will show author info and engagement stats."
+                        : "❌ Rich embeds have been **disabled**. Only embed fix links will be shown."
+                });
+                break;
+            }
+
+            case "platform": {
+                const platformId = interaction.options.getString("name", true) as PlatformId;
+                const enabled = interaction.options.getBoolean("enabled", true);
+                const platform = PLATFORMS.find(p => p.id === platformId);
+
+                if (!platform) {
+                    await interaction.editReply({
+                        content: "❌ Unknown platform."
+                    });
+                    return;
+                }
+
+                const disabledPlatforms = [...settings.embedFix.disabledPlatforms];
+
+                if (enabled) {
+                    // Remove from disabled list
+                    const index = disabledPlatforms.indexOf(platformId as PlatformId);
+                    if (index > -1) {
+                        disabledPlatforms.splice(index, 1);
                     }
-                );
+                } else {
+                    // Add to disabled list
+                    if (!disabledPlatforms.includes(platformId as PlatformId)) {
+                        disabledPlatforms.push(platformId as PlatformId);
+                    }
+                }
 
-            // Show platforms status
-            const platformStatus = PLATFORMS.map(p => {
-                const disabled = settings.embedFix.disabledPlatforms.includes(p.id as PlatformId);
-                return `${disabled ? "❌" : "✅"} ${p.name}`;
-            }).join("\n");
+                await updateEmbedFixSettings(interaction.guildId, { disabledPlatforms });
+                await interaction.editReply({
+                    content: enabled
+                        ? `✅ **${platform.name}** embed fix has been **enabled**.`
+                        : `❌ **${platform.name}** embed fix has been **disabled**.`
+                });
+                break;
+            }
 
-            embed.addFields({
-                name: "Platforms",
-                value: platformStatus
-            });
+            case "status": {
+                const embed = new EmbedBuilder()
+                    .setTitle("🔧 Embed Fix Settings")
+                    .setColor(0x5865f2)
+                    .addFields(
+                        {
+                            name: "Status",
+                            value: settings.embedFix.enabled ? "✅ Enabled" : "❌ Disabled",
+                            inline: true
+                        },
+                        {
+                            name: "Auto Upload",
+                            value: settings.embedFix.autoUpload ? "✅ Enabled" : "❌ Disabled",
+                            inline: true
+                        },
+                        {
+                            name: "Rich Embeds",
+                            value: settings.embedFix.richEmbeds ? "✅ Enabled" : "❌ Disabled",
+                            inline: true
+                        }
+                    );
 
-            await interaction.editReply({ embeds: [embed] });
-            break;
+                // Show platforms status
+                const platformStatus = PLATFORMS.map(p => {
+                    const disabled = settings.embedFix.disabledPlatforms.includes(p.id as PlatformId);
+                    return `${disabled ? "❌" : "✅"} ${p.name}`;
+                }).join("\n");
+
+                embed.addFields({
+                    name: "Platforms",
+                    value: platformStatus
+                });
+
+                await interaction.editReply({ embeds: [embed] });
+                break;
+            }
+        }
+    } catch (error) {
+        console.error("Embed settings command failed:", error);
+        try {
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({
+                    content: "❌ An error occurred while updating embed settings."
+                });
+            } else {
+                await interaction.reply({
+                    content: "❌ An error occurred while updating embed settings.",
+                    ephemeral: true
+                });
+            }
+        } catch (e) {
+            console.error("Failed to send error reply:", e);
         }
     }
 }

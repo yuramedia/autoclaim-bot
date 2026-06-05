@@ -77,28 +77,38 @@ function generateCandidateSeasons(): { tag: string; label: string }[] {
  * Only returns seasons that actually have content on Crunchyroll
  */
 async function getValidSeasons(): Promise<{ tag: string; label: string }[]> {
-    if (VALID_SEASONS_CACHE.seasons.length > 0 && Date.now() < VALID_SEASONS_CACHE.expiresAt) {
+    try {
+        if (VALID_SEASONS_CACHE.seasons.length > 0 && Date.now() < VALID_SEASONS_CACHE.expiresAt) {
+            const candidates = generateCandidateSeasons();
+            return candidates.filter(c => VALID_SEASONS_CACHE.seasons.includes(c.tag));
+        }
+
         const candidates = generateCandidateSeasons();
+
+        // Check each candidate concurrently
+        const results = await Promise.all(
+            candidates.map(async c => {
+                try {
+                    const items = await service.fetchSeasonalSeries(c.tag);
+                    return { tag: c.tag, hasData: items.length > 0 };
+                } catch (err) {
+                    console.error("Error fetching seasonal series for " + c.tag + ":", err);
+                    return { tag: c.tag, hasData: false };
+                }
+            })
+        );
+
+        const validSeasons = results.filter(r => r.hasData).map(r => r.tag);
+
+        // Update cache
+        VALID_SEASONS_CACHE.seasons = validSeasons;
+        VALID_SEASONS_CACHE.expiresAt = Date.now() + CR_SEASON_CACHE_TTL;
+
         return candidates.filter(c => VALID_SEASONS_CACHE.seasons.includes(c.tag));
+    } catch (error) {
+        console.error("getValidSeasons failed:", error);
+        return [];
     }
-
-    const candidates = generateCandidateSeasons();
-
-    // Check each candidate concurrently
-    const results = await Promise.all(
-        candidates.map(async c => {
-            const items = await service.fetchSeasonalSeries(c.tag);
-            return { tag: c.tag, hasData: items.length > 0 };
-        })
-    );
-
-    const validSeasons = results.filter(r => r.hasData).map(r => r.tag);
-
-    // Update cache
-    VALID_SEASONS_CACHE.seasons = validSeasons;
-    VALID_SEASONS_CACHE.expiresAt = Date.now() + CR_SEASON_CACHE_TTL;
-
-    return candidates.filter(c => VALID_SEASONS_CACHE.seasons.includes(c.tag));
 }
 
 /**
@@ -175,6 +185,9 @@ function buildButtons(page: number, totalPages: number): ActionRowBuilder<Button
 }
 
 // Command definition
+/**
+ * Slash command data for the crrelease command.
+ */
 export const data = new SlashCommandBuilder()
     .setName("crrelease")
     .setDescription("Lihat daftar anime rilis per season di Crunchyroll")
@@ -213,6 +226,12 @@ export async function autocomplete(interaction: AutocompleteInteraction): Promis
 
 /**
  * Execute command
+ */
+/**
+ * Executes the crrelease command to view seasonal Crunchyroll releases.
+ *
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when command execution finishes.
  */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply();
@@ -266,19 +285,23 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         });
 
         collector.on("collect", async buttonInteraction => {
-            if (buttonInteraction.customId === "crrelease_prev") {
-                currentPage = Math.max(0, currentPage - 1);
-            } else if (buttonInteraction.customId === "crrelease_next") {
-                currentPage = Math.min(totalPages - 1, currentPage + 1);
+            try {
+                if (buttonInteraction.customId === "crrelease_prev") {
+                    currentPage = Math.max(0, currentPage - 1);
+                } else if (buttonInteraction.customId === "crrelease_next") {
+                    currentPage = Math.min(totalPages - 1, currentPage + 1);
+                }
+
+                const newEmbed = buildEmbed(series, seasonLabel, currentPage, totalPages);
+                const newButtons = buildButtons(currentPage, totalPages);
+
+                await buttonInteraction.update({
+                    embeds: [newEmbed],
+                    components: [newButtons]
+                });
+            } catch (err) {
+                console.error("Error in crrelease button collector:", err);
             }
-
-            const newEmbed = buildEmbed(series, seasonLabel, currentPage, totalPages);
-            const newButtons = buildButtons(currentPage, totalPages);
-
-            await buttonInteraction.update({
-                embeds: [newEmbed],
-                components: [newButtons]
-            });
         });
 
         collector.on("end", async () => {

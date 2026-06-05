@@ -43,6 +43,34 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     inline: false
                 },
                 {
+                    name: "📈 Embed Fixer & Media Downloader",
+                    value: [
+                        "`/embed <url>` - Generate fixed embed atau download media secara manual",
+                        "`/embed-settings` - Toggle auto-fix platform di server (Twitter, TikTok, Instagram, Nyaa, NekoBT, Tsukihime, dll.)",
+                        "💡 *Tip: Kirim link sosial media di chat untuk auto-fix embed & direct video upload.*"
+                    ].join("\n"),
+                    inline: false
+                },
+                {
+                    name: "📺 Anime Feed & Subtitles",
+                    value: [
+                        "`/crrelease` - Lihat jadwal rilis anime per season di Crunchyroll",
+                        "`/crunchyroll-feed` - Setup auto-feed episode Crunchyroll baru di channel",
+                        "`/subcr` - Cari dan download subtitle (.ass) dari Crunchyroll",
+                        "`/u2-feed` - Setup auto-feed BDMV U2 RSS di channel",
+                        "`/bestrelease` - Rekomendasi sub group terbaik untuk seasonal anime"
+                    ].join("\n"),
+                    inline: false
+                },
+                {
+                    name: "🔍 Dictionaries & Utilities",
+                    value: [
+                        "`/jisho <kata>` - Cari kata di kamus Jepang-Inggris Jisho",
+                        "`/kbbi <kata>` - Cari definisi kata di Kamus Besar Bahasa Indonesia"
+                    ].join("\n"),
+                    inline: false
+                },
+                {
                     name: "📊 Info Commands",
                     value: [
                         "`/status` - Lihat status token & riwayat claim",
@@ -56,7 +84,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     name: "⚙️ Settings Commands",
                     value: [
                         "`/settings notify true/false` - Toggle notifikasi DM",
-                        "`/embed-settings` - Kustomisasi tampilan embed",
                         "`/remove all/hoyolab/endfield` - Hapus token"
                     ].join("\n"),
                     inline: false

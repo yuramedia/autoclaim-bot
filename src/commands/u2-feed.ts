@@ -11,7 +11,7 @@ import {
     TextChannel,
     EmbedBuilder
 } from "discord.js";
-import { getGuildSettings } from "../database/models/GuildSettings";
+import { getGuildSettings } from "../database/models/guild-settings";
 import type { IU2FeedSettings } from "../types/u2-feed";
 import { U2_DEFAULT_FILTER } from "../constants/u2-feed";
 

@@ -4,7 +4,7 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits } from "discord.js";
-import { getGuildSettings, updateEmbedFixSettings } from "../database/models/GuildSettings";
+import { getGuildSettings, updateEmbedFixSettings } from "../database/models/guild-settings";
 import { PLATFORMS } from "../constants";
 import { PlatformId } from "../types";
 

@@ -4,7 +4,7 @@
  */
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
-import { User } from "../database/models/User";
+import { User } from "../database/models/user";
 import { HoyolabService, type GameAccount } from "../services/hoyolab";
 import { getCodes } from "../services/code-source";
 import { getGameDisplayName } from "../constants";

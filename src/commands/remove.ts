@@ -4,7 +4,7 @@
  */
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, MessageFlags } from "discord.js";
-import { User } from "../database/models/User";
+import { User } from "../database/models/user";
 
 export const data = new SlashCommandBuilder()
     .setName("remove")

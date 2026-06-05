@@ -4,7 +4,7 @@
  */
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
-import { User } from "../database/models/User";
+import { User } from "../database/models/user";
 import { GAME_DISPLAY_NAMES } from "../constants";
 import { formatUtc8DateTime, discordTimestamp } from "../utils/time";
 

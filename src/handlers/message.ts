@@ -15,7 +15,7 @@ import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fi
 import { downloadMedia, downloadDirect } from "../services/media-downloader";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
 import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
-import { getGuildSettings } from "../database/models/GuildSettings";
+import { getGuildSettings } from "../database/models/guild-settings";
 import { getMaxDownloadSize } from "../constants/media-downloader";
 
 // Cache for storing video URLs for interactive resolution selection

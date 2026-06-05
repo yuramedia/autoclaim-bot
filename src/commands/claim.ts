@@ -4,7 +4,7 @@
  */
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
-import { User } from "../database/models/User";
+import { User } from "../database/models/user";
 import { HoyolabService, formatHoyolabResults } from "../services/hoyolab";
 import { EndfieldService, formatEndfieldResult } from "../services/endfield";
 import { decryptToken } from "../utils/token-crypto";

@@ -5,7 +5,7 @@
  */
 
 import { type ModalSubmitInteraction, MessageFlags } from "discord.js";
-import { User } from "../database/models/User";
+import { User } from "../database/models/user";
 import { EndfieldService } from "../services/endfield";
 import { encryptToken } from "../utils/token-crypto";
 

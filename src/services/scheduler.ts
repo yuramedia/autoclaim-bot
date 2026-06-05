@@ -6,8 +6,8 @@
 import cron from "node-cron";
 import { Client } from "discord.js";
 import { ramen } from "../core/ramen";
-import { User } from "../database/models/User";
-import type { IUser } from "../database/models/User";
+import { User } from "../database/models/user";
+import type { IUser } from "../database/models/user";
 import { HoyolabService, formatHoyolabResults } from "./hoyolab";
 import { EndfieldService, formatEndfieldResult } from "./endfield";
 import { config } from "../config";

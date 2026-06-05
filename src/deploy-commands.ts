@@ -5,7 +5,10 @@ import { fetchCrunchyrollLanguages } from "./constants";
 
 const rest = new REST().setToken(config.discord.token);
 
-async function deploy() {
+/**
+ * Registers all application slash commands with the Discord API.
+ */
+async function deploy(): Promise<void> {
     try {
         // Fetch Crunchyroll languages first so slash commands have up-to-date choices
         logger.info("🌐 Fetching Crunchyroll languages...");
@@ -20,7 +23,7 @@ async function deploy() {
             body: commandsData.map(cmd => cmd.toJSON())
         });
 
-        logger.info(`✅ Successfully registered ${(data as any[]).length} slash commands globally.`);
+        logger.info(`✅ Successfully registered ${(data as unknown[]).length} slash commands globally.`);
         logger.info(`Commands: ${commandsData.map(cmd => `/${cmd.name}`).join(", ")}`);
     } catch (error) {
         logger.error(error, "❌ Error registering commands");

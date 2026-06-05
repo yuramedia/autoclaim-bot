@@ -4,7 +4,7 @@
  */
 
 import { Client } from "discord.js";
-import { GuildSettings } from "../database/models/GuildSettings";
+import { GuildSettings } from "../database/models/guild-settings";
 import { CrunchyrollService } from "./crunchyroll";
 import { ramen } from "../core/ramen";
 import {

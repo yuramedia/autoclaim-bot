@@ -10,7 +10,7 @@ import {
     StringSelectMenuOptionBuilder,
     ActionRowBuilder
 } from "discord.js";
-import { User } from "../database/models/User";
+import { User } from "../database/models/user";
 import { HoyolabService } from "../services/hoyolab";
 import { GAME_DISPLAY_NAMES, type HoyolabGameKey } from "../constants";
 import { encryptToken } from "../utils/token-crypto";

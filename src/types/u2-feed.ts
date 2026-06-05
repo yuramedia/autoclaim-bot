@@ -3,7 +3,7 @@
  * Types for U2 (u2.dmhy.org) RSS feed parsing
  */
 
-import type { IU2FeedSettings } from "../database/models/GuildSettings";
+import type { IU2FeedSettings } from "../database/models/guild-settings";
 
 export type { IU2FeedSettings };
 

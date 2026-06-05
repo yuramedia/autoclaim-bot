@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 import { config } from "../config";
 
+/**
+ * Connects to the MongoDB database using the configured URI.
+ * Exits the process if the connection fails.
+ */
 export async function connectDatabase(): Promise<void> {
     try {
         await mongoose.connect(config.mongodb.uri);

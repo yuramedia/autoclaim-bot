@@ -10,7 +10,7 @@ import {
     ChannelType,
     EmbedBuilder
 } from "discord.js";
-import { getGuildSettings, type ICrunchyrollFeedSettings } from "../database/models/GuildSettings";
+import { getGuildSettings, type ICrunchyrollFeedSettings } from "../database/models/guild-settings";
 
 export const data = new SlashCommandBuilder()
     .setName("crunchyroll-feed")

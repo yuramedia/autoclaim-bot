@@ -1,5 +1,5 @@
 import { StringSelectMenuInteraction, MessageFlags } from "discord.js";
-import { User } from "../database/models/User";
+import { User } from "../database/models/user";
 import { getGameDisplayName } from "../constants/games";
 import { config } from "../config";
 

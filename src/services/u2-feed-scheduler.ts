@@ -5,7 +5,7 @@
  */
 
 import { Client } from "discord.js";
-import { GuildSettings } from "../database/models/GuildSettings";
+import { GuildSettings } from "../database/models/guild-settings";
 import { U2FeedService } from "./u2-feed";
 import { ramen } from "../core/ramen";
 import { U2_POLL_INTERVAL, U2_DEFAULT_FILTER, U2_MAX_ITEMS } from "../constants/u2-feed";

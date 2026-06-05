@@ -30,6 +30,9 @@ jobs:
             - name: Type Check
               run: bunx tsc --noEmit
 
+            - name: Run Tests
+              run: bun test --preload ./src/test-setup.ts
+
     build-test:
         name: Test Docker Build
         runs-on: ubuntu-latest

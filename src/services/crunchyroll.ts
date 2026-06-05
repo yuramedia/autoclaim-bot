@@ -26,6 +26,10 @@ let authExpiresAt = 0;
 let cachedAccountAuth: CrunchyrollAuth | null = null;
 let accountAuthExpiresAt = 0;
 
+/**
+ * Service for interacting with Crunchyroll APIs (Discovery, Search, Subtitles, etc.).
+ * Supports both anonymous auth and account-based premium auth.
+ */
 export class CrunchyrollService {
     private readonly API_BASE = "https://beta-api.crunchyroll.com";
     private basicAuth = CRUNCHYROLL_BASIC_AUTH;
@@ -193,15 +197,20 @@ export class CrunchyrollService {
         try {
             const results = await Promise.all(
                 episodeIds.map(async id => {
-                    const res = await fetch(`${this.API_BASE}/content/v2/cms/objects/${id}?locale=en-US`, {
-                        headers: {
-                            Authorization: `Bearer ${auth.access_token}`,
-                            "User-Agent": this.userAgent
-                        }
-                    });
-                    if (!res.ok) return null;
-                    const data = (await res.json()) as { data: CrunchyrollEpisode[] };
-                    return data.data?.[0] || null;
+                    try {
+                        const res = await fetch(`${this.API_BASE}/content/v2/cms/objects/${id}?locale=en-US`, {
+                            headers: {
+                                Authorization: `Bearer ${auth.access_token}`,
+                                "User-Agent": this.userAgent
+                            }
+                        });
+                        if (!res.ok) return null;
+                        const data = (await res.json()) as { data: CrunchyrollEpisode[] };
+                        return data.data?.[0] || null;
+                    } catch (error) {
+                        console.error(`Error fetching episode ${id}:`, error);
+                        return null;
+                    }
                 })
             );
 

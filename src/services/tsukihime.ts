@@ -87,12 +87,14 @@ async function fetchTsukihimeTorrent(path: string, cacheKey: string): Promise<Ts
             return response.data;
         }
         return null;
-    } catch (error: any) {
+    } catch (error: unknown) {
         // 404 is expected for torrents not indexed by Tsukihime
-        if (error?.response?.status === 404) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
             return null;
         }
-        console.error(`[Tsukihime] Error fetching ${cacheKey}:`, error?.response?.status || error.message);
+        const message = error instanceof Error ? error.message : String(error);
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+        console.error(`[Tsukihime] Error fetching ${cacheKey}:`, status || message);
         return null;
     }
 }

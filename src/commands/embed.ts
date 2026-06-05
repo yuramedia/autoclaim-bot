@@ -19,7 +19,8 @@ import {
     AttachmentBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
-    StringSelectMenuOptionBuilder
+    StringSelectMenuOptionBuilder,
+    ButtonBuilder
 } from "discord.js";
 import { findPlatform, applyFix, extractPostId } from "../services/embed-fix";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
@@ -123,7 +124,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         let embeds: EmbedBuilder[] = [];
         let files: AttachmentBuilder[] = [];
-        let components: ActionRowBuilder<any>[] = [];
+        let components: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] = [];
 
         // ── Platform-specific rich embeds ────────────────────────────
 

@@ -285,19 +285,23 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         });
 
         collector.on("collect", async buttonInteraction => {
-            if (buttonInteraction.customId === "crrelease_prev") {
-                currentPage = Math.max(0, currentPage - 1);
-            } else if (buttonInteraction.customId === "crrelease_next") {
-                currentPage = Math.min(totalPages - 1, currentPage + 1);
+            try {
+                if (buttonInteraction.customId === "crrelease_prev") {
+                    currentPage = Math.max(0, currentPage - 1);
+                } else if (buttonInteraction.customId === "crrelease_next") {
+                    currentPage = Math.min(totalPages - 1, currentPage + 1);
+                }
+
+                const newEmbed = buildEmbed(series, seasonLabel, currentPage, totalPages);
+                const newButtons = buildButtons(currentPage, totalPages);
+
+                await buttonInteraction.update({
+                    embeds: [newEmbed],
+                    components: [newButtons]
+                });
+            } catch (err) {
+                console.error("Error in crrelease button collector:", err);
             }
-
-            const newEmbed = buildEmbed(series, seasonLabel, currentPage, totalPages);
-            const newButtons = buildButtons(currentPage, totalPages);
-
-            await buttonInteraction.update({
-                embeds: [newEmbed],
-                components: [newButtons]
-            });
         });
 
         collector.on("end", async () => {

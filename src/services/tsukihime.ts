@@ -33,7 +33,12 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
  * @returns TsukihimeTorrent or null if not found
  */
 export async function fetchTsukihimeTorrentByNyaa(nyaaId: number): Promise<TsukihimeTorrent | null> {
-    return fetchTsukihimeTorrent(`/torrents/nyaa/${nyaaId}`, `nyaa:${nyaaId}`);
+    try {
+        return await fetchTsukihimeTorrent(`/torrents/nyaa/${nyaaId}`, `nyaa:${nyaaId}`);
+    } catch (error) {
+        console.error(`[Tsukihime] Error in fetchTsukihimeTorrentByNyaa for ${nyaaId}:`, error);
+        return null;
+    }
 }
 
 /**
@@ -42,7 +47,12 @@ export async function fetchTsukihimeTorrentByNyaa(nyaaId: number): Promise<Tsuki
  * @returns TsukihimeTorrent or null if not found
  */
 export async function fetchTsukihimeTorrentBySukebei(sukebeiId: number): Promise<TsukihimeTorrent | null> {
-    return fetchTsukihimeTorrent(`/torrents/sukebei/${sukebeiId}`, `sukebei:${sukebeiId}`);
+    try {
+        return await fetchTsukihimeTorrent(`/torrents/sukebei/${sukebeiId}`, `sukebei:${sukebeiId}`);
+    } catch (error) {
+        console.error(`[Tsukihime] Error in fetchTsukihimeTorrentBySukebei for ${sukebeiId}:`, error);
+        return null;
+    }
 }
 
 /**
@@ -51,7 +61,12 @@ export async function fetchTsukihimeTorrentBySukebei(sukebeiId: number): Promise
  * @returns TsukihimeTorrent or null if not found
  */
 export async function fetchTsukihimeTorrentByBtih(btih: string): Promise<TsukihimeTorrent | null> {
-    return fetchTsukihimeTorrent(`/torrents/btih/${btih.toLowerCase()}`, `btih:${btih.toLowerCase()}`);
+    try {
+        return await fetchTsukihimeTorrent(`/torrents/btih/${btih.toLowerCase()}`, `btih:${btih.toLowerCase()}`);
+    } catch (error) {
+        console.error(`[Tsukihime] Error in fetchTsukihimeTorrentByBtih for ${btih}:`, error);
+        return null;
+    }
 }
 
 /**
@@ -128,8 +143,13 @@ export function extractTsukihimeImages(torrent: TsukihimeTorrent): TsukihimeImag
  * @returns TsukihimeImages or null if torrent not found in Tsukihime
  */
 export async function fetchTsukihimeImagesByNyaa(nyaaId: number): Promise<TsukihimeImages | null> {
-    const cacheKey = `nyaa:${nyaaId}`;
-    return fetchTsukihimeImagesWithCache(cacheKey, () => fetchTsukihimeTorrentByNyaa(nyaaId));
+    try {
+        const cacheKey = `nyaa:${nyaaId}`;
+        return await fetchTsukihimeImagesWithCache(cacheKey, () => fetchTsukihimeTorrentByNyaa(nyaaId));
+    } catch (error) {
+        console.error(`[Tsukihime] Error in fetchTsukihimeImagesByNyaa for ${nyaaId}:`, error);
+        return null;
+    }
 }
 
 /**
@@ -138,8 +158,13 @@ export async function fetchTsukihimeImagesByNyaa(nyaaId: number): Promise<Tsukih
  * @returns TsukihimeImages or null if torrent not found in Tsukihime
  */
 export async function fetchTsukihimeImagesBySukebei(sukebeiId: number): Promise<TsukihimeImages | null> {
-    const cacheKey = `sukebei:${sukebeiId}`;
-    return fetchTsukihimeImagesWithCache(cacheKey, () => fetchTsukihimeTorrentBySukebei(sukebeiId));
+    try {
+        const cacheKey = `sukebei:${sukebeiId}`;
+        return await fetchTsukihimeImagesWithCache(cacheKey, () => fetchTsukihimeTorrentBySukebei(sukebeiId));
+    } catch (error) {
+        console.error(`[Tsukihime] Error in fetchTsukihimeImagesBySukebei for ${sukebeiId}:`, error);
+        return null;
+    }
 }
 
 /**
@@ -148,8 +173,13 @@ export async function fetchTsukihimeImagesBySukebei(sukebeiId: number): Promise<
  * @returns TsukihimeImages or null if torrent not found in Tsukihime
  */
 export async function fetchTsukihimeImagesByBtih(btih: string): Promise<TsukihimeImages | null> {
-    const cacheKey = `btih:${btih.toLowerCase()}`;
-    return fetchTsukihimeImagesWithCache(cacheKey, () => fetchTsukihimeTorrentByBtih(btih));
+    try {
+        const cacheKey = `btih:${btih.toLowerCase()}`;
+        return await fetchTsukihimeImagesWithCache(cacheKey, () => fetchTsukihimeTorrentByBtih(btih));
+    } catch (error) {
+        console.error(`[Tsukihime] Error in fetchTsukihimeImagesByBtih for ${btih}:`, error);
+        return null;
+    }
 }
 
 /**
@@ -162,34 +192,39 @@ async function fetchTsukihimeImagesWithCache(
     cacheKey: string,
     fetcher: () => Promise<TsukihimeTorrent | null>
 ): Promise<TsukihimeImages | null> {
-    // Check cache
-    const cached = tsukihimeCache.get(cacheKey);
-    if (cached && Date.now() < cached.expiry) {
-        return cached.data;
-    }
+    try {
+        // Check cache
+        const cached = tsukihimeCache.get(cacheKey);
+        if (cached && Date.now() < cached.expiry) {
+            return cached.data;
+        }
 
-    const torrent = await fetcher();
-    if (!torrent) {
+        const torrent = await fetcher();
+        if (!torrent) {
+            return null;
+        }
+
+        const images = extractTsukihimeImages(torrent);
+
+        // Cache if we got useful data
+        if (images.cover || images.animeTitle) {
+            tsukihimeCache.set(cacheKey, {
+                data: images,
+                expiry: Date.now() + CACHE_TTL
+            });
+
+            // Prune cache if too large
+            if (tsukihimeCache.size > 500) {
+                const firstKey = tsukihimeCache.keys().next().value;
+                if (firstKey) tsukihimeCache.delete(firstKey);
+            }
+        }
+
+        return images;
+    } catch (error) {
+        console.error(`[Tsukihime] Error in fetchTsukihimeImagesWithCache for ${cacheKey}:`, error);
         return null;
     }
-
-    const images = extractTsukihimeImages(torrent);
-
-    // Cache if we got useful data
-    if (images.cover || images.animeTitle) {
-        tsukihimeCache.set(cacheKey, {
-            data: images,
-            expiry: Date.now() + CACHE_TTL
-        });
-
-        // Prune cache if too large
-        if (tsukihimeCache.size > 500) {
-            const firstKey = tsukihimeCache.keys().next().value;
-            if (firstKey) tsukihimeCache.delete(firstKey);
-        }
-    }
-
-    return images;
 }
 
 /**
@@ -198,7 +233,12 @@ async function fetchTsukihimeImagesWithCache(
  * @returns TsukihimeTorrent or null if not found
  */
 export async function fetchTsukihimeTorrentById(torrentId: number): Promise<TsukihimeTorrent | null> {
-    return fetchTsukihimeTorrent(`/torrents/${torrentId}`, `tsukihime:${torrentId}`);
+    try {
+        return await fetchTsukihimeTorrent(`/torrents/${torrentId}`, `tsukihime:${torrentId}`);
+    } catch (error) {
+        console.error(`[Tsukihime] Error in fetchTsukihimeTorrentById for ${torrentId}:`, error);
+        return null;
+    }
 }
 
 /**
@@ -207,7 +247,14 @@ export async function fetchTsukihimeTorrentById(torrentId: number): Promise<Tsuk
  * @param originalUrl - Original tsukihime.org URL
  * @returns Object with embeds and components or null
  */
-export async function buildTsukihimeEmbed(torrentId: number, originalUrl: string) {
+export async function buildTsukihimeEmbed(
+    torrentId: number,
+    originalUrl: string
+): Promise<{
+    embeds: EmbedBuilder[];
+    components: ActionRowBuilder<ButtonBuilder>[];
+    files: AttachmentBuilder[];
+} | null> {
     const torrent = await fetchTsukihimeTorrentById(torrentId);
     if (!torrent) return null;
 

@@ -32,6 +32,9 @@ import { PLATFORMS } from "../constants/embed-fix";
 import { getMaxDownloadSize } from "../constants/media-downloader";
 import { videoSelectionCache } from "../handlers/message";
 
+/**
+ * Slash command definition for the embed command
+ */
 export const data = new SlashCommandBuilder()
     .setName("embed")
     .setDescription("Generate a rich embed from a supported URL")
@@ -83,6 +86,11 @@ function buildResolutionSelect(
     return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 }
 
+/**
+ * Execution handler for the embed command
+ * @param interaction - The ChatInputCommandInteraction from Discord
+ * @returns Promise that resolves when command execution completes
+ */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const url = interaction.options.getString("url", true).trim();
 

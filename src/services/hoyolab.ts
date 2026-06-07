@@ -7,6 +7,7 @@ import { createHash } from "crypto";
 import axios, { type AxiosInstance } from "axios";
 import type { ClaimResult, GameAccount, TokenValidation, RedeemResult } from "../types";
 import { HOYOLAB_GAMES, HOYOLAB_HEADERS, HOYOLAB_REDEEM_URLS, HOYOLAB_DS_SALT } from "../constants";
+import { logger } from "../core/logger";
 
 // Re-export types for backwards compatibility
 export type { ClaimResult, GameAccount };
@@ -136,7 +137,7 @@ export class HoyolabService {
 
             return results;
         } catch (error) {
-            console.error("Error in claimAll:", error);
+            logger.error({ msg: "Error in claimAll", err: error });
             return [];
         }
     }
@@ -181,7 +182,7 @@ export class HoyolabService {
             }
             return [];
         } catch (error) {
-            console.error(`Error fetching accounts for ${gameKey}:`, error);
+            logger.error({ msg: `Error fetching accounts for ${gameKey}`, err: error });
             return [];
         }
     }
@@ -218,8 +219,8 @@ export class HoyolabService {
         const url = `${baseUrl}/common/apicdkey/api/webExchangeCdkeyHyl?${params.toString()}`;
 
         try {
-            console.log(`[Redeem] Attempting to redeem for ${account.game_uid} (${gameKey})`);
-            console.log(`[Redeem] URL: ${url}`);
+            logger.debug({ uid: account.game_uid, game: gameKey }, "[Redeem] Attempting to redeem");
+            logger.debug({ uid: account.game_uid, game: gameKey, region: account.region }, "[Redeem] Request params");
 
             const headers = {
                 "x-rpc-app_version": "1.5.0",
@@ -236,7 +237,7 @@ export class HoyolabService {
             const response = await this.client.get(url, { headers });
             const data = response.data;
 
-            console.log(`[Redeem] Response for ${code}:`, JSON.stringify(data));
+            logger.debug({ code, retcode: data.retcode, message: data.message }, "[Redeem] Response");
 
             if (data.retcode === 0) {
                 return { success: true, message: "Redeemed successfully" };

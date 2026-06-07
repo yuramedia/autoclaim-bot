@@ -8,6 +8,8 @@ import { User } from "../database/models/user";
 import { HoyolabService, type GameAccount } from "../services/hoyolab";
 import { getCodes } from "../services/code-source";
 import { getGameDisplayName } from "../constants";
+import { decryptToken } from "../utils/token-crypto";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the redeem command.
@@ -62,7 +64,7 @@ async function redeemForUser(
                     const icon = result.success ? "✅" : "❌";
                     results.push(`${icon} **${accInfo}** (${code}): ${result.message}`);
                 } catch (codeErr) {
-                    console.error(`Failed to redeem code ${code} for ${accInfo}:`, codeErr);
+                    logger.error({ msg: `Failed to redeem code ${code} for ${accInfo}`, err: codeErr });
                     results.push(
                         `❌ **${accInfo}** (${code}): ${codeErr instanceof Error ? codeErr.message : String(codeErr)}`
                     );
@@ -71,7 +73,7 @@ async function redeemForUser(
         }
         return results;
     } catch (error) {
-        console.error("redeemForUser helper failed:", error);
+        logger.error({ msg: "redeemForUser helper failed", err: error });
         return [`Error running code redemption: ${error instanceof Error ? error.message : String(error)}`];
     }
 }
@@ -93,7 +95,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         return;
     }
 
-    const hoyolab = new HoyolabService(user.hoyolab.token);
+    const hoyolab = new HoyolabService(decryptToken(user.hoyolab.token));
     const subcommand = interaction.options.getSubcommand();
 
     try {
@@ -163,7 +165,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error("Redeem command error:", error);
+        logger.error({ msg: "Redeem command error", err: error });
         await interaction.editReply({
             content: `❌ An error occurred: ${errorMessage}`
         });

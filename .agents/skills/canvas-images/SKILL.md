@@ -59,13 +59,15 @@ function roundRect(ctx, x, y, w, h, r) {
 ### Loading Remote Images
 
 ```typescript
+import { logger } from "../core/logger";
+
 async function loadRemoteImage(url: string): Promise<Image | null> {
     try {
         const response = await fetch(url);
         const buffer = await response.arrayBuffer();
         return await loadImage(Buffer.from(buffer));
     } catch (error) {
-        console.error("Failed to load image:", url, error);
+        logger.error(error, `Failed to load image: ${url}`);
         return null;
     }
 }

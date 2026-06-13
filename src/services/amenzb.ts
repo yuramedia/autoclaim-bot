@@ -6,6 +6,7 @@
 
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { logger } from "../core/logger";
 import { EmbedBuilder } from "discord.js";
 import {
     AMENZB_BASE_URL,
@@ -119,7 +120,7 @@ export async function fetchAnimeImages(infohash: string): Promise<AmeNZBImages> 
         return result;
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
-        console.error(`[ameNZB] Error fetching images for ${infohash}:`, msg);
+        logger.error(`[ameNZB] Error fetching images for ${infohash}: ${msg}`);
         return result;
     }
 }
@@ -186,7 +187,7 @@ export async function buildAmeNZBEmbed(releaseId: string, url: string): Promise<
         return embed;
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
-        console.error(`[ameNZB] Error building embed for ${releaseId}:`, msg);
+        logger.error(`[ameNZB] Error building embed for ${releaseId}: ${msg}`);
         return null;
     }
 }
@@ -446,7 +447,7 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
         } else if (error instanceof Error) {
             errorMessage = error.message;
         }
-        console.error(`[Anilist Cover] Error fetching cover for title ${cleanTitle}:`, errorMessage);
+        logger.error(`[Anilist Cover] Error fetching cover for title ${cleanTitle}: ${errorMessage}`);
         return null;
     }
 }
@@ -472,7 +473,7 @@ async function findReleaseInfoByHash(infohash: string): Promise<SearchResult | n
                 }
             } catch (error: unknown) {
                 const msg = error instanceof Error ? error.message : String(error);
-                console.error("[ameNZB API] Search failed:", msg);
+                logger.error(`[ameNZB API] Search failed: ${msg}`);
             }
         }
 
@@ -505,13 +506,13 @@ async function findReleaseInfoByHash(infohash: string): Promise<SearchResult | n
             }
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
-            console.error("[ameNZB Scrape] Search failed:", msg);
+            logger.error(`[ameNZB Scrape] Search failed: ${msg}`);
         }
 
         return null;
     } catch (outerError: unknown) {
         const msg = outerError instanceof Error ? outerError.message : String(outerError);
-        console.error("[ameNZB findReleaseInfoByHash] Outer failure:", msg);
+        logger.error(`[ameNZB findReleaseInfoByHash] Outer failure: ${msg}`);
         return null;
     }
 }
@@ -571,7 +572,7 @@ export async function fetchAnilistCover(anidbId: number | string): Promise<strin
         return coverUrl || null;
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
-        console.error(`[Anilist Cover] Error fetching cover for AniDB ${anidbId}:`, msg);
+        logger.error(`[Anilist Cover] Error fetching cover for AniDB ${anidbId}: ${msg}`);
         return null;
     }
 }

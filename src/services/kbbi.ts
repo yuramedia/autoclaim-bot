@@ -2,6 +2,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import type { KbbiResult } from "../types/kbbi";
 import { KBBI_BASE_URL, KBBI_USER_AGENT } from "../constants/kbbi";
+import { logger } from "../core/logger";
 
 const extractDefinitions = ($: cheerio.CheerioAPI, selector: string): string[] => {
     const definitions: string[] = [];
@@ -154,7 +155,7 @@ const searchThesaurus = async (url: string): Promise<{ class: string; words: str
 
         return groupedSynonyms;
     } catch (error) {
-        console.error(`Error fetching Thesaurus from ${url}:`, error);
+        logger.error(error, `Error fetching Thesaurus from ${url}`);
         return [];
     }
 };
@@ -236,7 +237,7 @@ export const searchKbbi = async (word: string): Promise<KbbiResult | null> => {
             definitions: cleanedDefinitions
         };
     } catch (error) {
-        console.error(`Error fetching KBBI for ${word}:`, error);
+        logger.error(error, `Error fetching KBBI for ${word}`);
         return null;
     }
 };

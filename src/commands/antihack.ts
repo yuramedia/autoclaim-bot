@@ -13,6 +13,7 @@ import {
 } from "discord.js";
 import { getGuildSettings, updateAntihackSettings } from "../database/models/guild-settings";
 import { ANTIHACK_INFO_EMBED_COLOR } from "../constants";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the antihack command.
@@ -183,7 +184,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
         }
     } catch (error) {
-        console.error("Antihack command failed:", error);
+        logger.error(error, "Antihack command failed");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
@@ -196,7 +197,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 });
             }
         } catch (e) {
-            console.error("Failed to send error reply:", e);
+            logger.error(e, "Failed to send error reply");
         }
     }
 }

@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, type ChatInputCommandInteraction } from "discord.js";
 import { searchKbbi } from "../services/kbbi";
 import { KBBI_BASE_URL } from "../constants/kbbi";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the kbbi command.
@@ -77,7 +78,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error("KBBI Command Error:", error);
+        logger.error(error, "KBBI Command Error");
         await interaction.editReply({ content: "Terjadi kesalahan saat mencari kata di KBBI." });
     }
 }

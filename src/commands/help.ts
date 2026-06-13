@@ -5,6 +5,7 @@
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
 import { config } from "../config";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the help command.
@@ -143,14 +144,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     } catch (error) {
-        console.error("Help command failed:", error);
+        logger.error(error, "Help command failed");
         try {
             await interaction.reply({
                 content: "❌ An error occurred while displaying the help menu.",
                 flags: MessageFlags.Ephemeral
             });
         } catch (e) {
-            console.error("Failed to send error reply:", e);
+            logger.error(e, "Failed to send error reply");
         }
     }
 }

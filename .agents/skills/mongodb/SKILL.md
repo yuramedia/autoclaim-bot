@@ -12,13 +12,14 @@ This skill covers MongoDB database operations for the autoclaim bot.
 ```typescript
 // src/database.ts
 import mongoose from "mongoose";
+import { logger } from "../core/logger";
 
 export async function connectDatabase() {
     const uri = process.env.MONGODB_URI;
     if (!uri) throw new Error("MONGODB_URI not set");
 
     await mongoose.connect(uri);
-    console.log("Connected to MongoDB");
+    logger.info("Connected to MongoDB");
 }
 ```
 

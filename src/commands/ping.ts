@@ -5,6 +5,7 @@
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
 import { formatUptime } from "../utils/time";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the ping command.
@@ -49,7 +50,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.editReply({ content: "", embeds: [embed] });
     } catch (error) {
-        console.error("Ping command failed:", error);
+        logger.error(error, "Ping command failed");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ content: "❌ Failed to measure latency." });
@@ -57,7 +58,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 await interaction.reply({ content: "❌ Failed to measure latency.", ephemeral: true });
             }
         } catch (e) {
-            console.error("Failed to send error response:", e);
+            logger.error(e, "Failed to send error response");
         }
     }
 }

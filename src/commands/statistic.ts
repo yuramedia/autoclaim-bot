@@ -14,6 +14,7 @@ import {
 import os from "os";
 import { version as nodeVersion } from "process";
 import { formatUptimeSeconds } from "../utils/time";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the statistic command.
@@ -78,7 +79,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 totalUsers = results.reduce((acc, val) => acc + val.users, 0);
                 totalChannels = results.reduce((acc, val) => acc + val.channels, 0);
             } catch (error) {
-                console.error("[Statistic] Error fetching shard stats:", error);
+                logger.error(error, "[Statistic] Error fetching shard stats");
             }
         }
 
@@ -106,7 +107,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error("Statistic command failed:", error);
+        logger.error(error, "Statistic command failed");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ content: "❌ Failed to retrieve bot statistics." });
@@ -117,7 +118,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 });
             }
         } catch (e) {
-            console.error("Failed to send error reply:", e);
+            logger.error(e, "Failed to send error reply");
         }
     }
 }

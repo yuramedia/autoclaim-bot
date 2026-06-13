@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
 import { UniversalSpeedTest, SpeedUnits } from "universal-speedtest";
 import { getCooldownRemaining, setCooldown, formatCooldown } from "../utils/cooldown";
+import { logger } from "../core/logger";
 
 const SPEEDTEST_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes per user
 
@@ -134,7 +135,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.editReply({ embeds: [finishEmbed] });
     } catch (error) {
-        console.error("Speedtest error:", error);
+        logger.error(error, "Speedtest error");
 
         const errorEmbed = new EmbedBuilder()
             .setTitle("❌ Speedtest Failed")

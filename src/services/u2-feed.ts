@@ -8,6 +8,7 @@
 import { decode } from "he";
 import type { U2FeedItem, FormattedU2Item } from "../types/u2-feed";
 import { U2_IMAGE_PATTERN, U2_ATTACH_IMAGE_PATTERN } from "../constants/u2-feed";
+import { logger } from "../core/logger.js";
 
 /**
  * Light-escape special characters in URLs before fetching
@@ -83,14 +84,14 @@ export class U2FeedService {
             clearTimeout(timeoutId);
 
             if (!response.ok) {
-                console.error("U2 RSS fetch failed:", response.status);
+                logger.error(`U2 RSS fetch failed: ${response.status}`);
                 return [];
             }
 
             const xml = await response.text();
             return this.parseItems(xml);
         } catch (error) {
-            console.error("U2 RSS fetch error:", error);
+            logger.error(error, "U2 RSS fetch error");
             return [];
         }
     }
@@ -134,7 +135,7 @@ export class U2FeedService {
                     sizeBytes
                 });
             } catch (error) {
-                console.error("U2 RSS item parse error:", error);
+                logger.error(error, "U2 RSS item parse error");
             }
         }
 

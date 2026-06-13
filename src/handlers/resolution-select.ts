@@ -2,6 +2,7 @@ import { StringSelectMenuInteraction, AttachmentBuilder, MessageFlags } from "di
 import { videoSelectionCache } from "./message";
 import { downloadDirect } from "../services/media-downloader";
 import { getMaxDownloadSize } from "../constants/media-downloader";
+import { logger } from "../core/logger";
 
 /**
  * Handles the resolution selection interaction for media downloads.
@@ -63,14 +64,14 @@ export async function handleResolutionSelect(interaction: StringSelectMenuIntera
             });
         }
     } catch (outerError: unknown) {
-        console.error("[handleResolutionSelect] Unexpected error:", outerError);
+        logger.error(outerError, "[handleResolutionSelect] Unexpected error");
         try {
             await interaction.followUp({
                 content: "❌ An unexpected error occurred while processing your resolution selection.",
                 flags: MessageFlags.Ephemeral
             });
         } catch (replyError) {
-            console.error("[handleResolutionSelect] Failed to send error feedback:", replyError);
+            logger.error(replyError, "[handleResolutionSelect] Failed to send error feedback");
         }
     }
 }

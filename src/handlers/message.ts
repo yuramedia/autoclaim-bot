@@ -18,6 +18,7 @@ import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed 
 import { getGuildSettings, type IGuildSettings } from "../database/models/guild-settings";
 import { getMaxDownloadSize } from "../constants/media-downloader";
 import { checkAntihack } from "./antihack";
+import { logger } from "../core/logger";
 
 /**
  * Cache for storing video URLs and format details for interactive resolution selection.
@@ -89,11 +90,11 @@ export async function handleMessage(message: Message): Promise<void> {
             }, 2000);
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
-            console.error("Error processing embed fix:", msg);
+            logger.error("Error processing embed fix: %s", msg);
         }
     } catch (outerError: unknown) {
         const msg = outerError instanceof Error ? outerError.message : String(outerError);
-        console.error("Unexpected error in handleMessage:", msg);
+        logger.error("Unexpected error in handleMessage: %s", msg);
     }
 }
 
@@ -309,6 +310,6 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
         });
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
-        console.error(`[processUrl] Error processing URL ${processed.originalUrl}:`, msg);
+        logger.error(`[processUrl] Error processing URL ${processed.originalUrl}: ${msg}`);
     }
 }

@@ -16,6 +16,7 @@ import {
 import { CrunchyrollService } from "../services/crunchyroll";
 import { CRUNCHYROLL_COLOR, CR_SEASONS, CR_RELEASE_ITEMS_PER_PAGE, CR_SEASON_CACHE_TTL } from "../constants";
 import type { CrunchyrollBrowseItem } from "../types/crunchyroll";
+import { logger } from "../core/logger";
 
 const service = new CrunchyrollService();
 
@@ -92,7 +93,7 @@ async function getValidSeasons(): Promise<{ tag: string; label: string }[]> {
                     const items = await service.fetchSeasonalSeries(c.tag);
                     return { tag: c.tag, hasData: items.length > 0 };
                 } catch (err) {
-                    console.error("Error fetching seasonal series for " + c.tag + ":", err);
+                    logger.error(err, `Error fetching seasonal series for ${c.tag}`);
                     return { tag: c.tag, hasData: false };
                 }
             })
@@ -106,7 +107,7 @@ async function getValidSeasons(): Promise<{ tag: string; label: string }[]> {
 
         return candidates.filter(c => VALID_SEASONS_CACHE.seasons.includes(c.tag));
     } catch (error) {
-        console.error("getValidSeasons failed:", error);
+        logger.error(error, "getValidSeasons failed");
         return [];
     }
 }
@@ -214,7 +215,7 @@ export async function autocomplete(interaction: AutocompleteInteraction): Promis
 
         await interaction.respond(filtered.map(s => ({ name: s.label, value: s.tag })));
     } catch (error) {
-        console.error("Crrelease autocomplete error:", error);
+        logger.error(error, "Crrelease autocomplete error");
         // Fallback: show candidates without validation
         const candidates = generateCandidateSeasons();
         const filtered = candidates
@@ -300,7 +301,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     components: [newButtons]
                 });
             } catch (err) {
-                console.error("Error in crrelease button collector:", err);
+                logger.error(err, "Error in crrelease button collector");
             }
         });
 
@@ -312,7 +313,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
         });
     } catch (error) {
-        console.error("Crrelease command error:", error);
+        logger.error(error, "Crrelease command error");
         await interaction.editReply({
             content: "❌ Terjadi kesalahan saat mengambil data. Coba lagi nanti."
         });

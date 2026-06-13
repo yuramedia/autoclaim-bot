@@ -16,6 +16,7 @@ import {
 import { CrunchyrollService } from "../services/crunchyroll";
 import type { CrunchyrollEpisode } from "../types/crunchyroll";
 import { LANG_MAP, CRUNCHYROLL_COLOR } from "../constants";
+import { logger } from "../core/logger";
 
 const service = new CrunchyrollService();
 
@@ -93,7 +94,7 @@ export async function autocomplete(interaction: AutocompleteInteraction): Promis
         const results = await service.searchSeriesAutocomplete(focusedValue);
         await interaction.respond(results);
     } catch (error) {
-        console.error("Autocomplete error:", error);
+        logger.error(error, "Autocomplete error");
         await interaction.respond([]);
     }
 }
@@ -318,7 +319,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             });
         }
     } catch (error) {
-        console.error("Subcr command error:", error);
+        logger.error(error, "Subcr command error");
         await interaction.editReply({
             content: "❌ Terjadi kesalahan saat mengambil subtitle. Coba lagi nanti."
         });
@@ -373,7 +374,7 @@ async function downloadAndSend(
             components: []
         });
     } catch (error) {
-        console.error("downloadAndSend failed:", error);
+        logger.error(error, "downloadAndSend failed");
         await interaction.editReply({
             content: "❌ Gagal mendownload dan mengirim file subtitle.",
             components: []

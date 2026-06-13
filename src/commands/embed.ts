@@ -23,6 +23,7 @@ import {
     ButtonBuilder
 } from "discord.js";
 import { findPlatform, applyFix, extractPostId } from "../services/embed-fix";
+import { logger } from "../core/logger";
 import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
 import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
 import { buildNekoBTEmbed } from "../services/nekobt";
@@ -266,7 +267,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             content: `ℹ️ No embed data could be fetched for this **${platform.name}** URL.`
         });
     } catch (error) {
-        console.error("[Embed Command] Error:", error);
+        logger.error(error, "[Embed Command] Error");
         await interaction.editReply({
             content: "❌ An error occurred while generating the embed."
         });

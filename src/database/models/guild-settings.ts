@@ -6,6 +6,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 import type { PlatformId } from "../../types/embed-fix";
+import { logger } from "../../core/logger";
 
 /**
  * Settings configuration for the social media embed fixer.
@@ -111,7 +112,7 @@ export async function getGuildSettings(guildId: string): Promise<IGuildSettings>
         }
         return settings;
     } catch (error: unknown) {
-        console.error(`[getGuildSettings] Failed to fetch settings for guild ${guildId}:`, error);
+        logger.error(error, `[getGuildSettings] Failed to fetch settings for guild ${guildId}`);
         throw error;
     }
 }
@@ -135,7 +136,7 @@ export async function updateEmbedFixSettings(
         await settings.save();
         return settings;
     } catch (error: unknown) {
-        console.error(`[updateEmbedFixSettings] Failed to update settings for guild ${guildId}:`, error);
+        logger.error(error, `[updateEmbedFixSettings] Failed to update settings for guild ${guildId}`);
         throw error;
     }
 }
@@ -160,7 +161,7 @@ export async function updateAntihackSettings(
         await settings.save();
         return settings;
     } catch (error: unknown) {
-        console.error(`[updateAntihackSettings] Failed to update settings for guild ${guildId}:`, error);
+        logger.error(error, `[updateAntihackSettings] Failed to update settings for guild ${guildId}`);
         throw error;
     }
 }

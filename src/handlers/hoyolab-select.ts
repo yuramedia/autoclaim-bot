@@ -2,6 +2,7 @@ import { StringSelectMenuInteraction, MessageFlags } from "discord.js";
 import { User } from "../database/models/user";
 import { getGameDisplayName } from "../constants/games";
 import { config } from "../config";
+import { logger } from "../core/logger";
 
 /**
  * Handles the game selection interaction for Hoyolab accounts.
@@ -37,7 +38,7 @@ export async function handleHoyolabSelect(interaction: StringSelectMenuInteracti
             content: `✅ **Setup Complete!**\n\nThe following games have been enabled for auto-claim:\n\n${enabledGamesList}\n\nYour rewards will be claimed daily at **${claimTime}**.`
         });
     } catch (error: unknown) {
-        console.error("[handleHoyolabSelect] Failed to process Hoyolab game selection:", error);
+        logger.error(error, "[handleHoyolabSelect] Failed to process Hoyolab game selection");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
@@ -50,7 +51,7 @@ export async function handleHoyolabSelect(interaction: StringSelectMenuInteracti
                 });
             }
         } catch (replyError) {
-            console.error("[handleHoyolabSelect] Failed to send error response:", replyError);
+            logger.error(replyError, "[handleHoyolabSelect] Failed to send error response");
         }
     }
 }

@@ -4,6 +4,7 @@
  */
 
 import { EmbedBuilder } from "discord.js";
+import { logger } from "../core/logger";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { PlatformId } from "../types/embed-fix";
@@ -136,7 +137,7 @@ export async function fetchTwitterInfo(statusId: string): Promise<PostInfo | nul
             timestamp: tweet.created_at ? new Date(tweet.created_at) : undefined
         };
     } catch (error) {
-        console.error("Failed to fetch Twitter info:", error);
+        logger.error(error as Error, "Failed to fetch Twitter info");
         return null;
     }
 }
@@ -202,7 +203,7 @@ export async function fetchBlueskyInfo(url: string): Promise<PostInfo | null> {
             timestamp: record?.createdAt ? new Date(record.createdAt) : undefined
         };
     } catch (error) {
-        console.error("Failed to fetch Bluesky info:", error);
+        logger.error(error as Error, "Failed to fetch Bluesky info");
         return null;
     }
 }
@@ -304,7 +305,7 @@ export async function fetchFacebookInfo(url: string): Promise<PostInfo | null> {
             timestamp
         };
     } catch (error) {
-        console.error("Failed to fetch Facebook info:", error);
+        logger.error(error as Error, "Failed to fetch Facebook info");
         return null;
     }
 }
@@ -335,7 +336,7 @@ export async function fetchPostInfo(
             // Add more platforms as needed
         }
     } catch (error) {
-        console.error(`Error fetching post info for platform ${platform.id}:`, error);
+        logger.error(error as Error, `Error fetching post info for platform ${platform.id}`);
     }
     return null;
 }

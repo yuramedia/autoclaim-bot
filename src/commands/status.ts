@@ -7,6 +7,7 @@ import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, Me
 import { User } from "../database/models/user";
 import { GAME_DISPLAY_NAMES } from "../constants";
 import { formatUtc8DateTime, discordTimestamp } from "../utils/time";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the status command.
@@ -103,7 +104,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error("Status command failed:", error);
+        logger.error(error, "Status command failed");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ content: "❌ Failed to fetch status information." });
@@ -114,7 +115,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 });
             }
         } catch (e) {
-            console.error("Failed to send error reply:", e);
+            logger.error(e, "Failed to send error reply");
         }
     }
 }

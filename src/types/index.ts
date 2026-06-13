@@ -55,3 +55,6 @@ export type { AmeNZBImages, AmeNZBNewznabItem } from "./amenzb";
 
 // Tsukihime types
 export type { TsukihimeTorrent, TsukihimeAnime, TsukihimeImages } from "./tsukihime";
+
+// Antihack types
+export type { AntihackBanResult, AntihackLogData } from "./antihack";

@@ -14,6 +14,7 @@ import { User } from "../database/models/user";
 import { HoyolabService } from "../services/hoyolab";
 import { GAME_DISPLAY_NAMES, type HoyolabGameKey } from "../constants";
 import { encryptToken } from "../utils/token-crypto";
+import { logger } from "../core/logger";
 
 /** Default game options for select menu */
 const GAME_SELECT_OPTIONS: Array<{ key: HoyolabGameKey; emoji: string }> = [
@@ -112,7 +113,7 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
             components: [row]
         });
     } catch (error: unknown) {
-        console.error("[handleHoyolabModal] Failed to process Hoyolab modal submission:", error);
+        logger.error(error, "[handleHoyolabModal] Failed to process Hoyolab modal submission");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
@@ -125,7 +126,7 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
                 });
             }
         } catch (replyError) {
-            console.error("[handleHoyolabModal] Failed to send error response:", replyError);
+            logger.error(replyError, "[handleHoyolabModal] Failed to send error response");
         }
     }
 }

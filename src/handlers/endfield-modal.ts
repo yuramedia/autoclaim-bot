@@ -8,6 +8,7 @@ import { type ModalSubmitInteraction, MessageFlags } from "discord.js";
 import { User } from "../database/models/user";
 import { EndfieldService } from "../services/endfield";
 import { encryptToken } from "../utils/token-crypto";
+import { logger } from "../core/logger";
 
 /**
  * Handles the modal submission for the Endfield token setup command.
@@ -57,7 +58,7 @@ export async function handleEndfieldModal(interaction: ModalSubmitInteraction): 
                 `⚠️ Gunakan \`/claim endfield\` untuk test apakah token berfungsi.`
         });
     } catch (error: unknown) {
-        console.error("[handleEndfieldModal] Failed to process Endfield modal submission:", error);
+        logger.error(error, "[handleEndfieldModal] Failed to process Endfield modal submission");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
@@ -70,7 +71,7 @@ export async function handleEndfieldModal(interaction: ModalSubmitInteraction): 
                 });
             }
         } catch (replyError) {
-            console.error("[handleEndfieldModal] Failed to send error response:", replyError);
+            logger.error(replyError, "[handleEndfieldModal] Failed to send error response");
         }
     }
 }

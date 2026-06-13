@@ -9,6 +9,7 @@ import { HoyolabService, formatHoyolabResults } from "../services/hoyolab";
 import { EndfieldService, formatEndfieldResult } from "../services/endfield";
 import { decryptToken } from "../utils/token-crypto";
 import { getCooldownRemaining, setCooldown, formatCooldown } from "../utils/cooldown";
+import { logger } from "../core/logger";
 
 const CLAIM_COOLDOWN_MS = 30_000; // 30 seconds
 
@@ -109,7 +110,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         setCooldown("claim", interaction.user.id);
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error("Claim command failed:", error);
+        logger.error(error, "Claim command failed");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
@@ -122,7 +123,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 });
             }
         } catch (e) {
-            console.error("Failed to send error reply:", e);
+            logger.error(e, "Failed to send error reply");
         }
     }
 }

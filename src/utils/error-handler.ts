@@ -3,6 +3,7 @@
  */
 
 import { type Interaction, MessageFlags } from "discord.js";
+import { logger } from "../core/logger";
 
 /**
  * Handle interaction errors uniformly
@@ -15,7 +16,7 @@ export async function handleInteractionError(
 ): Promise<void> {
     const message = customMessage || "❌ An error occurred while processing your request.";
 
-    console.error(`[Error] Interaction ${interaction.id}:`, error);
+    logger.error(error, `[Error] Interaction ${interaction.id}`);
 
     if (!interaction.isRepliable()) return;
 
@@ -32,7 +33,7 @@ export async function handleInteractionError(
             });
         }
     } catch (sendError) {
-        console.error("[Error] Failed to send error response:", sendError);
+        logger.error(sendError, "[Error] Failed to send error response");
     }
 }
 

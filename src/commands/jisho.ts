@@ -2,6 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder, type ChatInputCommandInteraction } f
 import { searchJisho } from "../services/jisho";
 import { JISHO_COLOR, JISHO_ICON_URL } from "../constants/jisho";
 import type { JishoWord } from "../types/jisho";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the jisho command.
@@ -46,7 +47,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error("Jisho Command Error:", error);
+        logger.error(error, "Jisho Command Error");
         await interaction.editReply({
             content: "Terjadi kesalahan saat mencari kata di Jisho."
         });

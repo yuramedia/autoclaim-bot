@@ -1,4 +1,5 @@
 import { request, gql } from "graphql-request";
+import { logger } from "../core/logger";
 import type { AnilistMedia, AnilistResponse } from "../types";
 import { ANILIST_API_URL } from "../constants";
 
@@ -26,7 +27,7 @@ export async function searchAnime(title: string): Promise<AnilistMedia | null> {
         const data = await request<AnilistResponse>(ANILIST_API_URL, QUERY, { search: title });
         return data.Media;
     } catch (error) {
-        console.error(`Anilist search failed for "${title}":`, error);
+        logger.error(error as Error, `Anilist search failed for "${title}"`);
         return null;
     }
 }

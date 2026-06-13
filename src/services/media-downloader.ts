@@ -6,6 +6,7 @@
 import axios from "axios";
 import type { VKRResponse, VKRFormat, DownloadResult } from "../types/media-downloader";
 import { VKRDOWNLOADER_API, VKRDOWNLOADER_API_KEY, DEFAULT_MAX_DOWNLOAD_SIZE } from "../constants/media-downloader";
+import { logger } from "../core/logger";
 
 // Re-export types for backwards compatibility
 export type { VKRResponse, VKRFormat, DownloadResult };
@@ -46,8 +47,7 @@ export async function fetchMediaInfo(videoUrl: string): Promise<VKRResponse | nu
 
         return response.data;
     } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.error("VKrDownloader API error:", msg);
+        logger.error(error, "VKrDownloader API error");
         return null;
     }
 }
@@ -62,9 +62,9 @@ export async function downloadMedia(
     try {
         // Fetch media info
         const info = await fetchMediaInfo(videoUrl);
-        console.log("VKrDownloader raw response format count:", info?.formats?.length);
+        logger.debug({ formatCount: info?.formats?.length }, "VKrDownloader raw response format count");
         if (info?.formats && info.formats.length > 0) {
-            console.log("VKrDownloader first format sample:", info.formats[0]);
+            logger.debug({ firstFormat: info.formats[0] }, "VKrDownloader first format sample");
         }
 
         if (!info) {

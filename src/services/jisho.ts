@@ -1,4 +1,5 @@
 import axios from "axios";
+import { logger } from "../core/logger";
 import { JISHO_API_URL, JISHO_BASE_URL, JISHO_USER_AGENT } from "../constants/jisho";
 import type { JishoAPIResponse, JishoResult, JishoWord } from "../types/jisho";
 
@@ -56,13 +57,13 @@ export async function searchJisho(keyword: string): Promise<JishoWord[]> {
         });
 
         if (response.status !== 200) {
-            console.error(`Jisho API returned status code ${response.status}`);
+            logger.error(`Jisho API returned status code ${response.status}`);
             return [];
         }
 
         return response.data.data.map(result => parseJishoResult(result));
     } catch (error) {
-        console.error("Error fetching data from Jisho:", error);
+        logger.error(error as Error, "Error fetching data from Jisho");
         return [];
     }
 }

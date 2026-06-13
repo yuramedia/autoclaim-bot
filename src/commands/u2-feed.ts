@@ -14,6 +14,7 @@ import {
 import { getGuildSettings } from "../database/models/guild-settings";
 import type { IU2FeedSettings } from "../types/u2-feed";
 import { U2_DEFAULT_FILTER } from "../constants/u2-feed";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the u2-feed command.
@@ -142,7 +143,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
         }
     } catch (error) {
-        console.error("U2 feed command failed:", error);
+        logger.error(error, "U2 feed command failed");
         if (interaction.deferred || interaction.replied) {
             await interaction.editReply({
                 content: "❌ Terjadi kesalahan saat memproses perintah."

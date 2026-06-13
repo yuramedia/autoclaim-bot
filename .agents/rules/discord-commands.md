@@ -35,11 +35,13 @@ await interaction.editReply({ content: "Done!" });
 Always wrap command execution in try/catch:
 
 ```typescript
+import { logger } from "../core/logger";
+
 try {
     await interaction.deferReply();
     // Command logic
 } catch (error) {
-    console.error("Command failed:", error);
+    logger.error(error, "Command failed");
     const reply = interaction.deferred ? interaction.editReply : interaction.reply;
     await reply.call(interaction, {
         content: "An error occurred!",

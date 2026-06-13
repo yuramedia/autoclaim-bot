@@ -4,6 +4,7 @@
  */
 
 import axios from "axios";
+import { logger } from "../core/logger";
 import type { RedeemCode, HashblenResponse } from "../types";
 
 // Re-export types for backwards compatibility
@@ -30,7 +31,7 @@ export async function getCodes(): Promise<HashblenResponse | null> {
         }
         return null;
     } catch (error) {
-        console.error("Failed to fetch codes from Hashblen:", error);
+        logger.error(error as Error, "Failed to fetch codes from Hashblen");
         return null;
     }
 }

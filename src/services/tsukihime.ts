@@ -12,6 +12,7 @@ import type { TsukihimeTorrent, TsukihimeImages } from "../types/tsukihime.js";
 import { formatBytes } from "./nekobt.js";
 import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./amenzb.js";
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from "discord.js";
+import { logger } from "../core/logger.js";
 
 /**
  * Common headers for Tsukihime API requests
@@ -36,7 +37,7 @@ export async function fetchTsukihimeTorrentByNyaa(nyaaId: number): Promise<Tsuki
     try {
         return await fetchTsukihimeTorrent(`/torrents/nyaa/${nyaaId}`, `nyaa:${nyaaId}`);
     } catch (error) {
-        console.error(`[Tsukihime] Error in fetchTsukihimeTorrentByNyaa for ${nyaaId}:`, error);
+        logger.error(error, `[Tsukihime] Error in fetchTsukihimeTorrentByNyaa for ${nyaaId}`);
         return null;
     }
 }
@@ -50,7 +51,7 @@ export async function fetchTsukihimeTorrentBySukebei(sukebeiId: number): Promise
     try {
         return await fetchTsukihimeTorrent(`/torrents/sukebei/${sukebeiId}`, `sukebei:${sukebeiId}`);
     } catch (error) {
-        console.error(`[Tsukihime] Error in fetchTsukihimeTorrentBySukebei for ${sukebeiId}:`, error);
+        logger.error(error, `[Tsukihime] Error in fetchTsukihimeTorrentBySukebei for ${sukebeiId}`);
         return null;
     }
 }
@@ -64,7 +65,7 @@ export async function fetchTsukihimeTorrentByBtih(btih: string): Promise<Tsukihi
     try {
         return await fetchTsukihimeTorrent(`/torrents/btih/${btih.toLowerCase()}`, `btih:${btih.toLowerCase()}`);
     } catch (error) {
-        console.error(`[Tsukihime] Error in fetchTsukihimeTorrentByBtih for ${btih}:`, error);
+        logger.error(error, `[Tsukihime] Error in fetchTsukihimeTorrentByBtih for ${btih}`);
         return null;
     }
 }
@@ -92,9 +93,7 @@ async function fetchTsukihimeTorrent(path: string, cacheKey: string): Promise<Ts
         if (axios.isAxiosError(error) && error.response?.status === 404) {
             return null;
         }
-        const message = error instanceof Error ? error.message : String(error);
-        const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-        console.error(`[Tsukihime] Error fetching ${cacheKey}:`, status || message);
+        logger.error(error, `[Tsukihime] Error fetching ${cacheKey}`);
         return null;
     }
 }
@@ -149,7 +148,7 @@ export async function fetchTsukihimeImagesByNyaa(nyaaId: number): Promise<Tsukih
         const cacheKey = `nyaa:${nyaaId}`;
         return await fetchTsukihimeImagesWithCache(cacheKey, () => fetchTsukihimeTorrentByNyaa(nyaaId));
     } catch (error) {
-        console.error(`[Tsukihime] Error in fetchTsukihimeImagesByNyaa for ${nyaaId}:`, error);
+        logger.error(error, `[Tsukihime] Error in fetchTsukihimeImagesByNyaa for ${nyaaId}`);
         return null;
     }
 }
@@ -164,7 +163,7 @@ export async function fetchTsukihimeImagesBySukebei(sukebeiId: number): Promise<
         const cacheKey = `sukebei:${sukebeiId}`;
         return await fetchTsukihimeImagesWithCache(cacheKey, () => fetchTsukihimeTorrentBySukebei(sukebeiId));
     } catch (error) {
-        console.error(`[Tsukihime] Error in fetchTsukihimeImagesBySukebei for ${sukebeiId}:`, error);
+        logger.error(error, `[Tsukihime] Error in fetchTsukihimeImagesBySukebei for ${sukebeiId}`);
         return null;
     }
 }
@@ -179,7 +178,7 @@ export async function fetchTsukihimeImagesByBtih(btih: string): Promise<Tsukihim
         const cacheKey = `btih:${btih.toLowerCase()}`;
         return await fetchTsukihimeImagesWithCache(cacheKey, () => fetchTsukihimeTorrentByBtih(btih));
     } catch (error) {
-        console.error(`[Tsukihime] Error in fetchTsukihimeImagesByBtih for ${btih}:`, error);
+        logger.error(error, `[Tsukihime] Error in fetchTsukihimeImagesByBtih for ${btih}`);
         return null;
     }
 }
@@ -224,7 +223,7 @@ async function fetchTsukihimeImagesWithCache(
 
         return images;
     } catch (error) {
-        console.error(`[Tsukihime] Error in fetchTsukihimeImagesWithCache for ${cacheKey}:`, error);
+        logger.error(error, `[Tsukihime] Error in fetchTsukihimeImagesWithCache for ${cacheKey}`);
         return null;
     }
 }
@@ -238,7 +237,7 @@ export async function fetchTsukihimeTorrentById(torrentId: number): Promise<Tsuk
     try {
         return await fetchTsukihimeTorrent(`/torrents/${torrentId}`, `tsukihime:${torrentId}`);
     } catch (error) {
-        console.error(`[Tsukihime] Error in fetchTsukihimeTorrentById for ${torrentId}:`, error);
+        logger.error(error, `[Tsukihime] Error in fetchTsukihimeTorrentById for ${torrentId}`);
         return null;
     }
 }
@@ -392,7 +391,7 @@ export async function buildTsukihimeEmbed(
                     embed.setImage(mainImage);
                 }
             } catch (error) {
-                console.error("[Tsukihime] Failed to download screenshot:", error);
+                logger.error(error, "[Tsukihime] Failed to download screenshot");
                 embed.setImage(mainImage);
             }
         } else {

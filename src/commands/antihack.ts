@@ -112,6 +112,28 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                 channelIds.push(channel.id);
                 await updateAntihackSettings(interaction.guildId, { channelIds });
+
+                // Post a warning embed in the newly added trap channel and pin it
+                const guildChannel = await interaction.guild?.channels.fetch(channel.id);
+                if (guildChannel?.isTextBased()) {
+                    const warnEmbed = new EmbedBuilder()
+                        .setTitle("⚠️ Honeypot Channel")
+                        .setDescription(
+                            "This channel is part of the server's antihack protection system.\n\n" +
+                                "**DO NOT SEND ANY MESSAGES HERE.**\n\n" +
+                                "Any message sent here will result in an **automatic, permanent ban**."
+                        )
+                        .setColor(0xff5555)
+                        .setTimestamp();
+
+                    try {
+                        const sentMessage = await guildChannel.send({ embeds: [warnEmbed] });
+                        await sentMessage.pin().catch(() => {}); // ignore error if bot lacks pin permissions
+                    } catch (err) {
+                        logger.error(err, `Failed to send warning embed in channel ${channel.id}`);
+                    }
+                }
+
                 await interaction.editReply({
                     content:
                         `🛡️ Added <#${channel.id}> as a trap channel.\n` +

@@ -16,6 +16,7 @@ export * from "./u2-feed";
 export * from "./nekobt";
 export * from "./amenzb";
 export * from "./tsukihime";
+export * from "./antihack";
 
 /**
  * Discord Channel configurations.

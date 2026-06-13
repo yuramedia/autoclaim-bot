@@ -18,6 +18,7 @@ import * as jisho from "./jisho";
 import * as u2Feed from "./u2-feed";
 import * as crrelease from "./crrelease";
 import * as embedCommand from "./embed";
+import * as antihack from "./antihack";
 
 /**
  * A list of all available command modules.
@@ -42,7 +43,8 @@ export const commands = [
     jisho,
     u2Feed,
     crrelease,
-    embedCommand
+    embedCommand,
+    antihack
 ];
 
 /**

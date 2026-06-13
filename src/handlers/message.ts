@@ -17,6 +17,7 @@ import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
 import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
 import { getGuildSettings, type IGuildSettings } from "../database/models/guild-settings";
 import { getMaxDownloadSize } from "../constants/media-downloader";
+import { checkAntihack } from "./antihack";
 
 /**
  * Cache for storing video URLs and format details for interactive resolution selection.
@@ -47,6 +48,11 @@ export async function handleMessage(message: Message): Promise<void> {
 
         // Skip webhook messages
         if (message.webhookId) return;
+
+        // Antihack: check if this is a trap channel message
+        // If triggered (user banned), stop all further processing
+        const antihackTriggered = await checkAntihack(message);
+        if (antihackTriggered) return;
 
         // Skip if already processed
         if (processedMessages.has(message.id)) return;

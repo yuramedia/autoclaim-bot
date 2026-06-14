@@ -5,33 +5,21 @@
  */
 
 import { type Message, EmbedBuilder, PermissionFlagsBits } from "discord.js";
-import { getGuildSettings } from "../database/models/guild-settings";
+import { getGuildSettings, type IGuildSettings } from "../database/models/guild-settings";
 import { ANTIHACK_BAN_DELETE_SECONDS, ANTIHACK_EMBED_COLOR, ANTIHACK_MAX_MESSAGE_LENGTH } from "../constants";
 import { logger } from "../core/logger";
 import type { AntihackBanResult, AntihackLogData } from "../types/antihack";
 
 /**
- * Checks whether a channel is a configured antihack trap channel for the given guild.
- * @param guildId - The guild ID to check
- * @param channelId - The channel ID to check
- * @returns True if the channel is a trap channel
- */
-export async function isAntihackChannel(guildId: string, channelId: string): Promise<boolean> {
-    try {
-        const settings = await getGuildSettings(guildId);
-        return settings.antihack.enabled && settings.antihack.channelIds.includes(channelId);
-    } catch (error: unknown) {
-        logger.error(error, `[Antihack] Failed to check channel ${channelId} in guild ${guildId}`);
-        return false;
-    }
-}
-
-/**
  * Handles a message sent in a trap channel. Deletes the message,
  * bans the user (with 7 days of message deletion), and sends a
  * log embed to the configured log channel.
+ *
+ * Settings are fetched once and reused throughout the function to
+ * avoid redundant DB calls (fixes #21).
+ *
  * @param message - The Discord message that triggered the trap
- * @returns The result of the ban action
+ * @returns The result of the ban action, or null if not a trap channel
  */
 export async function handleAntihackMessage(message: Message): Promise<AntihackBanResult | null> {
     // Skip bots
@@ -45,9 +33,18 @@ export async function handleAntihackMessage(message: Message): Promise<AntihackB
 
     const guildId = message.guild.id;
 
-    // Check if this channel is a trap channel
-    const isTrap = await isAntihackChannel(guildId, message.channel.id);
-    if (!isTrap) return null;
+    // Fetch settings once and reuse throughout
+    let settings: IGuildSettings;
+    try {
+        settings = await getGuildSettings(guildId);
+    } catch {
+        return null;
+    }
+
+    // Check if this channel is a trap channel (inline, no separate DB call)
+    if (!settings.antihack.enabled || !settings.antihack.channelIds.includes(message.channel.id)) {
+        return null;
+    }
 
     const member = message.member;
     if (!member) return null;
@@ -69,8 +66,8 @@ export async function handleAntihackMessage(message: Message): Promise<AntihackB
 
         logger.info(`[Antihack] Banned ${message.author.tag} (${message.author.id}) in ${message.guild.name}`);
 
-        // Send log embed
-        await sendLogEmbed(message, {
+        // Send log embed — pass settings to avoid redundant DB call
+        await sendLogEmbed(message, settings, {
             userTag: message.author.tag,
             userId: message.author.id,
             avatarUrl: message.author.displayAvatarURL(),
@@ -103,19 +100,34 @@ export async function handleAntihackMessage(message: Message): Promise<AntihackB
 
 /**
  * Sends a log embed to the configured log channel for the guild.
+ *
+ * Uses channels.fetch() instead of channels.cache.get() to ensure
+ * the log channel is always resolved, even after a bot restart
+ * when the cache is cold (fixes #20).
+ *
  * @param message - The original triggering message (used to access the guild)
+ * @param settings - Guild settings (already fetched, avoids redundant DB call)
  * @param data - The log data to include in the embed
  */
-async function sendLogEmbed(message: Message, data: AntihackLogData): Promise<void> {
+async function sendLogEmbed(message: Message, settings: IGuildSettings, data: AntihackLogData): Promise<void> {
     if (!message.guild) return;
 
-    try {
-        const settings = await getGuildSettings(message.guild.id);
-        const logChannelId = settings.antihack.logChannelId;
-        if (!logChannelId) return;
+    const logChannelId = settings.antihack.logChannelId;
+    if (!logChannelId) return;
 
-        const logChannel = message.guild.channels.cache.get(logChannelId);
-        if (!logChannel?.isTextBased()) return;
+    try {
+        // Use fetch() instead of cache.get() to avoid cold-cache issues after restart
+        const logChannel = await message.guild.channels.fetch(logChannelId).catch(() => null);
+
+        if (!logChannel) {
+            logger.warn(`[Antihack] Log channel ${logChannelId} not found in guild ${message.guild.id}, skipping log`);
+            return;
+        }
+
+        if (!logChannel.isTextBased()) {
+            logger.warn(`[Antihack] Log channel ${logChannelId} is not text-based, skipping log`);
+            return;
+        }
 
         const embed = new EmbedBuilder()
             .setTitle("🛡️ Antihack Triggered")

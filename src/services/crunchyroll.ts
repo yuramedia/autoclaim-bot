@@ -149,7 +149,7 @@ export class CrunchyrollService {
         try {
             const response = await fetch("https://www.crunchyroll.com/rss/anime", {
                 headers: {
-                    "User-Agent": "Crunchyroll/3.50.0"
+                    "User-Agent": CRUNCHYROLL_USER_AGENT
                 }
             });
 
@@ -363,7 +363,7 @@ export class CrunchyrollService {
         try {
             const response = await fetch("https://www.crunchyroll.com/rss/anime", {
                 headers: {
-                    "User-Agent": "Crunchyroll/3.50.0"
+                    "User-Agent": CRUNCHYROLL_USER_AGENT
                 }
             });
 

@@ -311,3 +311,15 @@ export interface CrunchyrollBrowseResponse {
     /** List of browse items. */
     data: CrunchyrollBrowseItem[];
 }
+
+/**
+ * Represents a seasonal lineup announcement parsed from Crunchyroll news feed.
+ */
+export interface LineupAnnouncement {
+    title: string;
+    url: string;
+    description: string;
+    thumbnail: string | null;
+    author: string | null;
+    pubDate: string;
+}

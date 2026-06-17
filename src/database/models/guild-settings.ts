@@ -52,6 +52,7 @@ export interface IGuildSettings extends Document {
     guildId: string;
     embedFix: IEmbedFixSettings;
     crunchyrollFeed: ICrunchyrollFeedSettings;
+    crunchyrollLineup: ICrunchyrollFeedSettings;
     u2Feed: IU2FeedSettings;
     antihack: IAntihackSettings;
     createdAt: Date;
@@ -88,6 +89,7 @@ const GuildSettingsSchema = new Schema<IGuildSettings>(
         guildId: { type: String, required: true, unique: true, index: true },
         embedFix: { type: EmbedFixSettingsSchema, default: () => ({}) },
         crunchyrollFeed: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) },
+        crunchyrollLineup: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) },
         u2Feed: { type: U2FeedSettingsSchema, default: () => ({}) },
         antihack: { type: AntihackSettingsSchema, default: () => ({}) }
     },

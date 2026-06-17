@@ -16,7 +16,8 @@ export type {
     CrunchyrollEpisodes,
     FormattedEpisode,
     CrunchyrollSubtitle,
-    CrunchyrollPlayResponse
+    CrunchyrollPlayResponse,
+    LineupAnnouncement
 } from "./crunchyroll";
 
 // Code source types

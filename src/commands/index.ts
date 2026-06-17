@@ -19,6 +19,7 @@ import * as u2Feed from "./u2-feed";
 import * as crrelease from "./crrelease";
 import * as embedCommand from "./embed";
 import * as antihack from "./antihack";
+import * as cr from "./cr";
 
 /**
  * A list of all available command modules.
@@ -44,7 +45,8 @@ export const commands = [
     u2Feed,
     crrelease,
     embedCommand,
-    antihack
+    antihack,
+    cr
 ];
 
 /**

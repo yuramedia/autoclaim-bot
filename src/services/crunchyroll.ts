@@ -12,7 +12,8 @@ import type {
     CrunchyrollSubtitle,
     CrunchyrollPlayResponse,
     CrunchyrollBrowseItem,
-    CrunchyrollBrowseResponse
+    CrunchyrollBrowseResponse,
+    LineupAnnouncement
 } from "../types/crunchyroll";
 import { LANG_MAP, CR_RELEASE_ITEMS_PER_PAGE, CRUNCHYROLL_BASIC_AUTH, CRUNCHYROLL_USER_AGENT } from "../constants";
 import { config } from "../config";
@@ -839,5 +840,69 @@ export class CrunchyrollService {
             logger.error(error as Error, "Crunchyroll seasonal fetch error");
             return allSeries;
         }
+    }
+
+    /**
+     * Fetch seasonal lineup announcements or news from Crunchyroll RSS feed
+     */
+    async fetchLineupAnnouncements(onlySeasonal = true): Promise<LineupAnnouncement[]> {
+        try {
+            const response = await fetch("https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss", {
+                headers: {
+                    "User-Agent": this.userAgent
+                }
+            });
+
+            if (!response.ok) {
+                logger.error(`Failed to fetch news RSS: ${response.status}`);
+                return [];
+            }
+
+            const xml = await response.text();
+            const { parseStringPromise } = await import("xml2js");
+            const result = await parseStringPromise(xml);
+            const items = result?.rss?.channel?.[0]?.item || [];
+
+            const announcements: LineupAnnouncement[] = [];
+
+            for (const item of items) {
+                const title = item.title?.[0] || "";
+                const url = item.link?.[0] || "";
+
+                if (onlySeasonal) {
+                    const isSeasonal =
+                        /Season Lineup|Lineup Announced|Anime Season Lineup/i.test(title) ||
+                        /seasonal-lineup/i.test(url);
+                    if (!isSeasonal) continue;
+                }
+
+                const description = item.description?.[0] || "";
+                const author = item.author?.[0] || item["dc:creator"]?.[0] || null;
+                const thumbnail = item["media:thumbnail"]?.[0]?.$?.url || null;
+                const pubDate = item.pubDate?.[0] || new Date().toUTCString();
+
+                announcements.push({
+                    title,
+                    url,
+                    description,
+                    thumbnail,
+                    author,
+                    pubDate
+                });
+            }
+
+            return announcements;
+        } catch (error) {
+            logger.error(error as Error, "Error fetching lineup announcements");
+            return [];
+        }
+    }
+
+    /**
+     * Fetch latest season lineup announcements or news from Crunchyroll RSS feed
+     */
+    async fetchLatestLineupAnnouncement(onlySeasonal = true): Promise<LineupAnnouncement | null> {
+        const announcements = await this.fetchLineupAnnouncements(onlySeasonal);
+        return announcements[0] || null;
     }
 }

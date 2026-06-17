@@ -3,6 +3,7 @@ import { config } from "./config";
 import { connectDatabase } from "./database/connection";
 import { startScheduler, checkMissedClaims } from "./services/scheduler";
 import { startCrunchyrollFeed } from "./services/crunchyroll-scheduler";
+import { startCrunchyrollLineupFeed } from "./services/crunchyroll-lineup-scheduler";
 import { startU2Feed } from "./services/u2-feed-scheduler";
 import { handleInteraction } from "./handlers/interaction";
 import { handleMessage } from "./handlers/message";
@@ -31,6 +32,9 @@ client.once(Events.ClientReady, readyClient => {
 
     // Start Crunchyroll feed
     startCrunchyrollFeed(client);
+
+    // Start Crunchyroll lineup feed
+    startCrunchyrollLineupFeed(client);
 
     // Start U2 BDMV feed
     startU2Feed(client);

@@ -9,6 +9,7 @@ export const LANG_MAP: Record<string, string> = {
     "ja-JP": "Japanese",
     "id-ID": "Indonesian",
     "ms-MY": "Malay",
+    "ca-ES": "Catalan",
     "de-DE": "German",
     "es-LA": "Spanish (LA)",
     "es-ES": "Spanish (ES)",
@@ -29,7 +30,8 @@ export const LANG_MAP: Record<string, string> = {
     "zh-CN": "Mandarin",
     "zh-TW": "Mandarin (TW)",
     "ko-KR": "Korean",
-    "th-TH": "Thai"
+    "th-TH": "Thai",
+    "en-IN": "English (India)"
 };
 
 /**
@@ -66,8 +68,8 @@ export async function fetchCrunchyrollLanguages(): Promise<void> {
         // Snapshot current overrides before mutating
         const overrides = { ...LANG_MAP };
 
-        // Combine: remote data as base, our clean overrides take precedence
-        const newMap = { ...merged, ...overrides };
+        // Combine: fallback defaults first, remote data takes precedence (matches the links)
+        const newMap = { ...overrides, ...merged };
 
         // Mutate in place so existing references to LANG_MAP stay valid
         for (const key of Object.keys(LANG_MAP)) delete LANG_MAP[key];

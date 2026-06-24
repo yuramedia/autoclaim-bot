@@ -70,10 +70,13 @@ export const data = new SlashCommandBuilder()
             .setDescription("Pilih subtitle")
             .setRequired(false)
             .addChoices(
-                ...Object.entries(LANG_MAP)
-                    .filter(([code]) => code !== "ja-JP")
-                    .slice(0, 25)
-                    .map(([, name]) => ({ name, value: name }))
+                ...Array.from(
+                    new Map(
+                        Object.entries(LANG_MAP)
+                            .filter(([code]) => code !== "ja-JP")
+                            .map(([, name]) => [name, { name, value: name }])
+                    ).values()
+                ).slice(0, 25)
             )
     );
 

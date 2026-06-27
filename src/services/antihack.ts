@@ -55,14 +55,15 @@ export async function handleAntihackMessage(message: Message): Promise<AntihackB
     const channelName = "name" in message.channel ? (message.channel.name as string) : message.channel.id;
 
     try {
-        // Delete the offending message
-        await message.delete().catch(() => {});
-
-        // Ban the user with 7 days of message deletion
+        // Ban the user FIRST — if ban fails (insufficient perms, guild owner, etc.)
+        // we preserve the message as evidence and don't suppress further processing.
         await message.guild.members.ban(member, {
             reason: `[Antihack] Sent message in trap channel #${channelName}`,
             deleteMessageSeconds: ANTIHACK_BAN_DELETE_SECONDS
         });
+
+        // Delete the offending message only after successful ban
+        await message.delete().catch(() => {});
 
         logger.info(`[Antihack] Banned ${message.author.tag} (${message.author.id}) in ${message.guild.name}`);
 

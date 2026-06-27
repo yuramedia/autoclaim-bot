@@ -11,9 +11,22 @@ import { ramen } from "../core/ramen";
 import type { LineupAnnouncement } from "../types";
 
 const POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const MAX_SEEN_LINEUPS = 500;
 const seenLineups = new Set<string>();
 const lock = { isChecking: false };
 let isFirstRun = true;
+
+/** Prune oldest entries when the set exceeds MAX_SEEN_LINEUPS */
+function pruneSeenLineups(): void {
+    if (seenLineups.size <= MAX_SEEN_LINEUPS) return;
+    const excess = seenLineups.size - MAX_SEEN_LINEUPS;
+    let removed = 0;
+    for (const key of seenLineups) {
+        if (removed >= excess) break;
+        seenLineups.delete(key);
+        removed++;
+    }
+}
 
 const service = new CrunchyrollService();
 
@@ -59,9 +72,11 @@ async function initializeCache(): Promise<void> {
         }
 
         logger.info(`📺 Cached ${seenLineups.size} lineup URLs`);
-        isFirstRun = false;
     } catch (error) {
         logger.error(error as Error, "Failed to initialize Crunchyroll lineup cache");
+    } finally {
+        // Always transition out of first-run mode, even on failure.
+        isFirstRun = false;
     }
 }
 
@@ -72,17 +87,25 @@ async function checkForNewAnnouncements(): Promise<void> {
         if (announcements.length === 0) return;
 
         const newAnnouncements: LineupAnnouncement[] = [];
+        const pendingUrls: string[] = []; // URLs to commit after successful publish
 
         for (const item of announcements) {
             if (!seenLineups.has(item.url)) {
-                seenLineups.add(item.url);
+                pendingUrls.push(item.url); // Defer marking as seen
                 if (!isFirstRun) {
                     newAnnouncements.push(item);
                 }
             }
         }
 
-        if (newAnnouncements.length === 0) return;
+        if (newAnnouncements.length === 0) {
+            // No new announcements — commit pending URLs for first-run items
+            for (const url of pendingUrls) {
+                seenLineups.add(url);
+            }
+            pruneSeenLineups();
+            return;
+        }
 
         logger.info(`📺 Found ${newAnnouncements.length} new Crunchyroll seasonal lineup announcement(s)`);
 
@@ -101,6 +124,12 @@ async function checkForNewAnnouncements(): Promise<void> {
             announcements: newAnnouncements,
             targetChannelIds
         });
+
+        // Commit seen URLs only after successful publish
+        for (const url of pendingUrls) {
+            seenLineups.add(url);
+        }
+        pruneSeenLineups();
     } catch (error) {
         logger.error(error as Error, "Crunchyroll lineup feed check error");
     } finally {

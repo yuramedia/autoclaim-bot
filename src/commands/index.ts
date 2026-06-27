@@ -9,7 +9,6 @@ import * as help from "./help";
 import * as ping from "./ping";
 import * as embedSettings from "./embed-settings";
 import * as statistic from "./statistic";
-import * as speedtest from "./speedtest";
 import * as bestrelease from "./bestrelease";
 import * as crunchyrollFeed from "./crunchyroll-feed";
 import * as kbbi from "./kbbi";
@@ -36,7 +35,6 @@ export const commands = [
     statistic,
     redeem,
     embedSettings,
-    speedtest,
     bestrelease,
     crunchyrollFeed,
     kbbi,

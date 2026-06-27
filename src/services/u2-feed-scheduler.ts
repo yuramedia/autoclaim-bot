@@ -19,6 +19,7 @@ import type { FormattedU2Item } from "../types/u2-feed";
  */
 let cachedItems: FormattedU2Item[] = [];
 let isFirstCheck = true;
+const u2Lock = { isChecking: false };
 
 /**
  * Check if two items are equal (for U2, match on link OR title)
@@ -78,12 +79,20 @@ export function startU2Feed(client: Client): void {
  * 5. On subsequent checks: post unposted items
  */
 async function checkFeed(service: U2FeedService, feedUrl: string): Promise<void> {
+    // Prevent concurrent checkFeed executions
+    if (u2Lock.isChecking) {
+        logger.info("📦 Skipping U2 feed check — previous run still in progress");
+        return;
+    }
+    u2Lock.isChecking = true;
+
     try {
         const rawItems = await service.fetchFeed(feedUrl);
         if (!rawItems || rawItems.length === 0) {
             if (isFirstCheck) {
-                logger.info("📦 U2 feed empty on first check. Feed may be down.");
-                isFirstCheck = false;
+                logger.info("📦 U2 feed empty on first check. Feed may be down. Will retry on next poll.");
+                // Don't transition out of first-check mode on empty —
+                // retry next poll instead, to avoid notification flood on recovery.
             }
             return;
         }
@@ -122,7 +131,8 @@ async function checkFeed(service: U2FeedService, feedUrl: string): Promise<void>
         await postNewItems();
     } catch (error) {
         logger.error(error, "U2 feed check error:");
-        if (isFirstCheck) isFirstCheck = false;
+    } finally {
+        u2Lock.isChecking = false;
     }
 }
 

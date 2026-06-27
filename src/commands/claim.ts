@@ -76,8 +76,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 inline: false
             });
 
-            user.hoyolab.lastClaim = new Date();
-            user.hoyolab.lastClaimResult = results.map(r => `${r.game}: ${r.success ? "✅" : "❌"}`).join(", ");
+            // Atomic update — avoids race with scheduler overwriting the same document
+            const hoyolabResultText = results.map(r => `${r.game}: ${r.success ? "✅" : "❌"}`).join(", ");
+            await User.updateOne(
+                { discordId: interaction.user.id },
+                { $set: { "hoyolab.lastClaim": new Date(), "hoyolab.lastClaimResult": hoyolabResultText } }
+            );
             hasResults = true;
         }
 
@@ -94,8 +98,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 inline: false
             });
 
-            user.endfield.lastClaim = new Date();
-            user.endfield.lastClaimResult = result.success ? "✅ Success" : `❌ ${result.message}`;
+            // Atomic update — avoids race with scheduler overwriting the same document
+            const endfieldResultText = result.success ? "✅ Success" : `❌ ${result.message}`;
+            await User.updateOne(
+                { discordId: interaction.user.id },
+                { $set: { "endfield.lastClaim": new Date(), "endfield.lastClaimResult": endfieldResultText } }
+            );
             hasResults = true;
         }
 
@@ -106,19 +114,28 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             return;
         }
 
-        await user.save();
         setCooldown("claim", interaction.user.id);
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         logger.error(error, "Claim command failed");
+        // Special-case token decryption/format errors — give actionable remediation
+        const isDecryptError =
+            error instanceof Error &&
+            (error.message.includes("decryption failed") ||
+                error.message.includes("not in encrypted format") ||
+                error.message.includes("encryption key"));
+        const userMessage = isDecryptError
+            ? "❌ Your stored token could not be decrypted. This may happen after a key rotation. " +
+              "Please re-run `/setup-hoyolab` or `/setup-endfield` to update your credentials."
+            : "❌ An error occurred while executing the claim command.";
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
-                    content: "❌ An error occurred while executing the claim command."
+                    content: userMessage
                 });
             } else {
                 await interaction.reply({
-                    content: "❌ An error occurred while executing the claim command.",
+                    content: userMessage,
                     flags: MessageFlags.Ephemeral
                 });
             }

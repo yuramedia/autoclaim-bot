@@ -281,8 +281,9 @@ export class EndfieldService {
         logger.info("[Endfield] Starting auth pipeline...");
 
         // Step 1: Get OAuth code from ACCOUNT_TOKEN
-        const decodedToken = decodeURIComponent(this.accountToken);
-        const oauthCode = await getOAuthCode(decodedToken);
+        // Token is now stored in decoded form (URI-decoded at entry point in endfield-modal),
+        // so no decodeURIComponent needed here.
+        const oauthCode = await getOAuthCode(this.accountToken);
         if (!oauthCode) {
             return {
                 success: false,

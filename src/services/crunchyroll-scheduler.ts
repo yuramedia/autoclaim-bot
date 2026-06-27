@@ -77,9 +77,13 @@ async function initializeCache(service: CrunchyrollService): Promise<void> {
         pruneSeenEpisodes();
 
         logger.info(`📺 Cached ${seenEpisodes.size} episodes`);
-        isFirstRun = false;
     } catch (error) {
         logger.error(error as Error, "Failed to initialize Crunchyroll cache");
+    } finally {
+        // Always transition out of first-run mode, even on failure.
+        // If init fails, the next successful poll will treat all items as new
+        // — better than staying permanently silent.
+        isFirstRun = false;
     }
 }
 
@@ -92,22 +96,23 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
         // Fetch RSS publishers for enrichment (original)
         await service.fetchRssPublishers();
 
-        // Find new or edited episodes
+        // Find new or edited episodes — but don't mark them as seen until after publish
+        const pendingSeen: Map<string, string> = new Map(); // id → title, to be committed after publish
         const newEpisodes: { episode: FormattedEpisode; isEdited: boolean }[] = [];
         for (const ep of episodes) {
             const prevTitle = seenEpisodes.get(ep.id);
 
             if (prevTitle === undefined) {
-                // New episode
-                seenEpisodes.set(ep.id, ep.title);
+                // New episode — defer marking as seen until after successful publish
+                pendingSeen.set(ep.id, ep.title);
                 if (!isFirstRun) {
                     const formatted = service.formatEpisode(ep);
                     formatted.publisher = service.getPublisher(ep.external_id);
                     newEpisodes.push({ episode: formatted, isEdited: false });
                 }
             } else if (prevTitle !== ep.title) {
-                // Edited episode (title changed)
-                seenEpisodes.set(ep.id, ep.title);
+                // Edited episode (title changed) — defer marking as seen until after successful publish
+                pendingSeen.set(ep.id, ep.title);
                 if (!isFirstRun) {
                     logger.info(`📺 Detected edit on ${ep.id}`);
                     const formatted = service.formatEpisode(ep);
@@ -116,9 +121,15 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
                 }
             }
         }
-        pruneSeenEpisodes();
 
-        if (newEpisodes.length === 0) return;
+        if (newEpisodes.length === 0) {
+            // No new episodes — commit pending seen entries for first-run items
+            for (const [id, title] of pendingSeen) {
+                seenEpisodes.set(id, title);
+            }
+            pruneSeenEpisodes();
+            return;
+        }
 
         // Enrich with series posters
         const rawEpisodes = newEpisodes.map(e => e.episode);
@@ -172,7 +183,14 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
                 episodes: episodesToPublish,
                 targetChannelIds
             });
+
+            // Commit seen episodes only after successful publish
+            for (const [id, title] of pendingSeen) {
+                seenEpisodes.set(id, title);
+            }
         }
+
+        pruneSeenEpisodes();
     } catch (error) {
         logger.error(error as Error, "Crunchyroll feed check error");
     } finally {

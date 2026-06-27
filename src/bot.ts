@@ -28,7 +28,7 @@ client.once(Events.ClientReady, readyClient => {
     startScheduler(client);
 
     // Check for missed claims (recovery after downtime)
-    checkMissedClaims();
+    checkMissedClaims(client);
 
     // Start Crunchyroll feed
     startCrunchyrollFeed(client);

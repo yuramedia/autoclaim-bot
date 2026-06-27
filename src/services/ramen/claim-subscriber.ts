@@ -12,12 +12,17 @@ export interface ClaimResultEvent {
     isTokenError?: boolean;
 }
 
-ramen.subscribe<ClaimResultEvent>("account:claim_result", async (data): Promise<void> => {
+ramen.subscribe<ClaimResultEvent>("account:claim_result", async (data, meta): Promise<void> => {
     try {
         const { discordId, results, isTokenError } = data;
 
-        // Only send DMs from Shard 0 to prevent duplicates in a sharded setup.
+        // Only send DMs from Shard 0 AND only for events originating from Shard 0.
+        // This prevents duplicate DMs in multi-shard deployments where Shard 0
+        // receives both its own local events AND cross-shard relayed events.
         if (client.shard && client.shard.ids[0] !== 0) {
+            return;
+        }
+        if (meta.originShardId !== 0) {
             return;
         }
 

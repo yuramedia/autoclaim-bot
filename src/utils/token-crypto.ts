@@ -173,13 +173,15 @@ export function decryptTokenCompat(value: string): DecryptResult {
 }
 
 /**
- * Decrypt a token string — strict mode, throws on failure.
- * Use this when you need the decrypted value and want errors to propagate.
- * For backward-compatible decryption with auto-migration, use decryptTokenCompat() instead.
+ * Decrypt a token string — strict mode, throws on legacy/plaintext formats.
+ *
+ * @deprecated Use `decryptTokenCompat()` instead for backward-compatible decryption
+ * with auto-re-encryption. This function throws on legacy and plaintext tokens,
+ * which will break existing users whose tokens are not yet in v1 format.
  *
  * @param value - The encrypted token string.
  * @returns The decrypted plaintext token.
- * @throws Error if decryption fails or format is invalid.
+ * @throws Error if token is in legacy or plaintext format (use decryptTokenCompat for migration).
  */
 export function decryptToken(value: string): string {
     const result = decryptTokenCompat(value);
@@ -195,8 +197,9 @@ export function decryptToken(value: string): string {
 
 /**
  * Safe decryption wrapper that returns a result object instead of throwing.
- * Useful for callers that need to distinguish between decryption success and failure
- * without disrupting their flow (e.g., migration scripts, diagnostics).
+ *
+ * @deprecated Use `decryptTokenCompat()` instead — it provides the same
+ * non-throwing behavior with the `needsReEncryption` flag for auto-migration.
  *
  * @param value - The encrypted token string or potentially plaintext value.
  * @returns An object indicating whether decryption succeeded and the value.

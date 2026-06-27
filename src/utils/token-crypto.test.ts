@@ -7,6 +7,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
+import { createCipheriv, createHash, randomBytes } from "crypto";
 import { encryptToken, decryptToken, decryptTokenSafe } from "./token-crypto";
 
 // ── Round-trip ───────────────────────────────────────────────────────────────
@@ -128,6 +129,25 @@ describe("legacy format (3-part, no v1 prefix)", () => {
         parts[3] = "deadbeef".repeat(4);
         const legacyTampered = parts.slice(1).join(":");
         expect(() => decryptToken(legacyTampered)).toThrow();
+    });
+
+    test("decrypts real legacy tokens encrypted with pre-HKDF SHA-256 key", () => {
+        // Simulate how tokens were encrypted before the v1/HKDF change:
+        // old code used createHash("sha256").update(raw).digest() as the key,
+        // and stored as iv:authTag:ciphertext (3 parts, no version prefix).
+        // We re-create that exact process here to validate backward compatibility.
+        const rawKey = process.env.TOKEN_ENCRYPTION_KEY;
+        if (!rawKey) throw new Error("TOKEN_ENCRYPTION_KEY not set for test");
+        const legacyKey = createHash("sha256").update(rawKey).digest();
+        const iv = randomBytes(16);
+        const cipher = createCipheriv("aes-256-gcm", legacyKey, iv);
+        const plaintext = "ltoken_v2=old_sha256_encrypted_token; ltuid_v2=12345;";
+        const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+        const authTag = cipher.getAuthTag();
+        const legacyFormat = `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted.toString("hex")}`;
+
+        // decryptToken should successfully decrypt this using the legacy SHA-256 key fallback
+        expect(decryptToken(legacyFormat)).toBe(plaintext);
     });
 });
 

@@ -28,7 +28,18 @@ export async function handleEndfieldModal(interaction: ModalSubmitInteraction): 
 
         // URI-decode before validation and storage, so the stored token is always the decoded form
         // (prevents mismatch with endfield.ts claim() which previously decoded at runtime)
-        const decodedToken = decodeURIComponent(accountToken);
+        let decodedToken: string;
+        try {
+            decodedToken = decodeURIComponent(accountToken);
+        } catch {
+            // decodeURIComponent throws URIError on malformed percent-encoding (e.g. "%2" without a second digit)
+            await interaction.editReply({
+                content:
+                    "❌ Invalid token: contains malformed percent-encoding. " +
+                    "Please copy the token exactly as shown on the Endfield cookie store page."
+            });
+            return;
+        }
 
         const nickname = interaction.fields.getTextInputValue("endfield-nickname")?.trim() || "Unknown";
 

@@ -193,7 +193,17 @@ async function processUserClaim(user: IUser): Promise<void> {
 
         // Detect token errors — notify regardless of notifyOnClaim preference.
         // Uses structured Endfield tokenExpired flag + Hoyolab string patterns.
-        const TOKEN_ERROR_PATTERNS = ["expired", "invalid token", "ACCOUNT_TOKEN", "cookie_token", "Please log in"];
+        // Includes decrypt failure strings so users get notified even if decryptToken throws.
+        const TOKEN_ERROR_PATTERNS = [
+            "expired",
+            "invalid token",
+            "ACCOUNT_TOKEN",
+            "cookie_token",
+            "Please log in",
+            "decryption failed",
+            "not in encrypted format",
+            "encryption key"
+        ];
         const hasTokenError =
             hasTokenExpired ||
             results.some(r => TOKEN_ERROR_PATTERNS.some(p => r.toLowerCase().includes(p.toLowerCase())));

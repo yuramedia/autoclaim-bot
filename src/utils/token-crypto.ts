@@ -15,7 +15,7 @@
  * Use decryptTokenSafe() for callers that need graceful handling of legacy/malformed data.
  */
 
-import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from "crypto";
 import { config } from "../config";
 import { logger } from "../core/logger";
 
@@ -24,21 +24,27 @@ const IV_LENGTH = 16; // bytes
 const FORMAT_VERSION = "v1";
 const HKDF_INFO = "aes-256-gcm-token-encryption"; // application-specific info for HKDF
 
-/** Derive a 32-byte key from the config value using HKDF-SHA256. */
+/** Derive a 32-byte key from the config value using HKDF-SHA256 (v1 format). */
 function getKey(): Buffer {
     const raw = config.security.tokenEncryptionKey;
-    // config.ts already validates this on startup and calls process.exit(1) if missing,
-    // but we keep this guard as a safety net for any out-of-order import scenarios.
     if (!raw) {
         throw new Error(
             "TOKEN_ENCRYPTION_KEY is not set. Add it to your .env file. " +
                 "Any random string works — e.g. run: openssl rand -hex 32"
         );
     }
-    // HKDF provides proper key derivation with application separation.
-    // Empty salt is fine — the env var itself provides entropy.
-    // The info string ensures the derived key is unique to this application.
     return Buffer.from(hkdfSync("sha256", raw, "", HKDF_INFO, 32));
+}
+
+/** Derive a 32-byte key using the legacy single-pass SHA-256 method (pre-v1 format).
+ *  Used as a fallback for decrypting 3-part tokens that were encrypted before HKDF was introduced.
+ */
+function getLegacyKey(): Buffer {
+    const raw = config.security.tokenEncryptionKey;
+    if (!raw) {
+        throw new Error("TOKEN_ENCRYPTION_KEY is not set.");
+    }
+    return createHash("sha256").update(raw).digest();
 }
 
 /**
@@ -92,22 +98,42 @@ export function decryptToken(value: string): string {
 
     // Legacy format: iv:authTag:ciphertext (3 parts, no version prefix)
     // Support for tokens encrypted before the v1 format was introduced.
+    // Try HKDF-derived key first (for recently-encrypted legacy tokens),
+    // then fall back to legacy SHA-256 key (for older tokens encrypted before HKDF).
     if (parts.length === 3) {
         const [ivHex, authTagHex, encryptedHex] = parts;
         if (!ivHex || !authTagHex || encryptedHex === undefined) {
             throw new Error("Invalid legacy encrypted token format: empty segments");
         }
+        const iv = Buffer.from(ivHex, "hex");
+        const authTag = Buffer.from(authTagHex, "hex");
+        const encrypted = Buffer.from(encryptedHex, "hex");
+
+        // Try HKDF key first
         try {
             const key = getKey();
-            const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, "hex"));
-            decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
+            const decipher = createDecipheriv(ALGORITHM, key, iv);
+            decipher.setAuthTag(authTag);
+            return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+        } catch {
+            // HKDF key failed — try legacy SHA-256 key
+        }
 
-            return Buffer.concat([decipher.update(Buffer.from(encryptedHex, "hex")), decipher.final()]).toString(
-                "utf8"
+        // Try legacy SHA-256 key (pre-HKDF encryption)
+        try {
+            const legacyKey = getLegacyKey();
+            const decipher = createDecipheriv(ALGORITHM, legacyKey, iv);
+            decipher.setAuthTag(authTag);
+            const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+            logger.info(
+                "[token-crypto] Successfully decrypted legacy token with SHA-256 key. " +
+                    "This token should be re-encrypted in v1 format at next save."
             );
+            return decrypted;
         } catch {
             throw new Error(
-                "Token decryption failed (legacy format) — encryption key may have changed or data is corrupted"
+                "Token decryption failed (legacy format) — tried both HKDF and SHA-256 keys. " +
+                    "Encryption key may have changed or data is corrupted."
             );
         }
     }

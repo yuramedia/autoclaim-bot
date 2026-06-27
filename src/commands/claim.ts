@@ -118,14 +118,24 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         logger.error(error, "Claim command failed");
+        // Special-case token decryption/format errors — give actionable remediation
+        const isDecryptError =
+            error instanceof Error &&
+            (error.message.includes("decryption failed") ||
+                error.message.includes("not in encrypted format") ||
+                error.message.includes("encryption key"));
+        const userMessage = isDecryptError
+            ? "❌ Your stored token could not be decrypted. This may happen after a key rotation. " +
+              "Please re-run `/setup-hoyolab` or `/setup-endfield` to update your credentials."
+            : "❌ An error occurred while executing the claim command.";
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
-                    content: "❌ An error occurred while executing the claim command."
+                    content: userMessage
                 });
             } else {
                 await interaction.reply({
-                    content: "❌ An error occurred while executing the claim command.",
+                    content: userMessage,
                     flags: MessageFlags.Ephemeral
                 });
             }

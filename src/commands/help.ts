@@ -76,8 +76,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     value: [
                         "`/status` - Lihat status token & riwayat claim",
                         "`/statistic` - Lihat statistik claim keseluruhan",
-                        "`/ping` - Cek latency bot",
-                        "`/speedtest` - Test kecepatan network bot"
+                        "`/ping` - Cek latency bot"
                     ].join("\n"),
                     inline: false
                 },

@@ -87,7 +87,15 @@ ramen.subscribe<U2TorrentsEvent>("u2:new_torrents", async (data): Promise<void> 
                     // Apply guild's filter — use regex only if pattern is safe,
                     // otherwise fall back to simple string matching to prevent ReDoS.
                     const useRegex = isSafeRegex(target.filter);
-                    const filterRegex = useRegex ? new RegExp(target.filter, "i") : null;
+                    let filterRegex: RegExp | null = null;
+                    if (useRegex) {
+                        try {
+                            filterRegex = new RegExp(target.filter, "i");
+                        } catch {
+                            // Invalid regex syntax — treat as unsafe and fall back to substring
+                            filterRegex = null;
+                        }
+                    }
 
                     for (const item of items) {
                         if (filterRegex) {

@@ -32,7 +32,7 @@
         "graphql": "^17.0.1",
         "graphql-request": "^7.4.0",
         "he": "^1.2.0",
-        "mongoose": "^9.7.2",
+        "mongoose": "^9.7.3",
         "node-cron": "^4.5.0",
         "pino": "^10.3.1",
         "pino-pretty": "^13.1.3",

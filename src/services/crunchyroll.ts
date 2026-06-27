@@ -32,6 +32,8 @@ let accountAuthExpiresAt = 0;
  * Supports both anonymous auth and account-based premium auth.
  */
 export class CrunchyrollService {
+    private readonly subtitleCollator = new Intl.Collator("en", { sensitivity: "base" });
+
     private readonly API_BASE = "https://beta-api.crunchyroll.com";
     private basicAuth = CRUNCHYROLL_BASIC_AUTH;
     private userAgent = CRUNCHYROLL_USER_AGENT;
@@ -267,9 +269,7 @@ export class CrunchyrollService {
         // Format duration
         const duration = this.formatDuration(meta.duration_ms);
 
-        // Format subtitles - convert locale codes to language names
-        const subtitles =
-            meta.subtitle_locales?.length > 0 ? meta.subtitle_locales.map(loc => LANG_MAP[loc] || loc).join(", ") : "-";
+        const subtitles = this.formatSubtitleLocales(meta.subtitle_locales);
 
         return {
             id: ep.id,
@@ -325,6 +325,31 @@ export class CrunchyrollService {
         formatted += `${seconds}s`;
 
         return formatted;
+    }
+
+    /**
+     * Formats subtitle locales for Discord embed output.
+     * Arabic variants are pinned first and each label is wrapped in bidi isolate markers
+     * so mixed RTL/LTR language lists render in a stable order.
+     */
+    private formatSubtitleLocales(locales: string[] | undefined): string {
+        if (!locales || locales.length === 0) return "-";
+
+        const unique = Array.from(new Set(locales));
+        const sorted = unique.toSorted((a, b) => {
+            const aIsArabic = a.toLowerCase().startsWith("ar");
+            const bIsArabic = b.toLowerCase().startsWith("ar");
+
+            if (aIsArabic !== bIsArabic) {
+                return aIsArabic ? -1 : 1;
+            }
+
+            const aLabel = LANG_MAP[a] || a;
+            const bLabel = LANG_MAP[b] || b;
+            return this.subtitleCollator.compare(aLabel, bLabel);
+        });
+
+        return sorted.map(loc => `\u2068${LANG_MAP[loc] || loc}\u2069`).join(", ");
     }
 
     // Series poster cache: seriesId -> posterUrl (capped)

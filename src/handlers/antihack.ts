@@ -17,5 +17,8 @@ import { handleAntihackMessage } from "../services/antihack";
  */
 export async function checkAntihack(message: Message): Promise<boolean> {
     const result = await handleAntihackMessage(message);
-    return result !== null;
+    // Only suppress further processing when ban actually succeeded.
+    // Failed bans (insufficient permissions, guild owner, etc.) should NOT
+    // block embed-fix processing — the user wasn't banned.
+    return result !== null && result.success;
 }

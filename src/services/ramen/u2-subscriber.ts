@@ -60,6 +60,22 @@ function buildItemEmbed(item: FormattedU2Item): EmbedBuilder {
     return embed;
 }
 
+/**
+ * Check if a regex pattern is safe to execute (prevents ReDoS).
+ * Rejects patterns that are too long or contain nested quantifiers like (a+)+.
+ * @param pattern - The regex pattern string to validate.
+ * @returns True if the pattern is considered safe.
+ */
+function isSafeRegex(pattern: string): boolean {
+    // Reject overly long patterns
+    if (pattern.length > 200) return false;
+    // Reject nested quantifiers: (…+)+, (…*)+, (…+)*, (…*)*, etc.
+    // Simplified check — catches the most common dangerous patterns.
+    const nestedQuantifier = /\([^)]*[+*][^)]*\)[+*]/;
+    if (nestedQuantifier.test(pattern)) return false;
+    return true;
+}
+
 ramen.subscribe<U2TorrentsEvent>("u2:new_torrents", async (data): Promise<void> => {
     try {
         const { items, targets } = data;
@@ -68,11 +84,18 @@ ramen.subscribe<U2TorrentsEvent>("u2:new_torrents", async (data): Promise<void> 
             try {
                 const channel = client.channels.cache.get(target.channelId);
                 if (channel && channel instanceof TextChannel) {
-                    // Apply guild's filter regex
-                    const filterRegex = new RegExp(target.filter, "i");
+                    // Apply guild's filter — use regex only if pattern is safe,
+                    // otherwise fall back to simple string matching to prevent ReDoS.
+                    const useRegex = isSafeRegex(target.filter);
+                    const filterRegex = useRegex ? new RegExp(target.filter, "i") : null;
 
                     for (const item of items) {
-                        if (!filterRegex.test(item.title)) continue;
+                        if (filterRegex) {
+                            if (!filterRegex.test(item.title)) continue;
+                        } else {
+                            // Fallback: simple case-insensitive substring match
+                            if (!item.title.toLowerCase().includes(target.filter.toLowerCase())) continue;
+                        }
 
                         const embed = buildItemEmbed(item);
                         const message = await channel.send({ embeds: [embed] });

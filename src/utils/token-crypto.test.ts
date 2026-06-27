@@ -1,34 +1,42 @@
 /**
  * Unit tests for token-crypto.ts
  *
- * Covers: encrypt → decrypt round-trip, v1 format validation,
- * IV randomness (same plaintext → different ciphertext),
- * HKDF key derivation, legacy format support, and error behavior.
+ * Covers: encrypt → decryptCompat round-trip, v1 format validation,
+ * IV randomness, HKDF key derivation, legacy format support,
+ * plaintext backward-compat, and error behavior.
  */
 
 import { describe, test, expect } from "bun:test";
 import { createCipheriv, createHash, randomBytes } from "crypto";
-import { encryptToken, decryptToken, decryptTokenSafe } from "./token-crypto";
+import { encryptToken, decryptToken, decryptTokenCompat, decryptTokenSafe } from "./token-crypto";
 
-// ── Round-trip ───────────────────────────────────────────────────────────────
+// ── Round-trip via decryptTokenCompat ───────────────────────────────────────
 
-describe("encryptToken / decryptToken", () => {
-    test("round-trip: decrypt(encrypt(x)) === x", () => {
+describe("encryptToken / decryptTokenCompat", () => {
+    test("round-trip: decryptCompat(encrypt(x)) === x", () => {
         const token = "ltoken_v2=abc123; ltuid_v2=456789; cookie_token_v2=xyz;";
-        expect(decryptToken(encryptToken(token))).toBe(token);
+        const result = decryptTokenCompat(encryptToken(token));
+        expect(result.value).toBe(token);
+        expect(result.needsReEncryption).toBe(false);
     });
 
     test("works with short strings", () => {
-        expect(decryptToken(encryptToken("x"))).toBe("x");
+        const result = decryptTokenCompat(encryptToken("x"));
+        expect(result.value).toBe("x");
+        expect(result.needsReEncryption).toBe(false);
     });
 
     test("works with empty string", () => {
-        expect(decryptToken(encryptToken(""))).toBe("");
+        const result = decryptTokenCompat(encryptToken(""));
+        expect(result.value).toBe("");
+        expect(result.needsReEncryption).toBe(false);
     });
 
     test("works with unicode characters", () => {
         const token = "日本語テスト🎮";
-        expect(decryptToken(encryptToken(token))).toBe(token);
+        const result = decryptTokenCompat(encryptToken(token));
+        expect(result.value).toBe(token);
+        expect(result.needsReEncryption).toBe(false);
     });
 });
 
@@ -46,7 +54,6 @@ describe("encryptToken output format", () => {
         const encrypted = encryptToken("test-token");
         const parts = encrypted.split(":");
         const hexPattern = /^[0-9a-f]+$/i;
-        // Skip the "v1" prefix — only check the 3 data segments
         for (const part of parts.slice(1)) {
             expect(part).toMatch(hexPattern);
         }
@@ -66,39 +73,37 @@ describe("IV randomness", () => {
         const token = "same-hoyolab-token";
         const enc1 = encryptToken(token);
         const enc2 = encryptToken(token);
-        // Different IV → different output
         expect(enc1).not.toBe(enc2);
-        // Both still decrypt correctly
-        expect(decryptToken(enc1)).toBe(token);
-        expect(decryptToken(enc2)).toBe(token);
+        expect(decryptTokenCompat(enc1).value).toBe(token);
+        expect(decryptTokenCompat(enc2).value).toBe(token);
     });
 });
 
-// ── Error handling ───────────────────────────────────────────────────────────
+// ── decryptToken strict mode ─────────────────────────────────────────────────
 
-describe("decryptToken error behavior", () => {
-    test("throws on plaintext input (not encrypted format)", () => {
+describe("decryptToken strict mode (throws on legacy/plaintext)", () => {
+    test("succeeds on v1 format tokens", () => {
+        const token = "valid-v1-token";
+        expect(decryptToken(encryptToken(token))).toBe(token);
+    });
+
+    test("throws on plaintext input", () => {
         const plain = "ltoken_v2=old_plain_token; ltuid_v2=12345;";
-        expect(() => decryptToken(plain)).toThrow();
+        expect(() => decryptToken(plain)).toThrow(/legacy or plaintext format/);
     });
 
-    test("throws on wrong number of segments", () => {
-        expect(() => decryptToken("only:two")).toThrow();
-        expect(() => decryptToken("one")).toThrow();
-        expect(() => decryptToken("a:b:c:d:e")).toThrow();
-    });
-
-    test("throws on segments with non-hex data in 3-part format", () => {
-        expect(() => decryptToken("notHex:notHex:notHex")).toThrow();
+    test("throws on arbitrary strings", () => {
+        expect(() => decryptToken("only:two")).toThrow(/legacy or plaintext format/);
+        expect(() => decryptToken("one")).toThrow(/legacy or plaintext format/);
+        expect(() => decryptToken("a:b:c:d:e")).toThrow(/legacy or plaintext format/);
     });
 
     test("throws on tampered ciphertext (wrong auth tag)", () => {
         const encrypted = encryptToken("original");
         const parts = encrypted.split(":");
-        // Tamper with the ciphertext segment
         parts[3] = "deadbeef".repeat(4);
         const tampered = parts.join(":");
-        expect(() => decryptToken(tampered)).toThrow();
+        expect(() => decryptToken(tampered)).toThrow(/encryption key may have changed/);
     });
 
     test("throws on wrong version prefix", () => {
@@ -106,36 +111,35 @@ describe("decryptToken error behavior", () => {
         const parts = encrypted.split(":");
         parts[0] = "v2";
         const wrongVersion = parts.join(":");
-        expect(() => decryptToken(wrongVersion)).toThrow();
+        // v2 prefix with 4 parts doesn't match v1, falls through to legacy/plaintext handling
+        expect(() => decryptToken(wrongVersion)).toThrow(/legacy or plaintext format/);
     });
 });
 
-// ── Legacy format support ────────────────────────────────────────────────────
+// ── Legacy format backward compat ────────────────────────────────────────────
 
-describe("legacy format (3-part, no v1 prefix)", () => {
-    test("decrypts legacy 3-part format (iv:authTag:ciphertext)", () => {
-        // Encrypt to get a valid ciphertext, then strip the v1 prefix to simulate legacy format
+describe("decryptTokenCompat legacy format (3-part, no v1 prefix)", () => {
+    test("decrypts legacy 3-part format with needsReEncryption=true", () => {
         const encrypted = encryptToken("legacy-token");
         const parts = encrypted.split(":");
-        // Remove "v1" prefix → legacy format
         const legacy = parts.slice(1).join(":");
-        expect(decryptToken(legacy)).toBe("legacy-token");
+        const result = decryptTokenCompat(legacy);
+        expect(result.value).toBe("legacy-token");
+        expect(result.needsReEncryption).toBe(true);
     });
 
-    test("throws on legacy format with corrupted data", () => {
+    test("still returns value for corrupted 3-part format (fallback to plaintext)", () => {
         const encrypted = encryptToken("test");
         const parts = encrypted.split(":");
-        // Corrupt ciphertext, remove v1 prefix
         parts[3] = "deadbeef".repeat(4);
         const legacyTampered = parts.slice(1).join(":");
-        expect(() => decryptToken(legacyTampered)).toThrow();
+        const result = decryptTokenCompat(legacyTampered);
+        // When both HKDF and SHA-256 fail, the value is returned as-is for migration
+        expect(result.value).toBe(legacyTampered);
+        expect(result.needsReEncryption).toBe(true);
     });
 
     test("decrypts real legacy tokens encrypted with pre-HKDF SHA-256 key", () => {
-        // Simulate how tokens were encrypted before the v1/HKDF change:
-        // old code used createHash("sha256").update(raw).digest() as the key,
-        // and stored as iv:authTag:ciphertext (3 parts, no version prefix).
-        // We re-create that exact process here to validate backward compatibility.
         const rawKey = process.env.TOKEN_ENCRYPTION_KEY;
         if (!rawKey) throw new Error("TOKEN_ENCRYPTION_KEY not set for test");
         const legacyKey = createHash("sha256").update(rawKey).digest();
@@ -146,8 +150,26 @@ describe("legacy format (3-part, no v1 prefix)", () => {
         const authTag = cipher.getAuthTag();
         const legacyFormat = `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted.toString("hex")}`;
 
-        // decryptToken should successfully decrypt this using the legacy SHA-256 key fallback
-        expect(decryptToken(legacyFormat)).toBe(plaintext);
+        const result = decryptTokenCompat(legacyFormat);
+        expect(result.value).toBe(plaintext);
+        expect(result.needsReEncryption).toBe(true);
+    });
+});
+
+// ── Plaintext backward compat ────────────────────────────────────────────────
+
+describe("decryptTokenCompat plaintext tokens", () => {
+    test("returns plaintext as-is with needsReEncryption=true", () => {
+        const plain = "ltoken_v2=abc; ltuid_v2=123;";
+        const result = decryptTokenCompat(plain);
+        expect(result.value).toBe(plain);
+        expect(result.needsReEncryption).toBe(true);
+    });
+
+    test("arbitrary string returns as-is with needsReEncryption=true", () => {
+        const result = decryptTokenCompat("some-random-string");
+        expect(result.value).toBe("some-random-string");
+        expect(result.needsReEncryption).toBe(true);
     });
 });
 

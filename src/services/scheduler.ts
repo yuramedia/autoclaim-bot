@@ -12,7 +12,7 @@ import { HoyolabService, formatHoyolabResults } from "./hoyolab";
 import { EndfieldService, formatEndfieldResult } from "./endfield";
 import { config } from "../config";
 import { logger } from "../core/logger";
-import { decryptToken } from "../utils/token-crypto";
+import { decryptTokenCompat, encryptToken } from "../utils/token-crypto";
 
 /** Batch processing configuration */
 const BATCH_SIZE = 5; // Process 5 users concurrently
@@ -127,16 +127,21 @@ async function processUserClaim(user: IUser): Promise<void> {
             claimPromises.push(
                 (async () => {
                     try {
-                        const hoyolab = new HoyolabService(decryptToken(user.hoyolab!.token));
+                        const hoyolabDecrypt = decryptTokenCompat(user.hoyolab!.token);
+                        const hoyolab = new HoyolabService(hoyolabDecrypt.value);
                         const hoyolabResults = await hoyolab.claimAll(user.hoyolab!.games);
                         const resultText = formatHoyolabResults(hoyolabResults);
                         results.push("**Hoyolab**\n" + resultText);
 
-                        // Update last claim (atomic — avoids overwriting concurrent token updates)
-                        await User.updateOne(
-                            { discordId: user.discordId },
-                            { $set: { "hoyolab.lastClaim": new Date(), "hoyolab.lastClaimResult": resultText } }
-                        );
+                        // Update last claim (atomic) + re-encrypt if needed
+                        const hoyolabUpdate: Record<string, unknown> = {
+                            "hoyolab.lastClaim": new Date(),
+                            "hoyolab.lastClaimResult": resultText
+                        };
+                        if (hoyolabDecrypt.needsReEncryption) {
+                            hoyolabUpdate["hoyolab.token"] = encryptToken(hoyolabDecrypt.value);
+                        }
+                        await User.updateOne({ discordId: user.discordId }, { $set: hoyolabUpdate });
                     } catch (error: unknown) {
                         const err = error as { message?: string };
                         logger.error({
@@ -154,8 +159,9 @@ async function processUserClaim(user: IUser): Promise<void> {
             claimPromises.push(
                 (async () => {
                     try {
+                        const endfieldDecrypt = decryptTokenCompat(user.endfield!.accountToken);
                         const endfield = new EndfieldService({
-                            accountToken: decryptToken(user.endfield!.accountToken)
+                            accountToken: endfieldDecrypt.value
                         });
                         const endfieldResult = await endfield.claim();
                         const resultText = formatEndfieldResult(endfieldResult);
@@ -166,11 +172,15 @@ async function processUserClaim(user: IUser): Promise<void> {
                             hasTokenExpired = true;
                         }
 
-                        // Update last claim (atomic — avoids overwriting concurrent token updates)
-                        await User.updateOne(
-                            { discordId: user.discordId },
-                            { $set: { "endfield.lastClaim": new Date(), "endfield.lastClaimResult": resultText } }
-                        );
+                        // Update last claim (atomic) + re-encrypt if needed
+                        const endfieldUpdate: Record<string, unknown> = {
+                            "endfield.lastClaim": new Date(),
+                            "endfield.lastClaimResult": resultText
+                        };
+                        if (endfieldDecrypt.needsReEncryption) {
+                            endfieldUpdate["endfield.accountToken"] = encryptToken(endfieldDecrypt.value);
+                        }
+                        await User.updateOne({ discordId: user.discordId }, { $set: endfieldUpdate });
                     } catch (error: unknown) {
                         const err = error as { message?: string };
                         logger.error({

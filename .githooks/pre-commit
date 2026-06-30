@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook — fast checks, scoped to staged files only.
+#
+# Runs on every `git commit`:
+#   1. Auto-format staged .ts/.tsx files with oxfmt, then re-stage them
+#   2. Lint those same files with oxlint
+#   3. Run the full test suite (fast enough at ~1.5s to run unconditionally)
+#
+# Deliberately NOT included here: `tsc --noEmit` (~12s on this project).
+# That runs in .githooks/pre-push instead, so day-to-day commits stay fast.
+#
+# Note: this formats the full working-tree contents of each staged file.
+# If you partially stage a file (`git add -p`), any *unstaged* edits in
+# that same file will be picked up by the formatter and end up in the
+# commit too. Stick to whole-file `git add` for .ts files to avoid this.
+#
+# Bypass in an emergency with: git commit --no-verify
+
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+STAGED_TS_FILES=$(git diff --cached --name-only --diff-filter=ACM -- '*.ts' '*.tsx' || true)
+
+if [ -n "$STAGED_TS_FILES" ]; then
+    echo "→ Formatting staged files..."
+    bunx oxfmt $STAGED_TS_FILES
+    git add $STAGED_TS_FILES
+
+    echo "→ Linting staged files..."
+    bunx oxlint $STAGED_TS_FILES
+fi
+
+echo "→ Running tests..."
+bun test --preload ./src/test-setup.ts
+
+echo "✅ Pre-commit checks passed."

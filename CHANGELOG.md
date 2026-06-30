@@ -22,6 +22,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `src/test-setup.ts` — preload file untuk test runner (set env vars sebelum config.ts dievaluasi)
 - `src/utils/token-crypto.test.ts` — unit tests untuk enkripsi/dekripsi token (round-trip, format, IV randomness, backward compat)
 - Script `test` di `package.json`: `bun test --preload ./src/test-setup.ts`
+- `src/utils/time.test.ts`, `src/utils/cooldown.test.ts`, `src/utils/stats.test.ts`, `src/utils/error-handler.test.ts`, `src/services/hoyolab.test.ts`, `src/constants/games.test.ts`, `src/constants/hoyolab.test.ts` — 164 unit test baru menutup coverage utils inti, HoyolabService, dan integritas config game
+- `.githooks/pre-commit` dan `.githooks/pre-push` — git hooks lokal (format+lint+test di commit; format:check+lint+tsc+test mirror CI di push), aktif otomatis lewat `postinstall`
 
 ### Removed
 

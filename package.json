@@ -11,7 +11,8 @@
         "format": "bunx oxfmt",
         "format:check": "bunx oxfmt --check",
         "lint": "bunx oxlint",
-        "lint:fix": "bunx oxlint --fix"
+        "lint:fix": "bunx oxlint --fix",
+        "postinstall": "git config core.hooksPath .githooks 2>/dev/null || true"
     },
     "devDependencies": {
         "@types/bun": "latest",

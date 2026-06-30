@@ -18,6 +18,8 @@ Terima kasih sudah mau berkontribusi! Panduan ini menjelaskan cara setup environ
     bun install
     ```
 
+    > `bun install` otomatis mengaktifkan git hooks di `.githooks/` (lihat [Git Hooks](#git-hooks)).
+
 2. **Setup environment**
 
     ```bash
@@ -70,6 +72,20 @@ bun run format
 ```
 
 Pastikan tidak ada lint error sebelum membuat PR.
+
+### Git Hooks
+
+Hooks di `.githooks/` aktif otomatis lewat `postinstall` setelah `bun install`. Untuk clone lama yang belum punya fitur ini, aktifkan manual sekali:
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/*   # jaga-jaga kalau executable bit hilang saat transfer/zip
+```
+
+- **pre-commit** — format + lint file yang di-stage, lalu jalankan full test suite (~1.5s total)
+- **pre-push** — mirror penuh CI: `format:check`, `lint`, `tsc --noEmit`, `test` (~15s, mayoritas dari type-check)
+
+Darurat dan perlu skip? `git commit --no-verify` / `git push --no-verify`. CI tetap akan menjalankan check yang sama di PR, jadi ini cuma menunda, bukan menghindari.
 
 ## Pull Request
 

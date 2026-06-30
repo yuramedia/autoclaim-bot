@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# Pre-push hook — full mirror of the CI "Run Tests & Checks" job, run
+# against the whole project (not just staged files).
+#
+# This is the right place for `tsc --noEmit`: it can't be meaningfully
+# scoped to a handful of changed files (type errors can appear in files
+# that import the one you changed), and at ~12s it's too slow to run on
+# every commit — but it's a reasonable wait right before code leaves
+# your machine.
+#
+# Bypass in an emergency with: git push --no-verify
+
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+echo "→ Checking formatting..."
+bun run format:check
+
+echo "→ Linting..."
+bun run lint
+
+echo "→ Type-checking (this can take ~10-15s)..."
+bunx tsc --noEmit
+
+echo "→ Running tests..."
+bun run test
+
+echo "✅ Pre-push checks passed."

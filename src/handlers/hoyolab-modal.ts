@@ -14,6 +14,7 @@ import { User } from "../database/models/user";
 import { HoyolabService } from "../services/hoyolab";
 import { GAME_DISPLAY_NAMES, type HoyolabGameKey } from "../constants";
 import { encryptToken } from "../utils/token-crypto";
+import { logger } from "../core/logger";
 
 /** Default game options for select menu */
 const GAME_SELECT_OPTIONS: Array<{ key: HoyolabGameKey; emoji: string }> = [
@@ -40,6 +41,31 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
             .getTextInputValue("hoyolab-token")
             .trim()
             .replace(/[\r\n"]+/g, "");
+
+        // Reject tokens containing dangerous characters (MongoDB operators, backslashes)
+        const DANGEROUS_CHARS = /[{$\\]/;
+        if (DANGEROUS_CHARS.test(token)) {
+            await interaction.editReply({
+                content:
+                    "❌ Invalid token: contains disallowed characters (`{`, `$`, `\\`). " +
+                    "Please copy the full cookie string from your browser."
+            });
+            return;
+        }
+
+        // Validate token length bounds
+        if (token.length < 20) {
+            await interaction.editReply({
+                content: "❌ Token too short (minimum 20 characters). Please copy the full cookie string."
+            });
+            return;
+        }
+        if (token.length > 2000) {
+            await interaction.editReply({
+                content: "❌ Token too long (maximum 2000 characters). Please copy only the cookie portion."
+            });
+            return;
+        }
 
         const nickname = interaction.fields.getTextInputValue("hoyolab-nickname")?.trim() || "Unknown";
 
@@ -76,8 +102,11 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
                 $set: {
                     username: interaction.user.username,
                     "hoyolab.token": encryptToken(token),
-                    "hoyolab.accountName": nickname,
-                    // Default all games to false initially, user will select them next
+                    "hoyolab.accountName": nickname
+                },
+                $setOnInsert: {
+                    settings: { notifyOnClaim: true },
+                    // Only set default games on insert (new user) — preserve existing games on update
                     "hoyolab.games": {
                         genshin: false,
                         starRail: false,
@@ -85,9 +114,6 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
                         tearsOfThemis: false,
                         zenlessZoneZero: false
                     }
-                },
-                $setOnInsert: {
-                    settings: { notifyOnClaim: true }
                 }
             },
             { upsert: true, new: true }
@@ -112,7 +138,7 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
             components: [row]
         });
     } catch (error: unknown) {
-        console.error("[handleHoyolabModal] Failed to process Hoyolab modal submission:", error);
+        logger.error(error, "[handleHoyolabModal] Failed to process Hoyolab modal submission");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
@@ -125,7 +151,7 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
                 });
             }
         } catch (replyError) {
-            console.error("[handleHoyolabModal] Failed to send error response:", replyError);
+            logger.error(replyError, "[handleHoyolabModal] Failed to send error response");
         }
     }
 }

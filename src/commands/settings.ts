@@ -5,6 +5,7 @@
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, MessageFlags } from "discord.js";
 import { User } from "../database/models/user";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the settings command.
@@ -54,7 +55,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             });
         }
     } catch (error) {
-        console.error("Settings command failed:", error);
+        logger.error(error, "Settings command failed");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ content: "❌ An error occurred while updating settings." });
@@ -65,7 +66,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 });
             }
         } catch (e) {
-            console.error("Failed to send error reply:", e);
+            logger.error(e, "Failed to send error reply");
         }
     }
 }

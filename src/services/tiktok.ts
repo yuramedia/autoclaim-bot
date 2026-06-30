@@ -2,6 +2,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { parseStat } from "../utils/stats.js";
 import type { PostInfo } from "../types/index.js";
+import { logger } from "../core/logger.js";
 
 /**
  * Fetch TikTok post info via tnktok.com by extracting OpenGraph tags
@@ -80,7 +81,7 @@ export async function fetchTikTokInfo(url: string): Promise<PostInfo | null> {
     } catch (error: unknown) {
         const err = error as { response?: { status?: number }; message?: string };
         if (err.response?.status !== 404) {
-            console.error(`Error fetching TikTok info for ${url}:`, err.message);
+            logger.error(error, `Error fetching TikTok info for ${url}`);
         }
         return null;
     }

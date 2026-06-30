@@ -12,7 +12,7 @@ import { HoyolabService, formatHoyolabResults } from "./hoyolab";
 import { EndfieldService, formatEndfieldResult } from "./endfield";
 import { config } from "../config";
 import { logger } from "../core/logger";
-import { decryptToken } from "../utils/token-crypto";
+import { decryptTokenCompat, encryptToken } from "../utils/token-crypto";
 
 /** Batch processing configuration */
 const BATCH_SIZE = 5; // Process 5 users concurrently
@@ -40,7 +40,7 @@ export function startScheduler(client: Client): void {
                 }
 
                 logger.info("🔄 Running scheduled daily claims (Shard 0)...");
-                await runDailyClaims();
+                await runDailyClaims(client);
             } catch (error) {
                 logger.error(error, "[Scheduler] Error in scheduled cron job:");
             }
@@ -54,9 +54,25 @@ export function startScheduler(client: Client): void {
 /**
  * Run daily claims for all users.
  * Reads users with active tokens and processes them in batches.
+ * Only runs on Shard 0 in a sharded deployment to prevent duplicate claims.
+ * @param client - Discord client instance for shard guard check.
  * @returns A promise that resolves when all daily claims are processed.
  */
-export async function runDailyClaims(): Promise<void> {
+let schedulerRunning = false;
+
+export async function runDailyClaims(client: Client): Promise<void> {
+    // Prevent overlapping runs (cron + missedClaims recovery)
+    if (schedulerRunning) {
+        logger.info("⏳ Skipping daily claims — previous run still in progress");
+        return;
+    }
+
+    // Only run on Shard 0 to prevent duplicate claims across shards
+    if (client.shard && client.shard.ids[0] !== 0) {
+        return;
+    }
+
+    schedulerRunning = true;
     try {
         // Use cursor for memory efficiency
         const cursor = User.find({
@@ -90,6 +106,8 @@ export async function runDailyClaims(): Promise<void> {
         logger.info(`✅ Daily claims completed. Processed ${count} users.`);
     } catch (error) {
         logger.error(error, "[Scheduler] Error:");
+    } finally {
+        schedulerRunning = false;
     }
 }
 
@@ -101,6 +119,7 @@ export async function runDailyClaims(): Promise<void> {
 async function processUserClaim(user: IUser): Promise<void> {
     try {
         const results: string[] = [];
+        let hasTokenExpired = false; // Track structured token expiry from Endfield
         const claimPromises: Promise<void>[] = [];
 
         // Claim Hoyolab
@@ -108,14 +127,21 @@ async function processUserClaim(user: IUser): Promise<void> {
             claimPromises.push(
                 (async () => {
                     try {
-                        const hoyolab = new HoyolabService(decryptToken(user.hoyolab!.token));
+                        const hoyolabDecrypt = decryptTokenCompat(user.hoyolab!.token);
+                        const hoyolab = new HoyolabService(hoyolabDecrypt.value);
                         const hoyolabResults = await hoyolab.claimAll(user.hoyolab!.games);
                         const resultText = formatHoyolabResults(hoyolabResults);
                         results.push("**Hoyolab**\n" + resultText);
 
-                        // Update last claim
-                        user.hoyolab!.lastClaim = new Date();
-                        user.hoyolab!.lastClaimResult = resultText;
+                        // Update last claim (atomic) + re-encrypt if needed
+                        const hoyolabUpdate: Record<string, unknown> = {
+                            "hoyolab.lastClaim": new Date(),
+                            "hoyolab.lastClaimResult": resultText
+                        };
+                        if (hoyolabDecrypt.needsReEncryption) {
+                            hoyolabUpdate["hoyolab.token"] = encryptToken(hoyolabDecrypt.value);
+                        }
+                        await User.updateOne({ discordId: user.discordId }, { $set: hoyolabUpdate });
                     } catch (error: unknown) {
                         const err = error as { message?: string };
                         logger.error({
@@ -133,16 +159,28 @@ async function processUserClaim(user: IUser): Promise<void> {
             claimPromises.push(
                 (async () => {
                     try {
+                        const endfieldDecrypt = decryptTokenCompat(user.endfield!.accountToken);
                         const endfield = new EndfieldService({
-                            accountToken: decryptToken(user.endfield!.accountToken)
+                            accountToken: endfieldDecrypt.value
                         });
                         const endfieldResult = await endfield.claim();
                         const resultText = formatEndfieldResult(endfieldResult);
                         results.push("**SKPORT/Endfield**\n" + resultText);
 
-                        // Update last claim
-                        user.endfield!.lastClaim = new Date();
-                        user.endfield!.lastClaimResult = resultText;
+                        // Track structured token expiry flag from Endfield result
+                        if (endfieldResult.tokenExpired) {
+                            hasTokenExpired = true;
+                        }
+
+                        // Update last claim (atomic) + re-encrypt if needed
+                        const endfieldUpdate: Record<string, unknown> = {
+                            "endfield.lastClaim": new Date(),
+                            "endfield.lastClaimResult": resultText
+                        };
+                        if (endfieldDecrypt.needsReEncryption) {
+                            endfieldUpdate["endfield.accountToken"] = encryptToken(endfieldDecrypt.value);
+                        }
+                        await User.updateOne({ discordId: user.discordId }, { $set: endfieldUpdate });
                     } catch (error: unknown) {
                         const err = error as { message?: string };
                         logger.error({
@@ -160,18 +198,25 @@ async function processUserClaim(user: IUser): Promise<void> {
             await Promise.all(claimPromises);
         }
 
-        // Save updates
-        try {
-            await user.save();
-        } catch (saveError) {
-            logger.error(saveError, `[Scheduler] Failed to save user ${user.discordId}:`);
-        }
+        // Claim results are already saved atomically via User.updateOne() above.
+        // No need for user.save() — this avoids the "lost update" race condition.
 
-        // Detect token errors — notify regardless of notifyOnClaim preference
-        const TOKEN_ERROR_PATTERNS = ["expired", "invalid token", "ACCOUNT_TOKEN", "cookie_token"];
-        const hasTokenError = results.some(r =>
-            TOKEN_ERROR_PATTERNS.some(p => r.toLowerCase().includes(p.toLowerCase()))
-        );
+        // Detect token errors — notify regardless of notifyOnClaim preference.
+        // Uses structured Endfield tokenExpired flag + Hoyolab string patterns.
+        // Includes decrypt failure strings so users get notified even if decryptToken throws.
+        const TOKEN_ERROR_PATTERNS = [
+            "expired",
+            "invalid token",
+            "ACCOUNT_TOKEN",
+            "cookie_token",
+            "Please log in",
+            "decryption failed",
+            "not in encrypted format",
+            "encryption key"
+        ];
+        const hasTokenError =
+            hasTokenExpired ||
+            results.some(r => TOKEN_ERROR_PATTERNS.some(p => r.toLowerCase().includes(p.toLowerCase())));
 
         // Publish to RAMEN:
         // - always if there is a token error (user must know even if notifications are off)
@@ -222,7 +267,13 @@ function getSingaporeTime(): { year: number; month: number; day: number; hour: n
  * been claimed yet today, triggers runDailyClaims().
  * @param client - Discord client instance
  */
-export async function checkMissedClaims(): Promise<void> {
+export async function checkMissedClaims(client: Client): Promise<void> {
+    // Only run on Shard 0 to prevent duplicate claims across shards
+    if (client.shard && client.shard.ids[0] !== 0) {
+        logger.info("⏰ Skipping missed claims check — not on Shard 0");
+        return;
+    }
+
     try {
         const { hour, minute } = config.scheduler;
         const sg = getSingaporeTime();
@@ -264,7 +315,7 @@ export async function checkMissedClaims(): Promise<void> {
 
         if (missedCount > 0) {
             logger.info(`⚠️ Found ${missedCount} user(s) with missed claims. Running recovery...`);
-            await runDailyClaims();
+            await runDailyClaims(client);
         } else {
             logger.info("✅ No missed claims detected. All users are up to date.");
         }

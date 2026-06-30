@@ -12,7 +12,8 @@ import type {
     CrunchyrollSubtitle,
     CrunchyrollPlayResponse,
     CrunchyrollBrowseItem,
-    CrunchyrollBrowseResponse
+    CrunchyrollBrowseResponse,
+    LineupAnnouncement
 } from "../types/crunchyroll";
 import { LANG_MAP, CR_RELEASE_ITEMS_PER_PAGE, CRUNCHYROLL_BASIC_AUTH, CRUNCHYROLL_USER_AGENT } from "../constants";
 import { config } from "../config";
@@ -31,6 +32,8 @@ let accountAuthExpiresAt = 0;
  * Supports both anonymous auth and account-based premium auth.
  */
 export class CrunchyrollService {
+    private readonly subtitleCollator = new Intl.Collator("en", { sensitivity: "base" });
+
     private readonly API_BASE = "https://beta-api.crunchyroll.com";
     private basicAuth = CRUNCHYROLL_BASIC_AUTH;
     private userAgent = CRUNCHYROLL_USER_AGENT;
@@ -62,13 +65,13 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
-                console.error("Crunchyroll auth failed:", response.status);
+                logger.error(`Crunchyroll auth failed: ${response.status}`);
                 return null;
             }
 
             const auth = (await response.json()) as CrunchyrollAuth;
             if (!auth.access_token) {
-                console.error("Crunchyroll auth: no access token");
+                logger.error("Crunchyroll auth: no access token");
                 return null;
             }
 
@@ -78,7 +81,7 @@ export class CrunchyrollService {
 
             return auth;
         } catch (error) {
-            console.error("Crunchyroll auth error:", error);
+            logger.error(error as Error, "Crunchyroll auth error");
             return null;
         }
     }
@@ -116,7 +119,7 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
-                console.error("Crunchyroll fetch failed:", response.status);
+                logger.error(`Crunchyroll fetch failed: ${response.status}`);
                 return [];
             }
 
@@ -136,7 +139,7 @@ export class CrunchyrollService {
                 return dateB - dateA;
             });
         } catch (error) {
-            console.error("Crunchyroll fetch error:", error);
+            logger.error(error as Error, "Crunchyroll fetch error");
             return [];
         }
     }
@@ -149,12 +152,12 @@ export class CrunchyrollService {
         try {
             const response = await fetch("https://www.crunchyroll.com/rss/anime", {
                 headers: {
-                    "User-Agent": "Crunchyroll/3.50.0"
+                    "User-Agent": CRUNCHYROLL_USER_AGENT
                 }
             });
 
             if (!response.ok) {
-                console.error("Failed to fetch RSS:", response.status);
+                logger.error(`Failed to fetch RSS: ${response.status}`);
                 return [];
             }
 
@@ -180,7 +183,7 @@ export class CrunchyrollService {
 
             return uuids;
         } catch (error) {
-            console.error("Error fetching RSS for episodes:", error);
+            logger.error(error as Error, "Error fetching RSS for episodes");
             return [];
         }
     }
@@ -208,7 +211,7 @@ export class CrunchyrollService {
                         const data = (await res.json()) as { data: CrunchyrollEpisode[] };
                         return data.data?.[0] || null;
                     } catch (error) {
-                        console.error(`Error fetching episode ${id}:`, error);
+                        logger.error(error as Error, `Error fetching episode ${id}`);
                         return null;
                     }
                 })
@@ -216,7 +219,7 @@ export class CrunchyrollService {
 
             return results.filter((ep): ep is CrunchyrollEpisode => ep !== null);
         } catch (error) {
-            console.error("Error fetching episodes by IDs:", error);
+            logger.error(error as Error, "Error fetching episodes by IDs");
             return [];
         }
     }
@@ -266,9 +269,7 @@ export class CrunchyrollService {
         // Format duration
         const duration = this.formatDuration(meta.duration_ms);
 
-        // Format subtitles - convert locale codes to language names
-        const subtitles =
-            meta.subtitle_locales?.length > 0 ? meta.subtitle_locales.map(loc => LANG_MAP[loc] || loc).join(", ") : "-";
+        const subtitles = this.formatSubtitleLocales(meta.subtitle_locales);
 
         return {
             id: ep.id,
@@ -326,6 +327,31 @@ export class CrunchyrollService {
         return formatted;
     }
 
+    /**
+     * Formats subtitle locales for Discord embed output.
+     * Arabic variants are pinned first and each label is wrapped in bidi isolate markers
+     * so mixed RTL/LTR language lists render in a stable order.
+     */
+    private formatSubtitleLocales(locales: string[] | undefined): string {
+        if (!locales || locales.length === 0) return "-";
+
+        const unique = Array.from(new Set(locales));
+        const sorted = unique.toSorted((a, b) => {
+            const aIsArabic = a.toLowerCase().startsWith("ar");
+            const bIsArabic = b.toLowerCase().startsWith("ar");
+
+            if (aIsArabic !== bIsArabic) {
+                return aIsArabic ? -1 : 1;
+            }
+
+            const aLabel = LANG_MAP[a] || a;
+            const bLabel = LANG_MAP[b] || b;
+            return this.subtitleCollator.compare(aLabel, bLabel);
+        });
+
+        return sorted.map(loc => `\u2068${LANG_MAP[loc] || loc}\u2069`).join(", ");
+    }
+
     // Series poster cache: seriesId -> posterUrl (capped)
     private static readonly MAX_SERIES_CACHE = 200;
     private static seriesCache: Map<string, string> = new Map();
@@ -363,12 +389,12 @@ export class CrunchyrollService {
         try {
             const response = await fetch("https://www.crunchyroll.com/rss/anime", {
                 headers: {
-                    "User-Agent": "Crunchyroll/3.50.0"
+                    "User-Agent": CRUNCHYROLL_USER_AGENT
                 }
             });
 
             if (!response.ok) {
-                console.error("Failed to fetch RSS:", response.status);
+                logger.error(`Failed to fetch RSS: ${response.status}`);
                 return CrunchyrollService.publisherCache;
             }
 
@@ -396,9 +422,9 @@ export class CrunchyrollService {
             }
 
             CrunchyrollService.rssCacheTime = Date.now();
-            console.log(`Cached ${CrunchyrollService.publisherCache.size} publishers from RSS`);
+            logger.info(`Cached ${CrunchyrollService.publisherCache.size} publishers from RSS`);
         } catch (error) {
-            console.error("Error fetching RSS publishers:", error);
+            logger.error(error as Error, "Error fetching RSS publishers");
         }
 
         return CrunchyrollService.publisherCache;
@@ -434,7 +460,7 @@ export class CrunchyrollService {
                 return ep;
             });
         } catch (error) {
-            console.error("Error enriching with publisher:", error);
+            logger.error(error as Error, "Error enriching with publisher");
             return episodes;
         }
     }
@@ -462,7 +488,7 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
-                console.error(`Failed to fetch series ${seriesId}:`, response.status);
+                logger.error(`Failed to fetch series ${seriesId}: ${response.status}`);
                 return undefined;
             }
 
@@ -498,7 +524,7 @@ export class CrunchyrollService {
                 }
             }
         } catch (error) {
-            console.error(`Error fetching series poster for ${seriesId}:`, error);
+            logger.error(error as Error, `Error fetching series poster for ${seriesId}`);
         }
 
         return undefined;
@@ -523,7 +549,7 @@ export class CrunchyrollService {
                 return ep;
             });
         } catch (error) {
-            console.error("Error enriching with series poster:", error);
+            logger.error(error as Error, "Error enriching with series poster");
             return episodes;
         }
     }
@@ -568,13 +594,13 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
-                console.error("Crunchyroll account auth failed:", response.status);
+                logger.error(`Crunchyroll account auth failed: ${response.status}`);
                 return null;
             }
 
             const auth = (await response.json()) as CrunchyrollAuth;
             if (!auth.access_token) {
-                console.error("Crunchyroll account auth: no access token");
+                logger.error("Crunchyroll account auth: no access token");
                 return null;
             }
 
@@ -584,7 +610,7 @@ export class CrunchyrollService {
 
             return auth;
         } catch (error) {
-            console.error("Crunchyroll account auth error:", error);
+            logger.error(error as Error, "Crunchyroll account auth error");
             return null;
         }
     }
@@ -613,7 +639,7 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
-                console.error("Crunchyroll search failed:", response.status);
+                logger.error(`Crunchyroll search failed: ${response.status}`);
                 return [];
             }
 
@@ -631,7 +657,7 @@ export class CrunchyrollService {
             // Fetch episodes using the new method
             return await this.fetchEpisodesBySeriesId(series.id, episodeNumber);
         } catch (error) {
-            console.error("Crunchyroll search error:", error);
+            logger.error(error as Error, "Crunchyroll search error");
             return [];
         }
     }
@@ -675,7 +701,7 @@ export class CrunchyrollService {
                 value: s.title.substring(0, 100)
             }));
         } catch (error) {
-            console.error("Crunchyroll autocomplete error:", error);
+            logger.error(error as Error, "Crunchyroll autocomplete error");
             return [];
         }
     }
@@ -737,7 +763,7 @@ export class CrunchyrollService {
 
             return episodesData.data;
         } catch (error) {
-            console.error("Crunchyroll series episodes fetch error:", error);
+            logger.error(error as Error, "Crunchyroll series episodes fetch error");
             return [];
         }
     }
@@ -760,14 +786,14 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
-                console.error("Crunchyroll play service failed:", response.status);
+                logger.error(`Crunchyroll play service failed: ${response.status}`);
                 return null;
             }
 
             const data = (await response.json()) as CrunchyrollPlayResponse;
             return data.subtitles || null;
         } catch (error) {
-            console.error("Crunchyroll subtitle fetch error:", error);
+            logger.error(error as Error, "Crunchyroll subtitle fetch error");
             return null;
         }
     }
@@ -782,7 +808,7 @@ export class CrunchyrollService {
             if (!response.ok) return null;
             return await response.text();
         } catch (error) {
-            console.error("Subtitle download error:", error);
+            logger.error(error as Error, "Subtitle download error");
             return null;
         }
     }
@@ -818,7 +844,7 @@ export class CrunchyrollService {
                 });
 
                 if (!response.ok) {
-                    console.error(`Crunchyroll seasonal fetch failed with status: ${response.status}`);
+                    logger.error(`Crunchyroll seasonal fetch failed with status: ${response.status}`);
                     return allSeries;
                 }
 
@@ -836,8 +862,72 @@ export class CrunchyrollService {
 
             return allSeries;
         } catch (error) {
-            console.error("Crunchyroll seasonal fetch error:", error);
+            logger.error(error as Error, "Crunchyroll seasonal fetch error");
             return allSeries;
         }
+    }
+
+    /**
+     * Fetch seasonal lineup announcements or news from Crunchyroll RSS feed
+     */
+    async fetchLineupAnnouncements(onlySeasonal = true): Promise<LineupAnnouncement[]> {
+        try {
+            const response = await fetch("https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss", {
+                headers: {
+                    "User-Agent": this.userAgent
+                }
+            });
+
+            if (!response.ok) {
+                logger.error(`Failed to fetch news RSS: ${response.status}`);
+                return [];
+            }
+
+            const xml = await response.text();
+            const { parseStringPromise } = await import("xml2js");
+            const result = await parseStringPromise(xml);
+            const items = result?.rss?.channel?.[0]?.item || [];
+
+            const announcements: LineupAnnouncement[] = [];
+
+            for (const item of items) {
+                const title = item.title?.[0] || "";
+                const url = item.link?.[0] || "";
+
+                if (onlySeasonal) {
+                    const isSeasonal =
+                        /Season Lineup|Lineup Announced|Anime Season Lineup/i.test(title) ||
+                        /seasonal-lineup/i.test(url);
+                    if (!isSeasonal) continue;
+                }
+
+                const description = item.description?.[0] || "";
+                const author = item.author?.[0] || item["dc:creator"]?.[0] || null;
+                const thumbnail = item["media:thumbnail"]?.[0]?.$?.url || null;
+                const pubDate = item.pubDate?.[0] || new Date().toUTCString();
+
+                announcements.push({
+                    title,
+                    url,
+                    description,
+                    thumbnail,
+                    author,
+                    pubDate
+                });
+            }
+
+            return announcements;
+        } catch (error) {
+            logger.error(error as Error, "Error fetching lineup announcements");
+            return [];
+        }
+    }
+
+    /**
+     * Fetch latest season lineup announcements or news from Crunchyroll RSS feed
+     */
+    async fetchLatestLineupAnnouncement(onlySeasonal = true): Promise<LineupAnnouncement | null> {
+        const announcements = await this.fetchLineupAnnouncements(onlySeasonal);
+        return announcements[0] || null;
     }
 }

@@ -9,7 +9,6 @@ import * as help from "./help";
 import * as ping from "./ping";
 import * as embedSettings from "./embed-settings";
 import * as statistic from "./statistic";
-import * as speedtest from "./speedtest";
 import * as bestrelease from "./bestrelease";
 import * as crunchyrollFeed from "./crunchyroll-feed";
 import * as kbbi from "./kbbi";
@@ -18,6 +17,8 @@ import * as jisho from "./jisho";
 import * as u2Feed from "./u2-feed";
 import * as crrelease from "./crrelease";
 import * as embedCommand from "./embed";
+import * as antihack from "./antihack";
+import * as cr from "./cr";
 
 /**
  * A list of all available command modules.
@@ -34,7 +35,6 @@ export const commands = [
     statistic,
     redeem,
     embedSettings,
-    speedtest,
     bestrelease,
     crunchyrollFeed,
     kbbi,
@@ -42,7 +42,9 @@ export const commands = [
     jisho,
     u2Feed,
     crrelease,
-    embedCommand
+    embedCommand,
+    antihack,
+    cr
 ];
 
 /**

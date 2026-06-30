@@ -12,6 +12,7 @@ import {
     ActionRowBuilder,
     type ModalActionRowComponentBuilder
 } from "discord.js";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the setup-hoyolab command.
@@ -53,14 +54,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.showModal(modal);
     } catch (error) {
-        console.error("setup-hoyolab command failed:", error);
+        logger.error(error, "setup-hoyolab command failed");
         try {
             await interaction.reply({
                 content: "❌ Failed to open setup modal.",
                 ephemeral: true
             });
         } catch (e) {
-            console.error("Failed to send error reply:", e);
+            logger.error(e, "Failed to send error reply");
         }
     }
 }

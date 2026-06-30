@@ -135,3 +135,43 @@ ramen.subscribe<CrunchyrollEpisodesEvent>("crunchyroll:new_episodes", async (dat
     }
 });
 logger.info("🍜 RAMEN Subscriber registered: crunchyroll:new_episodes");
+
+import { buildLineupEmbed } from "../../commands/cr";
+
+export interface CrunchyrollLineupEvent {
+    announcements: {
+        title: string;
+        url: string;
+        description: string;
+        thumbnail: string | null;
+        author: string | null;
+        pubDate: string;
+    }[];
+    targetChannelIds: string[];
+}
+
+ramen.subscribe<CrunchyrollLineupEvent>("crunchyroll:new_lineup_announcement", async (data): Promise<void> => {
+    try {
+        const { announcements, targetChannelIds } = data;
+
+        for (const channelId of targetChannelIds) {
+            try {
+                const channel = client.channels.cache.get(channelId);
+                if (channel && channel instanceof TextChannel) {
+                    for (const announcement of announcements) {
+                        const embed = buildLineupEmbed(announcement);
+                        await channel.send({ embeds: [embed] });
+                        await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
+                    }
+                }
+            } catch (error: unknown) {
+                const err = error instanceof Error ? error : new Error(String(error));
+                logger.error(err, `RAMEN: Failed to send crunchyroll lineup embed to channel ${channelId}`);
+            }
+        }
+    } catch (outerError: unknown) {
+        const err = outerError instanceof Error ? outerError : new Error(String(outerError));
+        logger.error(err, "RAMEN: Unexpected error in crunchyroll:new_lineup_announcement subscriber");
+    }
+});
+logger.info("🍜 RAMEN Subscriber registered: crunchyroll:new_lineup_announcement");

@@ -11,6 +11,7 @@ import { PLATFORMS } from "../constants/embed-fix";
 import { BROWSER_USER_AGENT } from "../constants/anime";
 import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./amenzb";
 import { fetchTsukihimeImagesByNyaa, fetchTsukihimeImagesBySukebei } from "./tsukihime";
+import { logger } from "../core/logger";
 
 const NYAA_COLOR = PLATFORMS.find(p => p.id === PlatformId.NYAA)?.color ?? 0x0089ff;
 
@@ -80,7 +81,7 @@ export async function fetchNyaaInfo(
                 : null
         };
     } catch (error) {
-        console.error(`Failed to fetch ${provider}.nyaa.si info for ${viewId}:`, error);
+        logger.error(error, `Failed to fetch ${provider}.nyaa.si info for ${viewId}`);
         return null;
     }
 }
@@ -121,7 +122,7 @@ export async function fetchNyaaComment(
             infoHash: data.infohash
         };
     } catch (error) {
-        console.error(`Failed to fetch ${provider}.nyaa.si comment for ${viewId}#com-${commentId}:`, error);
+        logger.error(error, `Failed to fetch ${provider}.nyaa.si comment for ${viewId}#com-${commentId}`);
         return null;
     }
 }

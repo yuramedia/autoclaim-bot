@@ -16,6 +16,7 @@ import { handleEndfieldModal } from "./endfield-modal";
 import { handleHoyolabSelect } from "./hoyolab-select";
 import { handleResolutionSelect } from "./resolution-select";
 import { handleInteractionError } from "../utils/error-handler";
+import { logger } from "../core/logger";
 
 // Store commands in collection for fast lookup
 const commandCollection = new Collection<string, (typeof commands)[0]>();
@@ -55,7 +56,7 @@ export async function handleInteraction(interaction: Interaction): Promise<void>
             return;
         }
     } catch (error: unknown) {
-        console.error("[handleInteraction] Unexpected interaction handling error:", error);
+        logger.error(error, "[handleInteraction] Unexpected interaction handling error");
     }
 }
 
@@ -66,7 +67,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
     const command = commandCollection.get(interaction.commandName);
 
     if (!command) {
-        console.error(`[Command] ${interaction.commandName} not found`);
+        logger.error(`[Command] ${interaction.commandName} not found`);
         return;
     }
 
@@ -92,7 +93,7 @@ async function handleModal(interaction: Interaction): Promise<void> {
                 await handleEndfieldModal(interaction);
                 break;
             default:
-                console.warn(`[Modal] Unknown modal: ${interaction.customId}`);
+                logger.warn(`[Modal] Unknown modal: ${interaction.customId}`);
         }
     } catch (error: unknown) {
         await handleInteractionError(interaction, error, "❌ An error occurred while processing your input.");
@@ -114,7 +115,7 @@ async function handleSelectMenu(interaction: StringSelectMenuInteraction): Promi
                 await handleHoyolabSelect(interaction);
                 break;
             default:
-                console.warn(`[SelectMenu] Unknown select menu: ${interaction.customId}`);
+                logger.warn(`[SelectMenu] Unknown select menu: ${interaction.customId}`);
         }
     } catch (error: unknown) {
         await handleInteractionError(interaction, error, "❌ Error processing selection.");
@@ -134,6 +135,6 @@ async function handleAutocomplete(interaction: AutocompleteInteraction): Promise
     try {
         await command.autocomplete(interaction);
     } catch (error: unknown) {
-        console.error(`[Autocomplete] Error for ${interaction.commandName}:`, error);
+        logger.error(error, `[Autocomplete] Error for ${interaction.commandName}`);
     }
 }

@@ -15,6 +15,7 @@ Create a new file in `src/commands/`:
 
 ```typescript
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
+import { logger } from "../core/logger";
 
 export const data = new SlashCommandBuilder().setName("command-name").setDescription("What this command does");
 
@@ -25,7 +26,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         // Command logic here
         await interaction.editReply("Success!");
     } catch (error) {
-        console.error("Command error:", error);
+        logger.error(error, "Command error");
         await interaction.editReply("An error occurred.");
     }
 }

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { config } from "../config";
+import { logger } from "../core/logger";
 
 /**
  * Connects to the MongoDB database using the configured URI.
@@ -8,17 +9,17 @@ import { config } from "../config";
 export async function connectDatabase(): Promise<void> {
     try {
         await mongoose.connect(config.mongodb.uri);
-        console.log("✅ Connected to MongoDB");
+        logger.info("✅ Connected to MongoDB");
     } catch (error) {
-        console.error("❌ Failed to connect to MongoDB:", error);
+        logger.error(error, "❌ Failed to connect to MongoDB");
         process.exit(1);
     }
 }
 
 mongoose.connection.on("error", error => {
-    console.error("MongoDB connection error:", error);
+    logger.error(error, "MongoDB connection error");
 });
 
 mongoose.connection.on("disconnected", () => {
-    console.warn("MongoDB disconnected");
+    logger.warn("MongoDB disconnected");
 });

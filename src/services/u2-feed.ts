@@ -8,6 +8,7 @@
 import { decode } from "he";
 import type { U2FeedItem, FormattedU2Item } from "../types/u2-feed";
 import { U2_IMAGE_PATTERN, U2_ATTACH_IMAGE_PATTERN } from "../constants/u2-feed";
+import { logger } from "../core/logger.js";
 
 /**
  * Light-escape special characters in URLs before fetching
@@ -22,30 +23,6 @@ function lightEscapeURL(url: string): string {
         .replace(/\[/g, "%5B")
         .replace(/\]/g, "%5D")
         .replace(/\|/g, "%7C");
-}
-
-/**
- * Extract content from a CDATA section or plain text XML tag
- * @param raw - Raw XML content
- * @returns Plaint text within CDATA or stripped content
- */
-function extractCDATA(raw: string): string {
-    const cdataMatch = raw.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
-    if (cdataMatch) return cdataMatch[1]!;
-    // Strip any remaining XML tags
-    return raw.replace(/<[^>]+>/g, "").trim();
-}
-
-/**
- * Extract a single XML tag value from a block of XML
- * @param xml - The XML content
- * @param tag - Tag name to extract
- * @returns Tag text value
- */
-function extractTag(xml: string, tag: string): string {
-    const regex = new RegExp(`<${tag}[&>]*>([\\s\\S]*?)</${tag}>`, "i");
-    const match = xml.match(regex);
-    return match ? extractCDATA(match[1]!) : "";
 }
 
 /**
@@ -83,61 +60,65 @@ export class U2FeedService {
             clearTimeout(timeoutId);
 
             if (!response.ok) {
-                console.error("U2 RSS fetch failed:", response.status);
+                logger.error(`U2 RSS fetch failed: ${response.status}`);
                 return [];
             }
 
             const xml = await response.text();
-            return this.parseItems(xml);
+            return await this.parseItems(xml);
         } catch (error) {
-            console.error("U2 RSS fetch error:", error);
+            logger.error(error, "U2 RSS fetch error");
             return [];
         }
     }
 
     /**
-     * Parse RSS XML into U2FeedItem array.
+     * Parse RSS XML into U2FeedItem array using xml2js.
      * @param xml - Raw RSS XML string.
      * @returns Array of parsed U2FeedItems.
      */
-    private parseItems(xml: string): U2FeedItem[] {
+    private async parseItems(xml: string): Promise<U2FeedItem[]> {
         const items: U2FeedItem[] = [];
-        const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
-        let match;
+        try {
+            const { parseStringPromise } = await import("xml2js");
+            const result = await parseStringPromise(xml);
+            const rawItems = result?.rss?.channel?.[0]?.item || [];
 
-        while ((match = itemRegex.exec(xml)) !== null) {
-            try {
-                const block = match[1]!;
-                const title = extractTag(block, "title");
-                const link = extractTag(block, "link");
-                const description = extractTag(block, "description");
-                const author = extractTag(block, "author");
-                const guid = extractTag(block, "guid");
-                const pubDate = extractTag(block, "pubDate");
+            for (const item of rawItems) {
+                try {
+                    const title = item.title?.[0] || "";
+                    const link = item.link?.[0] || "";
+                    const description = item.description?.[0] || "";
+                    const author = item.author?.[0] || "";
 
-                // Category: extract text content from <category> tag
-                const categoryMatch = block.match(/<category[^>]*>([\s\S]*?)<\/category>/i);
-                const category = categoryMatch ? extractCDATA(categoryMatch[1]!) : "";
+                    const guidRaw = item.guid?.[0];
+                    const guid = (typeof guidRaw === "object" ? guidRaw?._ : guidRaw) || "";
 
-                // Enclosure: extract size from length attribute
-                const enclosureMatch = block.match(/<enclosure[^>]*length="(\d+)"[^>]*\/?>/i);
-                const sizeBytes = enclosureMatch ? parseInt(enclosureMatch[1]!, 10) : null;
+                    const pubDate = item.pubDate?.[0] || "";
 
-                items.push({
-                    title,
-                    author,
-                    category,
-                    description,
-                    guid,
-                    link,
-                    pubDate,
-                    sizeBytes
-                });
-            } catch (error) {
-                console.error("U2 RSS item parse error:", error);
+                    const categoryRaw = item.category?.[0];
+                    const category = (typeof categoryRaw === "object" ? categoryRaw?._ : categoryRaw) || "";
+
+                    const lengthAttr = item.enclosure?.[0]?.$?.length;
+                    const sizeBytes = lengthAttr ? parseInt(lengthAttr, 10) : null;
+
+                    items.push({
+                        title,
+                        author,
+                        category,
+                        description,
+                        guid,
+                        link,
+                        pubDate,
+                        sizeBytes
+                    });
+                } catch (itemError) {
+                    logger.error(itemError, "U2 RSS individual item parse error");
+                }
             }
+        } catch (error) {
+            logger.error(error, "U2 RSS XML parsing error");
         }
-
         return items;
     }
 

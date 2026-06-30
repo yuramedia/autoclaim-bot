@@ -1,6 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import { fetchAnilistCoverByTitle, fetchAnimeImages } from "./amenzb";
 import { fetchTsukihimeImagesByBtih } from "./tsukihime";
+import { logger } from "../core/logger";
 
 /**
  * Represents the response structure from NekoBT torrent API
@@ -63,17 +64,17 @@ export async function fetchNekoBTTorrent(id: string): Promise<NekoBTTorrentRespo
             }
         });
         if (!res.ok) {
-            console.error(`[NekoBT] Failed to fetch torrent ${id}: ${res.status}`);
+            logger.error(`[NekoBT] Failed to fetch torrent ${id}: ${res.status}`);
             return null;
         }
         const data = (await res.json()) as NekoBTTorrentResponse;
         if (data.error) {
-            console.error(`[NekoBT] API returned error for ${id}:`, data.message);
+            logger.error(`[NekoBT] API returned error for ${id}: ${data.message}`);
             return null;
         }
         return data;
     } catch (error) {
-        console.error(`[NekoBT] Error fetching torrent ${id}:`, error);
+        logger.error(error, `[NekoBT] Error fetching torrent ${id}`);
         return null;
     }
 }
@@ -201,7 +202,7 @@ export async function buildNekoBTEmbed(
 
         return { embeds: [embed], components: [row] };
     } catch (error) {
-        console.error(`[NekoBT] Error building embed for ${url}:`, error);
+        logger.error(error, `[NekoBT] Error building embed for ${url}`);
         return null;
     }
 }

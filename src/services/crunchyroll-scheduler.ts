@@ -4,6 +4,7 @@
  */
 
 import { Client } from "discord.js";
+import { logger } from "../core/logger";
 import { GuildSettings } from "../database/models/guild-settings";
 import { CrunchyrollService } from "./crunchyroll";
 import { ramen } from "../core/ramen";
@@ -37,7 +38,7 @@ function pruneSeenEpisodes(): void {
  * @param client - Discord client instance.
  */
 export function startCrunchyrollFeed(client: Client): void {
-    console.log("📺 Starting Crunchyroll feed scheduler...");
+    logger.info("📺 Starting Crunchyroll feed scheduler...");
 
     const service = new CrunchyrollService();
 
@@ -54,20 +55,20 @@ export function startCrunchyrollFeed(client: Client): void {
 
             // Skip if a previous check is still running
             if (feedLock.isChecking) {
-                console.log("📺 Skipping feed check — previous run still in progress");
+                logger.info("📺 Skipping feed check — previous run still in progress");
                 return;
             }
 
             await checkForNewEpisodes(client, service);
         } catch (error) {
-            console.error("Error in Crunchyroll feed poll:", error);
+            logger.error(error as Error, "Error in Crunchyroll feed poll");
         }
     }, CRUNCHYROLL_POLL_INTERVAL);
 }
 
 async function initializeCache(service: CrunchyrollService): Promise<void> {
     try {
-        console.log("📺 Initializing Crunchyroll episode cache from Browser Endpoint (Global)...");
+        logger.info("📺 Initializing Crunchyroll episode cache from Browser Endpoint (Global)...");
         const episodes = await service.fetchLatestEpisodes("", 100);
 
         for (const ep of episodes) {
@@ -75,10 +76,14 @@ async function initializeCache(service: CrunchyrollService): Promise<void> {
         }
         pruneSeenEpisodes();
 
-        console.log(`📺 Cached ${seenEpisodes.size} episodes`);
-        isFirstRun = false;
+        logger.info(`📺 Cached ${seenEpisodes.size} episodes`);
     } catch (error) {
-        console.error("Failed to initialize Crunchyroll cache:", error);
+        logger.error(error as Error, "Failed to initialize Crunchyroll cache");
+    } finally {
+        // Always transition out of first-run mode, even on failure.
+        // If init fails, the next successful poll will treat all items as new
+        // — better than staying permanently silent.
+        isFirstRun = false;
     }
 }
 
@@ -91,39 +96,46 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
         // Fetch RSS publishers for enrichment (original)
         await service.fetchRssPublishers();
 
-        // Find new or edited episodes
+        // Find new or edited episodes — but don't mark them as seen until after publish
+        const pendingSeen: Map<string, string> = new Map(); // id → title, to be committed after publish
         const newEpisodes: { episode: FormattedEpisode; isEdited: boolean }[] = [];
         for (const ep of episodes) {
             const prevTitle = seenEpisodes.get(ep.id);
 
             if (prevTitle === undefined) {
-                // New episode
-                seenEpisodes.set(ep.id, ep.title);
+                // New episode — defer marking as seen until after successful publish
+                pendingSeen.set(ep.id, ep.title);
                 if (!isFirstRun) {
                     const formatted = service.formatEpisode(ep);
                     formatted.publisher = service.getPublisher(ep.external_id);
                     newEpisodes.push({ episode: formatted, isEdited: false });
                 }
             } else if (prevTitle !== ep.title) {
-                // Edited episode (title changed)
-                seenEpisodes.set(ep.id, ep.title);
+                // Edited episode (title changed) — defer marking as seen until after successful publish
+                pendingSeen.set(ep.id, ep.title);
                 if (!isFirstRun) {
-                    console.log(`📺 Detected edit on ${ep.id}`);
+                    logger.info(`📺 Detected edit on ${ep.id}`);
                     const formatted = service.formatEpisode(ep);
                     formatted.publisher = service.getPublisher(ep.external_id);
                     newEpisodes.push({ episode: formatted, isEdited: true });
                 }
             }
         }
-        pruneSeenEpisodes();
 
-        if (newEpisodes.length === 0) return;
+        if (newEpisodes.length === 0) {
+            // No new episodes — commit pending seen entries for first-run items
+            for (const [id, title] of pendingSeen) {
+                seenEpisodes.set(id, title);
+            }
+            pruneSeenEpisodes();
+            return;
+        }
 
         // Enrich with series posters
         const rawEpisodes = newEpisodes.map(e => e.episode);
         const enrichedEpisodes = await service.enrichWithSeriesPoster(rawEpisodes);
 
-        console.log(`📺 Found ${enrichedEpisodes.length} new/edited Crunchyroll episode(s)`);
+        logger.info(`📺 Found ${enrichedEpisodes.length} new/edited Crunchyroll episode(s)`);
 
         // Enrich with Metadata (MAL/Anilist/AniDB) in parallel
         await Promise.all(
@@ -142,7 +154,7 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
                         };
                     }
                 } catch (e) {
-                    console.error(`Error enriching metadata for ${ep.seriesTitle}:`, e);
+                    logger.error(e as Error, `Error enriching metadata for ${ep.seriesTitle}`);
                 }
             })
         );
@@ -171,9 +183,16 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
                 episodes: episodesToPublish,
                 targetChannelIds
             });
+
+            // Commit seen episodes only after successful publish
+            for (const [id, title] of pendingSeen) {
+                seenEpisodes.set(id, title);
+            }
         }
+
+        pruneSeenEpisodes();
     } catch (error) {
-        console.error("Crunchyroll feed check error:", error);
+        logger.error(error as Error, "Crunchyroll feed check error");
     } finally {
         feedLock.isChecking = false;
     }

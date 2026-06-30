@@ -11,6 +11,7 @@ import {
     EmbedBuilder
 } from "discord.js";
 import { getGuildSettings, type ICrunchyrollFeedSettings } from "../database/models/guild-settings";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the crunchyroll-feed command.
@@ -113,7 +114,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
         }
     } catch (error) {
-        console.error("Crunchyroll feed command failed:", error);
+        logger.error(error, "Crunchyroll feed command failed");
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
@@ -126,7 +127,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 });
             }
         } catch (e) {
-            console.error("Failed to send error reply:", e);
+            logger.error(e, "Failed to send error reply");
         }
     }
 }

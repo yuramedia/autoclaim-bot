@@ -5,6 +5,7 @@
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
 import type { AnimeRelease, AnimeEntry } from "../types/bestrelease";
+import { logger } from "../core/logger";
 
 /**
  * Slash command data for the bestrelease command.
@@ -105,7 +106,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error("Best release error:", error);
+        logger.error(error, "Best release error");
         await interaction.editReply({
             content: "❌ Terjadi kesalahan saat mencari data. Silakan coba lagi nanti."
         });
@@ -178,7 +179,7 @@ function parseApiData(json: { nodes?: { data?: unknown[] }[] }): AnimeEntry[] {
             animeList.push(anime);
         }
     } catch (e) {
-        console.error("Error parsing API data:", e);
+        logger.error(e, "Error parsing API data");
     }
 
     return animeList;

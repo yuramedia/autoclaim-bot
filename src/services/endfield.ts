@@ -6,6 +6,7 @@
  */
 
 import crypto from "crypto";
+import { logger } from "../core/logger";
 import type { EndfieldClaimResult, EndfieldRoleResult, EndfieldServiceOptions, EndfieldValidation } from "../types";
 import {
     ENDFIELD,
@@ -67,7 +68,7 @@ async function getOAuthCode(accountToken: string): Promise<string | null> {
         const json = (await response.json()) as { status?: number; data?: { code?: string } };
         return json.status === 0 && json.data?.code ? json.data.code : null;
     } catch (error) {
-        console.error("[Endfield] getOAuthCode error:", error);
+        logger.error(error as Error, "[Endfield] getOAuthCode error");
         return null;
     }
 }
@@ -89,7 +90,7 @@ async function getCred(oauthCode: string): Promise<string | null> {
         const json = (await response.json()) as { code?: number; data?: { cred?: string } };
         return json.code === 0 && json.data?.cred ? json.data.cred : null;
     } catch (error) {
-        console.error("[Endfield] getCred error:", error);
+        logger.error(error as Error, "[Endfield] getCred error");
         return null;
     }
 }
@@ -117,7 +118,7 @@ async function getSignToken(cred: string): Promise<string | null> {
         const json = (await response.json()) as { code?: number; data?: { token?: string } };
         return json.code === 0 && json.data?.token ? json.data.token : null;
     } catch (error) {
-        console.error("[Endfield] getSignToken error:", error);
+        logger.error(error as Error, "[Endfield] getSignToken error");
         return null;
     }
 }
@@ -176,7 +177,7 @@ async function getPlayerBindings(cred: string, signToken: string): Promise<strin
         }
         return roles;
     } catch (error) {
-        console.error("[Endfield] getPlayerBindings error:", error);
+        logger.error(error as Error, "[Endfield] getPlayerBindings error");
         return [];
     }
 }
@@ -216,7 +217,7 @@ async function sendAttendanceRequest(
         });
         return (await response.json()) as { code?: number; message?: string; data?: unknown };
     } catch (error) {
-        console.error("[Endfield] sendAttendanceRequest error:", error);
+        logger.error(error as Error, "[Endfield] sendAttendanceRequest error");
         return { code: -1, message: "Network error in sendAttendanceRequest" };
     }
 }
@@ -277,11 +278,12 @@ export class EndfieldService {
      * @returns Claim results.
      */
     async claim(): Promise<EndfieldClaimResult> {
-        console.log("[Endfield] Starting auth pipeline...");
+        logger.info("[Endfield] Starting auth pipeline...");
 
         // Step 1: Get OAuth code from ACCOUNT_TOKEN
-        const decodedToken = decodeURIComponent(this.accountToken);
-        const oauthCode = await getOAuthCode(decodedToken);
+        // Token is now stored in decoded form (URI-decoded at entry point in endfield-modal),
+        // so no decodeURIComponent needed here.
+        const oauthCode = await getOAuthCode(this.accountToken);
         if (!oauthCode) {
             return {
                 success: false,
@@ -290,39 +292,39 @@ export class EndfieldService {
                 tokenExpired: true
             };
         }
-        console.log("[Endfield] OAuth code obtained");
+        logger.info("[Endfield] OAuth code obtained");
 
         // Step 2: Generate cred
         const cred = await getCred(oauthCode);
         if (!cred) {
             return { success: false, message: "❌ Failed to generate credential from OAuth code" };
         }
-        console.log("[Endfield] Cred generated");
+        logger.info("[Endfield] Cred generated");
 
         // Step 3: Get sign token
         const signToken = await getSignToken(cred);
         if (!signToken) {
             return { success: false, message: "❌ Failed to get sign token" };
         }
-        console.log("[Endfield] Sign token obtained");
+        logger.info("[Endfield] Sign token obtained");
 
         // Step 4: Get player bindings (auto-detect all game roles)
         const gameRoles = await getPlayerBindings(cred, signToken);
         if (gameRoles.length === 0) {
             return { success: false, message: "❌ No Endfield game roles found for this account" };
         }
-        console.log(`[Endfield] Found ${gameRoles.length} game role(s): ${gameRoles.join(", ")}`);
+        logger.info(`[Endfield] Found ${gameRoles.length} game role(s): ${gameRoles.join(", ")}`);
 
         // Step 5: Send attendance for each role in parallel
         const rolePromises = gameRoles.map(async (gameRole): Promise<EndfieldRoleResult> => {
             try {
                 const response = await sendAttendanceRequest(cred, signToken, gameRole, this.language);
-                console.log(`[Endfield] Role ${gameRole} response:`, JSON.stringify(response));
+                logger.info(`[Endfield] Role ${gameRole} response: ${JSON.stringify(response)}`);
 
                 return this.handleResponse(gameRole, response);
             } catch (error: unknown) {
                 const err = error as { message?: string };
-                console.error(`[Endfield] Role ${gameRole} error:`, err.message);
+                logger.error(`[Endfield] Role ${gameRole} error: ${err.message}`);
                 return {
                     gameRole,
                     success: false,

@@ -16,7 +16,8 @@ export type {
     CrunchyrollEpisodes,
     FormattedEpisode,
     CrunchyrollSubtitle,
-    CrunchyrollPlayResponse
+    CrunchyrollPlayResponse,
+    LineupAnnouncement
 } from "./crunchyroll";
 
 // Code source types
@@ -55,3 +56,6 @@ export type { AmeNZBImages, AmeNZBNewznabItem } from "./amenzb";
 
 // Tsukihime types
 export type { TsukihimeTorrent, TsukihimeAnime, TsukihimeImages } from "./tsukihime";
+
+// Antihack types
+export type { AntihackBanResult, AntihackLogData } from "./antihack";

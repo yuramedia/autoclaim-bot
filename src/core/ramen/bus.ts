@@ -43,6 +43,12 @@ export class RamenBus {
             process.on("message", (message: unknown) => {
                 const msg = message as RamenIpcMessage | null;
                 if (msg && msg._ramen_ipc) {
+                    // Skip events that originated from this shard —
+                    // we already emitted them locally in publish().
+                    // Without this filter, the master's cross-shard relay
+                    // sends our own event back to us, causing double delivery.
+                    if (msg.origin === this.shardId) return;
+
                     this.emitter.emit(msg.topic, msg.data, {
                         isLocal: false,
                         originShardId: msg.origin

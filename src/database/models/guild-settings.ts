@@ -6,6 +6,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 import type { PlatformId } from "../../types/embed-fix";
+import { logger } from "../../core/logger";
 
 /**
  * Settings configuration for the social media embed fixer.
@@ -36,13 +37,24 @@ export interface IU2FeedSettings {
 }
 
 /**
+ * Settings configuration for the antihack trap channel system.
+ */
+export interface IAntihackSettings {
+    enabled: boolean;
+    channelIds: string[];
+    logChannelId: string | null;
+}
+
+/**
  * Document interface representing guild-specific configuration settings stored in MongoDB.
  */
 export interface IGuildSettings extends Document {
     guildId: string;
     embedFix: IEmbedFixSettings;
     crunchyrollFeed: ICrunchyrollFeedSettings;
+    crunchyrollLineup: ICrunchyrollFeedSettings;
     u2Feed: IU2FeedSettings;
+    antihack: IAntihackSettings;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -66,12 +78,20 @@ const U2FeedSettingsSchema = new Schema<IU2FeedSettings>({
     filter: { type: String, default: "BDMV|Blu-ray|BD-BOX" }
 });
 
+const AntihackSettingsSchema = new Schema<IAntihackSettings>({
+    enabled: { type: Boolean, default: false },
+    channelIds: { type: [String], default: [] },
+    logChannelId: { type: String, default: null }
+});
+
 const GuildSettingsSchema = new Schema<IGuildSettings>(
     {
         guildId: { type: String, required: true, unique: true, index: true },
         embedFix: { type: EmbedFixSettingsSchema, default: () => ({}) },
         crunchyrollFeed: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) },
-        u2Feed: { type: U2FeedSettingsSchema, default: () => ({}) }
+        crunchyrollLineup: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) },
+        u2Feed: { type: U2FeedSettingsSchema, default: () => ({}) },
+        antihack: { type: AntihackSettingsSchema, default: () => ({}) }
     },
     {
         timestamps: true
@@ -94,7 +114,7 @@ export async function getGuildSettings(guildId: string): Promise<IGuildSettings>
         }
         return settings;
     } catch (error: unknown) {
-        console.error(`[getGuildSettings] Failed to fetch settings for guild ${guildId}:`, error);
+        logger.error(error, `[getGuildSettings] Failed to fetch settings for guild ${guildId}`);
         throw error;
     }
 }
@@ -118,7 +138,32 @@ export async function updateEmbedFixSettings(
         await settings.save();
         return settings;
     } catch (error: unknown) {
-        console.error(`[updateEmbedFixSettings] Failed to update settings for guild ${guildId}:`, error);
+        logger.error(error, `[updateEmbedFixSettings] Failed to update settings for guild ${guildId}`);
+        throw error;
+    }
+}
+
+/**
+ * Update guild antihack settings
+ * @param guildId - The guild ID to update settings for
+ * @param updates - Partial antihack settings to apply
+ * @returns The updated guild settings document
+ */
+export async function updateAntihackSettings(
+    guildId: string,
+    updates: Partial<IAntihackSettings>
+): Promise<IGuildSettings> {
+    try {
+        const settings = await getGuildSettings(guildId);
+
+        if (updates.enabled !== undefined) settings.antihack.enabled = updates.enabled;
+        if (updates.channelIds !== undefined) settings.antihack.channelIds = updates.channelIds;
+        if (updates.logChannelId !== undefined) settings.antihack.logChannelId = updates.logChannelId;
+
+        await settings.save();
+        return settings;
+    } catch (error: unknown) {
+        logger.error(error, `[updateAntihackSettings] Failed to update settings for guild ${guildId}`);
         throw error;
     }
 }

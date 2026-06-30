@@ -7,8 +7,9 @@ import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, Me
 import { User } from "../database/models/user";
 import { HoyolabService, formatHoyolabResults } from "../services/hoyolab";
 import { EndfieldService, formatEndfieldResult } from "../services/endfield";
-import { decryptToken } from "../utils/token-crypto";
+import { decryptTokenCompat, encryptToken } from "../utils/token-crypto";
 import { getCooldownRemaining, setCooldown, formatCooldown } from "../utils/cooldown";
+import { logger } from "../core/logger";
 
 const CLAIM_COOLDOWN_MS = 30_000; // 30 seconds
 
@@ -66,7 +67,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         // Claim Hoyolab
         if ((service === "all" || service === "hoyolab") && user.hoyolab?.token) {
-            const hoyolabService = new HoyolabService(decryptToken(user.hoyolab.token));
+            const hoyolabDecrypt = decryptTokenCompat(user.hoyolab.token);
+            const hoyolabService = new HoyolabService(hoyolabDecrypt.value);
             const results = await hoyolabService.claimAll(user.hoyolab.games);
 
             embed.addFields({
@@ -75,15 +77,25 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 inline: false
             });
 
-            user.hoyolab.lastClaim = new Date();
-            user.hoyolab.lastClaimResult = results.map(r => `${r.game}: ${r.success ? "✅" : "❌"}`).join(", ");
+            // Atomic update — avoids race with scheduler overwriting the same document
+            const hoyolabResultText = results.map(r => `${r.game}: ${r.success ? "✅" : "❌"}`).join(", ");
+            const hoyolabUpdate: Record<string, unknown> = {
+                "hoyolab.lastClaim": new Date(),
+                "hoyolab.lastClaimResult": hoyolabResultText
+            };
+            // Re-encrypt token in v1 format if it came from legacy/plaintext
+            if (hoyolabDecrypt.needsReEncryption) {
+                hoyolabUpdate["hoyolab.token"] = encryptToken(hoyolabDecrypt.value);
+            }
+            await User.updateOne({ discordId: interaction.user.id }, { $set: hoyolabUpdate });
             hasResults = true;
         }
 
         // Claim Endfield
         if ((service === "all" || service === "endfield") && user.endfield?.accountToken) {
+            const endfieldDecrypt = decryptTokenCompat(user.endfield.accountToken);
             const endfieldService = new EndfieldService({
-                accountToken: decryptToken(user.endfield.accountToken)
+                accountToken: endfieldDecrypt.value
             });
             const result = await endfieldService.claim();
 
@@ -93,8 +105,17 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 inline: false
             });
 
-            user.endfield.lastClaim = new Date();
-            user.endfield.lastClaimResult = result.success ? "✅ Success" : `❌ ${result.message}`;
+            // Atomic update — avoids race with scheduler overwriting the same document
+            const endfieldResultText = result.success ? "✅ Success" : `❌ ${result.message}`;
+            const endfieldUpdate: Record<string, unknown> = {
+                "endfield.lastClaim": new Date(),
+                "endfield.lastClaimResult": endfieldResultText
+            };
+            // Re-encrypt token in v1 format if it came from legacy/plaintext
+            if (endfieldDecrypt.needsReEncryption) {
+                endfieldUpdate["endfield.accountToken"] = encryptToken(endfieldDecrypt.value);
+            }
+            await User.updateOne({ discordId: interaction.user.id }, { $set: endfieldUpdate });
             hasResults = true;
         }
 
@@ -105,24 +126,26 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             return;
         }
 
-        await user.save();
         setCooldown("claim", interaction.user.id);
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        console.error("Claim command failed:", error);
+        logger.error(error, "Claim command failed");
+        // decryptTokenCompat never throws for format reasons, but claim logic
+        // could still fail (API errors, validation, etc.)
+        const userMessage = "❌ An error occurred while executing the claim command.";
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
-                    content: "❌ An error occurred while executing the claim command."
+                    content: userMessage
                 });
             } else {
                 await interaction.reply({
-                    content: "❌ An error occurred while executing the claim command.",
+                    content: userMessage,
                     flags: MessageFlags.Ephemeral
                 });
             }
         } catch (e) {
-            console.error("Failed to send error reply:", e);
+            logger.error(e, "Failed to send error reply");
         }
     }
 }

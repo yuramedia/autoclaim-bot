@@ -8,7 +8,7 @@ import { User } from "../database/models/user";
 import { HoyolabService, type GameAccount } from "../services/hoyolab";
 import { getCodes } from "../services/code-source";
 import { getGameDisplayName } from "../constants";
-import { decryptToken } from "../utils/token-crypto";
+import { decryptTokenCompat, encryptToken } from "../utils/token-crypto";
 import { logger } from "../core/logger";
 
 /**
@@ -95,7 +95,17 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         return;
     }
 
-    const hoyolab = new HoyolabService(decryptToken(user.hoyolab.token));
+    const hoyolabDecrypt = decryptTokenCompat(user.hoyolab.token);
+    const hoyolab = new HoyolabService(hoyolabDecrypt.value);
+
+    // Re-encrypt token in v1 format if it came from legacy/plaintext
+    if (hoyolabDecrypt.needsReEncryption) {
+        await User.updateOne(
+            { discordId: interaction.user.id },
+            { $set: { "hoyolab.token": encryptToken(hoyolabDecrypt.value) } }
+        );
+    }
+
     const subcommand = interaction.options.getSubcommand();
 
     try {

@@ -1,0 +1,8 @@
+# Force LF line endings for all text files, regardless of each contributor's
+# local `core.autocrlf` setting (Windows Git defaults often convert LF -> CRLF
+# on checkout, which oxfmt then flags as a formatting violation).
+#
+# An explicit `eol=lf` attribute takes precedence over `core.autocrlf` during
+# checkout, so this fixes the issue for every contributor/OS going forward —
+# not just locally for one machine.
+* text=auto eol=lf

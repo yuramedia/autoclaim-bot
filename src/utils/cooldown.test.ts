@@ -70,7 +70,9 @@ describe("setCooldown", () => {
 
         // Small artificial wait to ensure a measurable time difference
         const spin = Date.now() + 5;
-        while (Date.now() < spin) { /* busy-wait 5 ms */ }
+        while (Date.now() < spin) {
+            /* busy-wait 5 ms */
+        }
 
         setCooldown("refresh-cmd", userId); // re-stamp
         const after = getCooldownRemaining("refresh-cmd", userId, 30_000);

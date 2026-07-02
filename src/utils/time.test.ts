@@ -9,13 +9,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import {
-    formatDuration,
-    formatUptime,
-    formatUptimeSeconds,
-    discordTimestamp,
-    formatUtc8DateTime
-} from "./time";
+import { formatDuration, formatUptime, formatUptimeSeconds, discordTimestamp, formatUtc8DateTime } from "./time";
 
 // ── formatDuration ────────────────────────────────────────────────────────────
 

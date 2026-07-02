@@ -34,17 +34,13 @@ mock.module("axios", () => ({
         create: () => ({
             post: async (_url: string, _data?: unknown, _cfg?: unknown) => {
                 if (http.shouldThrow) {
-                    throw new Error(
-                        typeof http.shouldThrow === "string" ? http.shouldThrow : "Network error"
-                    );
+                    throw new Error(typeof http.shouldThrow === "string" ? http.shouldThrow : "Network error");
                 }
                 return http.postResponse;
             },
             get: async (_url: string, _cfg?: unknown) => {
                 if (http.shouldThrow) {
-                    throw new Error(
-                        typeof http.shouldThrow === "string" ? http.shouldThrow : "Network error"
-                    );
+                    throw new Error(typeof http.shouldThrow === "string" ? http.shouldThrow : "Network error");
                 }
                 return http.getResponse;
             }
@@ -84,9 +80,7 @@ describe("formatHoyolabResults", () => {
     });
 
     test("prefixes failed claims with ❌", () => {
-        const output = formatHoyolabResults([
-            { success: false, game: "Zenless Zone Zero", message: "Token expired" }
-        ]);
+        const output = formatHoyolabResults([{ success: false, game: "Zenless Zone Zero", message: "Token expired" }]);
         expect(output).toContain("❌");
         expect(output).toContain("Token expired");
     });
@@ -101,9 +95,7 @@ describe("formatHoyolabResults", () => {
     });
 
     test("bold-wraps the game name in every line", () => {
-        const output = formatHoyolabResults([
-            { success: true, game: "Tears of Themis", message: "Claimed!" }
-        ]);
+        const output = formatHoyolabResults([{ success: true, game: "Tears of Themis", message: "Claimed!" }]);
         expect(output).toContain("**Tears of Themis**");
     });
 });
@@ -293,9 +285,7 @@ describe("HoyolabService.redeemCode", () => {
     });
 
     test("returns success when the API confirms redemption", async () => {
-        const svc = new HoyolabService(
-            "ltoken_v2=abc; ltuid_v2=123; cookie_token_v2=xyz;"
-        );
+        const svc = new HoyolabService("ltoken_v2=abc; ltuid_v2=123; cookie_token_v2=xyz;");
         http.getResponse = { data: { retcode: 0 } };
         const result = await svc.redeemCode("genshin", mockAccount, "TESTCODE123");
         expect(result.success).toBe(true);
@@ -303,9 +293,7 @@ describe("HoyolabService.redeemCode", () => {
     });
 
     test("returns the API failure message when retcode is non-zero", async () => {
-        const svc = new HoyolabService(
-            "ltoken_v2=abc; ltuid_v2=123; cookie_token_v2=xyz;"
-        );
+        const svc = new HoyolabService("ltoken_v2=abc; ltuid_v2=123; cookie_token_v2=xyz;");
         http.getResponse = { data: { retcode: -2001, message: "Redemption code has expired" } };
         const result = await svc.redeemCode("genshin", mockAccount, "EXPIREDCODE");
         expect(result.success).toBe(false);
@@ -313,18 +301,14 @@ describe("HoyolabService.redeemCode", () => {
     });
 
     test("returns error immediately for an unknown game key", async () => {
-        const svc = new HoyolabService(
-            "ltoken_v2=abc; ltuid_v2=123; cookie_token_v2=xyz;"
-        );
+        const svc = new HoyolabService("ltoken_v2=abc; ltuid_v2=123; cookie_token_v2=xyz;");
         const result = await svc.redeemCode("unknownGame", mockAccount, "CODE123");
         expect(result.success).toBe(false);
         expect(result.message).toBe("Unknown game");
     });
 
     test("returns error on network failure", async () => {
-        const svc = new HoyolabService(
-            "ltoken_v2=abc; ltuid_v2=123; cookie_token_v2=xyz;"
-        );
+        const svc = new HoyolabService("ltoken_v2=abc; ltuid_v2=123; cookie_token_v2=xyz;");
         http.shouldThrow = "Network error";
         const result = await svc.redeemCode("genshin", mockAccount, "CODE123");
         expect(result.success).toBe(false);

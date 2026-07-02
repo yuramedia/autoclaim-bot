@@ -17,13 +17,7 @@ import {
     type HoyolabGameKey
 } from "./games";
 
-const ALL_GAME_KEYS: HoyolabGameKey[] = [
-    "genshin",
-    "starRail",
-    "honkai3",
-    "tearsOfThemis",
-    "zenlessZoneZero"
-];
+const ALL_GAME_KEYS: HoyolabGameKey[] = ["genshin", "starRail", "honkai3", "tearsOfThemis", "zenlessZoneZero"];
 
 // ── getGameDisplayName ────────────────────────────────────────────────────────
 

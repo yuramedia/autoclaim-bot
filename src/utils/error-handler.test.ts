@@ -23,11 +23,13 @@ interface MockInteraction {
     followUp: ReturnType<typeof mock>;
 }
 
-function makeMockInteraction(opts: {
-    replied?: boolean;
-    deferred?: boolean;
-    repliable?: boolean;
-} = {}): MockInteraction {
+function makeMockInteraction(
+    opts: {
+        replied?: boolean;
+        deferred?: boolean;
+        repliable?: boolean;
+    } = {}
+): MockInteraction {
     return {
         id: "mock-interaction-123",
         isRepliable: () => opts.repliable ?? true,
@@ -49,9 +51,7 @@ describe("formatError", () => {
         class DatabaseError extends Error {
             override name = "DatabaseError";
         }
-        expect(formatError(new DatabaseError("connection refused"))).toBe(
-            "DatabaseError: connection refused"
-        );
+        expect(formatError(new DatabaseError("connection refused"))).toBe("DatabaseError: connection refused");
     });
 
     test("converts a plain string to itself", () => {
@@ -115,11 +115,7 @@ describe("handleInteractionError", () => {
 
     test("sends the custom message when one is provided", async () => {
         const interaction = makeMockInteraction();
-        await handleInteractionError(
-            interaction as any,
-            new Error("inner error"),
-            "❌ Custom error message"
-        );
+        await handleInteractionError(interaction as any, new Error("inner error"), "❌ Custom error message");
         const args = interaction.reply.mock.calls[0] as [{ content: string }];
         expect(args[0].content).toBe("❌ Custom error message");
     });

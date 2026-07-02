@@ -7,20 +7,9 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import {
-    HOYOLAB_GAMES,
-    HOYOLAB_HEADERS,
-    HOYOLAB_REDEEM_URLS,
-    HOYOLAB_DS_SALT
-} from "./hoyolab";
+import { HOYOLAB_GAMES, HOYOLAB_HEADERS, HOYOLAB_REDEEM_URLS, HOYOLAB_DS_SALT } from "./hoyolab";
 
-const SUPPORTED_GAME_KEYS = [
-    "genshin",
-    "starRail",
-    "honkai3",
-    "tearsOfThemis",
-    "zenlessZoneZero"
-] as const;
+const SUPPORTED_GAME_KEYS = ["genshin", "starRail", "honkai3", "tearsOfThemis", "zenlessZoneZero"] as const;
 
 // ── HOYOLAB_GAMES ─────────────────────────────────────────────────────────────
 
@@ -84,9 +73,7 @@ describe("HOYOLAB_GAMES", () => {
         const keysWithout = ["genshin", "starRail", "honkai3", "tearsOfThemis"] as const;
         for (const key of keysWithout) {
             const cfg = HOYOLAB_GAMES[key];
-            const hasExtra =
-                cfg?.extraHeaders !== undefined &&
-                Object.keys(cfg.extraHeaders).length > 0;
+            const hasExtra = cfg?.extraHeaders !== undefined && Object.keys(cfg.extraHeaders).length > 0;
             expect(hasExtra, `${key} should not have extra headers`).toBe(false);
         }
     });

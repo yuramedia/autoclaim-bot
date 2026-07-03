@@ -3,7 +3,7 @@
 # ==========================================
 # Stage 1: Builder - Install dependencies
 # ==========================================
-FROM oven/bun:1 AS builder
+FROM oven/bun:canary AS builder
 WORKDIR /app
 
 # Set environment variables
@@ -18,7 +18,7 @@ RUN bun install --frozen-lockfile --production
 # ==========================================
 # Stage 2: Runner - Lightweight production image
 # ==========================================
-FROM oven/bun:1-alpine AS runner
+FROM oven/bun:canary-alpine AS runner
 WORKDIR /app
 
 # Set production environment

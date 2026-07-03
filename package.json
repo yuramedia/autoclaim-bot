@@ -20,9 +20,7 @@
         "@types/node-cron": "^3.0.11",
         "@types/xml2js": "^0.4.14",
         "oxfmt": "^0.57.0",
-        "oxlint": "^1.72.0"
-    },
-    "peerDependencies": {
+        "oxlint": "^1.72.0",
         "typescript": "^6.0.3"
     },
     "dependencies": {

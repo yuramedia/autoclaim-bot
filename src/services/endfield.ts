@@ -382,6 +382,15 @@ export class EndfieldService {
             };
         }
 
+        // Character not logged in / position not found
+        if (code === 19001 || msg.includes("无法获取当前角色位置")) {
+            return {
+                gameRole,
+                success: false,
+                message: "Cannot get character position. Please make sure you have logged into the game."
+            };
+        }
+
         // Unknown error
         return { gameRole, success: false, message: `API Error ${code}: ${msg}` };
     }

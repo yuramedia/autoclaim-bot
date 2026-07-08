@@ -3,9 +3,17 @@
 # Pre-commit hook — fast checks, scoped to staged files only.
 #
 # Runs on every `git commit`:
-#   1. Auto-format staged .ts/.tsx files with oxfmt, then re-stage them
-#   2. Lint those same files with oxlint
+#   1. Auto-format ALL staged files with oxfmt (.ts, .json, .yml, .md, ...),
+#      then re-stage them
+#   2. Lint staged .ts/.tsx files with oxlint
 #   3. Run the full test suite (fast enough at ~1.5s to run unconditionally)
+#
+# oxfmt skips individual files it doesn't recognize as long as at least
+# one staged file is a supported type. But if EVERY staged file is an
+# unsupported/extensionless one (e.g. committing only .githooks/pre-commit
+# itself), oxfmt has zero targets left and exits non-zero — which, under
+# `set -e`, aborted the whole commit. --no-error-on-unmatched-pattern
+# below makes that case a no-op instead of a hard failure.
 #
 # Deliberately NOT included here: `tsc --noEmit` (~12s on this project).
 # That runs in .githooks/pre-push instead, so day-to-day commits stay fast.
@@ -13,20 +21,23 @@
 # Note: this formats the full working-tree contents of each staged file.
 # If you partially stage a file (`git add -p`), any *unstaged* edits in
 # that same file will be picked up by the formatter and end up in the
-# commit too. Stick to whole-file `git add` for .ts files to avoid this.
+# commit too. Stick to whole-file `git add` to avoid this.
 #
 # Bypass in an emergency with: git commit --no-verify
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM || true)
 STAGED_TS_FILES=$(git diff --cached --name-only --diff-filter=ACM -- '*.ts' '*.tsx' || true)
 
-if [ -n "$STAGED_TS_FILES" ]; then
+if [ -n "$STAGED_FILES" ]; then
     echo "→ Formatting staged files..."
-    bunx oxfmt $STAGED_TS_FILES
-    git add $STAGED_TS_FILES
+    bunx oxfmt --no-error-on-unmatched-pattern $STAGED_FILES
+    git add $STAGED_FILES
+fi
 
+if [ -n "$STAGED_TS_FILES" ]; then
     echo "→ Linting staged files..."
     bunx oxlint $STAGED_TS_FILES
 fi

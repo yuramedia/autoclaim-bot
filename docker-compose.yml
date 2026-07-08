@@ -1,34 +1,22 @@
-# Docker Compose untuk autoclaim-bot (Production)
-# Deploy: docker compose up -d
-# Note: Requires external network 'yura-network' — setup via yura-infra repo.
-#
-# Untuk development lokal, gunakan:
-#   docker compose -f docker-compose.dev.yml up
-
 services:
     bot:
-        # Use pre-built image from GitHub Container Registry
         image: ghcr.io/yuramedia/autoclaim-bot:${IMAGE_TAG:-latest}
         container_name: autoclaim-bot
         restart: unless-stopped
 
-        # Healthcheck: verify the bot process is still alive
         healthcheck:
-            test: ["CMD-SHELL", "pgrep -f 'bun\\|node' || exit 1"]
+            test: ["CMD-SHELL", "pgrep -f 'bun|node' || exit 1"]
             interval: 30s
             timeout: 10s
             retries: 3
             start_period: 20s
 
-        # Environment variables dari file
         env_file:
             - .env.production
 
-        # Additional environment variables
         environment:
             NODE_ENV: production
 
-        # Resource limits
         deploy:
             resources:
                 limits:
@@ -37,12 +25,10 @@ services:
                 reservations:
                     memory: 256M
 
-        # Volumes untuk persistent data
         volumes:
             - ./data:/app/data
             - ./logs:/app/logs
 
-# Connect ke Yura Infra external network
 networks:
     default:
         name: yura-network

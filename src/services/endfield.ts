@@ -149,8 +149,8 @@ async function getPlayerBindings(cred: string, signToken: string): Promise<strin
             sign: signature,
             // Additional headers from reference implementation
             "User-Agent": "Skport/0.7.0 (com.gryphline.skport; build:700089; Android 33; ) Okhttp/5.1.0",
-            "Origin": "https://game.skport.com",
-            "Referer": "https://game.skport.com/"
+            Origin: "https://game.skport.com",
+            Referer: "https://game.skport.com/"
         };
         const response = await fetch(ENDFIELD_BINDING_URL, {
             method: "GET",
@@ -220,8 +220,8 @@ async function sendAttendanceRequest(
             "sk-game-role": gameRole,
             // Additional headers from reference implementation
             "User-Agent": "Skport/0.7.0 (com.gryphline.skport; build:700089; Android 33; ) Okhttp/5.1.0",
-            "Origin": "https://game.skport.com",
-            "Referer": "https://game.skport.com/"
+            Origin: "https://game.skport.com",
+            Referer: "https://game.skport.com/"
         };
         const response = await fetch(ENDFIELD_ATTENDANCE_URL, {
             method: "POST",

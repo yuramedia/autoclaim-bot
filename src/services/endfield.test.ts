@@ -3,7 +3,6 @@ import { EndfieldService, formatEndfieldResult } from "./endfield";
 import {
     ENDFIELD_GRANT_URL,
     ENDFIELD_GENERATE_CRED_URL,
-    ENDFIELD_REFRESH_TOKEN_URL,
     ENDFIELD_BINDING_URL,
     ENDFIELD_ATTENDANCE_URL
 } from "../constants";
@@ -25,10 +24,6 @@ describe("EndfieldService", () => {
         mockResponses[ENDFIELD_GENERATE_CRED_URL] = {
             code: 0,
             data: { cred: "mock_cred", token: "mock_salt" }
-        };
-        mockResponses[ENDFIELD_REFRESH_TOKEN_URL] = {
-            code: 0,
-            data: { token: "mock_sign_token" }
         };
         mockResponses[ENDFIELD_BINDING_URL] = {
             code: 0,

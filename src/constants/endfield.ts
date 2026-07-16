@@ -1,7 +1,7 @@
 /**
  * Endfield/SKPORT API Constants
  * Configuration for Endfield API endpoints
- * Reference: https://github.com/nano-shino/EndfieldCheckin
+ * Reference: https://github.com/Areha11Fz/ArknightsEndfieldAutoCheckIn
  */
 
 /**
@@ -15,14 +15,9 @@ export const ENDFIELD_APP_CODE = "6eb76d4e13aa36e6";
 export const ENDFIELD_GRANT_URL = "https://as.gryphline.com/user/oauth2/v2/grant";
 
 /**
- * Generate cred from OAuth code.
+ * Generate cred from OAuth code (returns both cred and salt/signToken).
  */
 export const ENDFIELD_GENERATE_CRED_URL = "https://zonai.skport.com/web/v1/user/auth/generate_cred_by_code";
-
-/**
- * Refresh token to get signToken.
- */
-export const ENDFIELD_REFRESH_TOKEN_URL = "https://zonai.skport.com/web/v1/auth/refresh";
 
 /**
  * Player binding URL (get game roles).

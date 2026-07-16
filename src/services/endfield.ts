@@ -2,7 +2,7 @@
  * Endfield Service
  * Handles daily check-in for Arknights: Endfield via SKPORT API
  * Uses dynamic token refresh from ACCOUNT_TOKEN (long-lasting)
- * Reference: https://github.com/nano-shino/EndfieldCheckin
+ * Reference: https://github.com/Areha11Fz/ArknightsEndfieldAutoCheckIn
  */
 
 import crypto from "crypto";
@@ -183,7 +183,7 @@ async function getPlayerBindings(cred: string, signToken: string): Promise<strin
 
 /**
  * Send attendance request for a single game role
- * Reference: Uses V2 signature with salt (signToken) when available, V1 as fallback
+ * Uses V2 signature with salt (signToken) from getCredAndSalt
  * @param cred - The session credential
  * @param signToken - The sign token (salt) from getCredAndSalt
  * @param gameRole - Game role identifier
@@ -198,8 +198,6 @@ async function sendAttendanceRequest(
 ): Promise<{ code?: number; message?: string; data?: unknown }> {
     try {
         const timestamp = String(Math.floor(Date.now() / 1000));
-        // Use V2 signature (with salt/signToken) for attendance - matches reference implementation
-        // Reference: "const sign = salt ? generateSignV2(signPath, timestamp, salt) : generateSignV1(timestamp, cred)"
         const signature = computeSignV2(ENDFIELD_ATTENDANCE_PATH, "", timestamp, signToken);
         const headers: Record<string, string> = {
             cred,
@@ -348,7 +346,6 @@ export class EndfieldService {
 
     /**
      * Handle attendance response for a single role.
-     * Reference: handleResponse() from nano-shino/EndfieldCheckin
      * @param gameRole - Game role identifier.
      * @param json - Parsed JSON response.
      * @returns Role check-in result.

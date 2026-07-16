@@ -13,11 +13,9 @@ import {
     ENDFIELD_APP_CODE,
     ENDFIELD_GRANT_URL,
     ENDFIELD_GENERATE_CRED_URL,
-    ENDFIELD_REFRESH_TOKEN_URL,
     ENDFIELD_BINDING_URL,
     ENDFIELD_BINDING_PATH,
     ENDFIELD_ATTENDANCE_URL,
-    ENDFIELD_ATTENDANCE_PATH,
     ENDFIELD_GAME_ID,
     ENDFIELD_PLATFORM,
     ENDFIELD_VERSION
@@ -29,15 +27,29 @@ export type { EndfieldClaimResult, EndfieldServiceOptions };
 // ── Crypto ──────────────────────────────────────────────────────────────
 
 /**
- * Compute sign for SKPORT API requests (HMAC-SHA256 + MD5)
- * Reference: computeSign() from nano-shino/EndfieldCheckin
+ * Compute V1 sign for SKPORT API requests (simple MD5)
+ * Used for attendance requests
+ * Reference: Areha11Fz/ArknightsEndfieldAutoCheckIn - generateSignV1
+ * @param timestamp - Request timestamp
+ * @param cred - Session credential
+ * @returns Computed signature string
+ */
+function computeSignV1(timestamp: string, cred: string): string {
+    const input = `timestamp=${timestamp}&cred=${cred}`;
+    return crypto.createHash("md5").update(input).digest("hex");
+}
+
+/**
+ * Compute V2 sign for SKPORT API requests (HMAC-SHA256 + MD5)
+ * Used for player binding requests
+ * Reference: Areha11Fz/ArknightsEndfieldAutoCheckIn - generateSignV2
  * @param path - API path
  * @param body - Request body
  * @param timestamp - Request timestamp
- * @param signToken - Secret sign token
+ * @param signToken - Secret sign token (salt)
  * @returns Computed signature string
  */
-function computeSign(path: string, body: string, timestamp: string, signToken: string): string {
+function computeSignV2(path: string, body: string, timestamp: string, signToken: string): string {
     const headerObj = {
         platform: ENDFIELD_PLATFORM,
         timestamp,
@@ -74,12 +86,23 @@ async function getOAuthCode(accountToken: string): Promise<string | null> {
 }
 
 /**
- * Step 2: Exchange OAuth code for a cred (session credential)
- * POST https://zonai.skport.com/web/v1/user/auth/generate_cred_by_code
- * @param oauthCode - The OAuth code obtained from getOAuthCode
- * @returns Session credential string or null if failed
+ * Credential response from generate_cred_by_code
+ * Returns both cred (session credential) and salt (sign token)
  */
-async function getCred(oauthCode: string): Promise<string | null> {
+interface CredResponse {
+    cred: string;
+    salt: string;
+    userId?: string;
+}
+
+/**
+ * Step 2: Exchange OAuth code for cred and salt (sign token)
+ * POST https://zonai.skport.com/web/v1/user/auth/generate_cred_by_code
+ * Reference: Areha11Fz/ArknightsEndfieldAutoCheckIn - returns both cred and salt (signToken)
+ * @param oauthCode - The OAuth code obtained from getOAuthCode
+ * @returns CredResponse with cred and salt, or null if failed
+ */
+async function getCredAndSalt(oauthCode: string): Promise<CredResponse | null> {
     try {
         const payload = { kind: 1, code: oauthCode };
         const response = await fetch(ENDFIELD_GENERATE_CRED_URL, {
@@ -87,44 +110,26 @@ async function getCred(oauthCode: string): Promise<string | null> {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
-        const json = (await response.json()) as { code?: number; data?: { cred?: string } };
-        return json.code === 0 && json.data?.cred ? json.data.cred : null;
-    } catch (error) {
-        logger.error(error as Error, "[Endfield] getCred error");
-        return null;
-    }
-}
-
-/**
- * Step 3: Refresh to get a signToken for signing requests
- * GET https://zonai.skport.com/web/v1/auth/refresh
- * @param cred - The session credential
- * @returns Sign token string or null if failed
- */
-async function getSignToken(cred: string): Promise<string | null> {
-    try {
-        const timestamp = String(Math.floor(Date.now() / 1000));
-        const headers: Record<string, string> = {
-            cred,
-            platform: ENDFIELD_PLATFORM,
-            vname: ENDFIELD_VERSION,
-            timestamp,
-            "sk-language": "en"
+        const json = (await response.json()) as {
+            code?: number;
+            data?: { cred?: string; token?: string; userId?: string };
         };
-        const response = await fetch(ENDFIELD_REFRESH_TOKEN_URL, {
-            method: "GET",
-            headers
-        });
-        const json = (await response.json()) as { code?: number; data?: { token?: string } };
-        return json.code === 0 && json.data?.token ? json.data.token : null;
+        if (json.code === 0 && json.data?.cred && json.data?.token) {
+            return {
+                cred: json.data.cred,
+                salt: json.data.token,
+                userId: json.data.userId
+            };
+        }
+        return null;
     } catch (error) {
-        logger.error(error as Error, "[Endfield] getSignToken error");
+        logger.error(error as Error, "[Endfield] getCredAndSalt error");
         return null;
     }
 }
 
 /**
- * Step 4: Get player bindings to find all Endfield game roles
+ * Get player bindings to find all Endfield game roles
  * GET https://zonai.skport.com/api/v1/game/player/binding
  * Returns array of game role strings like "3_{roleId}_{serverId}"
  * @param cred - The session credential
@@ -134,7 +139,7 @@ async function getSignToken(cred: string): Promise<string | null> {
 async function getPlayerBindings(cred: string, signToken: string): Promise<string[]> {
     try {
         const timestamp = String(Math.floor(Date.now() / 1000));
-        const signature = computeSign(ENDFIELD_BINDING_PATH, "", timestamp, signToken);
+        const signature = computeSignV2(ENDFIELD_BINDING_PATH, "", timestamp, signToken);
         const headers: Record<string, string> = {
             cred,
             platform: ENDFIELD_PLATFORM,
@@ -187,20 +192,19 @@ async function getPlayerBindings(cred: string, signToken: string): Promise<strin
 /**
  * Send attendance request for a single game role
  * @param cred - The session credential
- * @param signToken - The sign token
  * @param gameRole - Game role identifier
  * @param language - Language code for reward names
  * @returns Promise with API response
  */
 async function sendAttendanceRequest(
     cred: string,
-    signToken: string,
     gameRole: string,
     language: string
 ): Promise<{ code?: number; message?: string; data?: unknown }> {
     try {
         const timestamp = String(Math.floor(Date.now() / 1000));
-        const signature = computeSign(ENDFIELD_ATTENDANCE_PATH, "", timestamp, signToken);
+        // Use V1 signature for attendance requests (simple MD5)
+        const signature = computeSignV1(timestamp, cred);
         const headers: Record<string, string> = {
             cred,
             platform: ENDFIELD_PLATFORM,
@@ -294,31 +298,26 @@ export class EndfieldService {
         }
         logger.info("[Endfield] OAuth code obtained");
 
-        // Step 2: Generate cred
-        const cred = await getCred(oauthCode);
-        if (!cred) {
+        // Step 2: Generate cred and salt (signToken) in one call
+        // Reference: Areha11Fz/ArknightsEndfieldAutoCheckIn - generate_cred_by_code returns both
+        const credData = await getCredAndSalt(oauthCode);
+        if (!credData) {
             return { success: false, message: "❌ Failed to generate credential from OAuth code" };
         }
-        logger.info("[Endfield] Cred generated");
+        const { cred, salt: signToken } = credData;
+        logger.info("[Endfield] Cred and sign token obtained");
 
-        // Step 3: Get sign token
-        const signToken = await getSignToken(cred);
-        if (!signToken) {
-            return { success: false, message: "❌ Failed to get sign token" };
-        }
-        logger.info("[Endfield] Sign token obtained");
-
-        // Step 4: Get player bindings (auto-detect all game roles)
+        // Step 3: Get player bindings (auto-detect all game roles)
         const gameRoles = await getPlayerBindings(cred, signToken);
         if (gameRoles.length === 0) {
             return { success: false, message: "❌ No Endfield game roles found for this account" };
         }
         logger.info(`[Endfield] Found ${gameRoles.length} game role(s): ${gameRoles.join(", ")}`);
 
-        // Step 5: Send attendance for each role in parallel
+        // Step 4: Send attendance for each role in parallel
         const rolePromises = gameRoles.map(async (gameRole): Promise<EndfieldRoleResult> => {
             try {
-                const response = await sendAttendanceRequest(cred, signToken, gameRole, this.language);
+                const response = await sendAttendanceRequest(cred, gameRole, this.language);
                 logger.info(`[Endfield] Role ${gameRole} response: ${JSON.stringify(response)}`);
 
                 return this.handleResponse(gameRole, response);

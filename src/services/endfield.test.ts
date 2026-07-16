@@ -24,7 +24,7 @@ describe("EndfieldService", () => {
         };
         mockResponses[ENDFIELD_GENERATE_CRED_URL] = {
             code: 0,
-            data: { cred: "mock_cred" }
+            data: { cred: "mock_cred", token: "mock_salt" }
         };
         mockResponses[ENDFIELD_REFRESH_TOKEN_URL] = {
             code: 0,

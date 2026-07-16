@@ -10,9 +10,6 @@
  * Key derivation: HKDF-SHA256 from the raw env var, with application-specific info string.
  * This replaces the previous single-pass SHA-256 approach, providing proper key stretching
  * and making future key rotation easier (change the HKDF salt/info without changing the env var).
- *
- * decryptToken() throws on decryption failure — no plaintext fallback.
- * Use decryptTokenSafe() for callers that need graceful handling of legacy/malformed data.
  */
 
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from "crypto";
@@ -170,48 +167,4 @@ export function decryptTokenCompat(value: string): DecryptResult {
             "Returning raw value — this token will be re-encrypted in v1 format and saved back to DB."
     );
     return { value, needsReEncryption: true };
-}
-
-/**
- * Decrypt a token string — strict mode, throws on legacy/plaintext formats.
- *
- * @deprecated Use `decryptTokenCompat()` instead for backward-compatible decryption
- * with auto-re-encryption. This function throws on legacy and plaintext tokens,
- * which will break existing users whose tokens are not yet in v1 format.
- *
- * @param value - The encrypted token string.
- * @returns The decrypted plaintext token.
- * @throws Error if token is in legacy or plaintext format (use decryptTokenCompat for migration).
- */
-export function decryptToken(value: string): string {
-    const result = decryptTokenCompat(value);
-    if (result.needsReEncryption) {
-        // In strict mode, we don't return plaintext/legacy values — throw instead
-        throw new Error(
-            `Token is in a legacy or plaintext format and needs migration. ` +
-                `Use decryptTokenCompat() for backward-compatible decryption with auto-re-encryption.`
-        );
-    }
-    return result.value;
-}
-
-/**
- * Safe decryption wrapper that returns a result object instead of throwing.
- *
- * @deprecated Use `decryptTokenCompat()` instead — it provides the same
- * non-throwing behavior with the `needsReEncryption` flag for auto-migration.
- *
- * @param value - The encrypted token string or potentially plaintext value.
- * @returns An object indicating whether decryption succeeded and the value.
- */
-export function decryptTokenSafe(value: string): { decrypted: boolean; value: string } {
-    try {
-        return { decrypted: true, value: decryptToken(value) };
-    } catch (error) {
-        logger.warn(
-            `[token-crypto] decryptTokenSafe failed: ${error instanceof Error ? error.message : String(error)}. ` +
-                `Returning raw value — this token may need re-encryption.`
-        );
-        return { decrypted: false, value };
-    }
 }

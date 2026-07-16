@@ -8,7 +8,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { createCipheriv, createHash, randomBytes } from "crypto";
-import { encryptToken, decryptToken, decryptTokenCompat, decryptTokenSafe } from "./token-crypto";
+import { encryptToken, decryptTokenCompat } from "./token-crypto";
 
 // ── Round-trip via decryptTokenCompat ───────────────────────────────────────
 
@@ -79,43 +79,6 @@ describe("IV randomness", () => {
     });
 });
 
-// ── decryptToken strict mode ─────────────────────────────────────────────────
-
-describe("decryptToken strict mode (throws on legacy/plaintext)", () => {
-    test("succeeds on v1 format tokens", () => {
-        const token = "valid-v1-token";
-        expect(decryptToken(encryptToken(token))).toBe(token);
-    });
-
-    test("throws on plaintext input", () => {
-        const plain = "ltoken_v2=old_plain_token; ltuid_v2=12345;";
-        expect(() => decryptToken(plain)).toThrow(/legacy or plaintext format/);
-    });
-
-    test("throws on arbitrary strings", () => {
-        expect(() => decryptToken("only:two")).toThrow(/legacy or plaintext format/);
-        expect(() => decryptToken("one")).toThrow(/legacy or plaintext format/);
-        expect(() => decryptToken("a:b:c:d:e")).toThrow(/legacy or plaintext format/);
-    });
-
-    test("throws on tampered ciphertext (wrong auth tag)", () => {
-        const encrypted = encryptToken("original");
-        const parts = encrypted.split(":");
-        parts[3] = "deadbeef".repeat(4);
-        const tampered = parts.join(":");
-        expect(() => decryptToken(tampered)).toThrow(/encryption key may have changed/);
-    });
-
-    test("throws on wrong version prefix", () => {
-        const encrypted = encryptToken("test");
-        const parts = encrypted.split(":");
-        parts[0] = "v2";
-        const wrongVersion = parts.join(":");
-        // v2 prefix with 4 parts doesn't match v1, falls through to legacy/plaintext handling
-        expect(() => decryptToken(wrongVersion)).toThrow(/legacy or plaintext format/);
-    });
-});
-
 // ── Legacy format backward compat ────────────────────────────────────────────
 
 describe("decryptTokenCompat legacy format (3-part, no v1 prefix)", () => {
@@ -170,29 +133,5 @@ describe("decryptTokenCompat plaintext tokens", () => {
         const result = decryptTokenCompat("some-random-string");
         expect(result.value).toBe("some-random-string");
         expect(result.needsReEncryption).toBe(true);
-    });
-});
-
-// ── decryptTokenSafe ──────────────────────────────────────────────────────────
-
-describe("decryptTokenSafe", () => {
-    test("returns { decrypted: true, value } for valid encrypted token", () => {
-        const token = "safe-token-test";
-        const result = decryptTokenSafe(encryptToken(token));
-        expect(result.decrypted).toBe(true);
-        expect(result.value).toBe(token);
-    });
-
-    test("returns { decrypted: false, value } for plaintext input", () => {
-        const plain = "not-encrypted-at-all";
-        const result = decryptTokenSafe(plain);
-        expect(result.decrypted).toBe(false);
-        expect(result.value).toBe(plain);
-    });
-
-    test("returns { decrypted: false, value } for invalid format", () => {
-        const result = decryptTokenSafe("only:two");
-        expect(result.decrypted).toBe(false);
-        expect(result.value).toBe("only:two");
     });
 });

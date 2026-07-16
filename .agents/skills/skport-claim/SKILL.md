@@ -6,7 +6,7 @@ description: Implementation patterns for SKPORT/Endfield daily check-in with dyn
 # SKPORT Auto-Claim Skill
 
 This skill covers SKPORT (Arknights: Endfield) API integration for auto-claim.
-Reference: https://github.com/nano-shino/EndfieldCheckin
+Reference: https://github.com/Areha11Fz/ArknightsEndfieldAutoCheckIn
 
 ## Authentication
 
@@ -29,15 +29,14 @@ This token lasts weeks/months and dynamically generates fresh credentials before
 
 ## Auth Pipeline
 
-Before each attendance request, the service runs a 4-step auth pipeline:
+Before each attendance request, the service runs a 3-step auth pipeline:
 
 ```
 ACCOUNT_TOKEN
-  → 1. getOAuthCode()    POST gryphline.com/user/oauth2/v2/grant
-  → 2. getCred()         POST zonai.skport.com/generate_cred_by_code
-  → 3. getSignToken()    GET  zonai.skport.com/web/v1/auth/refresh
-  → 4. getPlayerBindings()  GET  zonai.skport.com/api/v1/game/player/binding
-  → 5. sendAttendance() per role
+  → 1. getOAuthCode()       POST gryphline.com/user/oauth2/v2/grant
+  → 2. getCredAndSalt()     POST zonai.skport.com/generate_cred_by_code (returns cred + salt)
+  → 3. getPlayerBindings()  GET  zonai.skport.com/api/v1/game/player/binding
+  → 4. sendAttendance()     POST zonai.skport.com/web/v1/game/endfield/attendance (per role)
 ```
 
 ### Step 1: Get OAuth Code
@@ -48,23 +47,16 @@ const payload = { token: accountToken, appCode: "6eb76d4e13aa36e6", type: 0 };
 // Returns: { status: 0, data: { code: "..." } }
 ```
 
-### Step 2: Generate Cred
+### Step 2: Generate Cred and Salt (Sign Token)
 
 ```typescript
 const payload = { kind: 1, code: oauthCode };
 // POST https://zonai.skport.com/web/v1/user/auth/generate_cred_by_code
-// Returns: { code: 0, data: { cred: "..." } }
+// Returns: { code: 0, data: { cred: "...", token: "..." } }
+// Note: 'token' in response is the salt/signToken for signing requests
 ```
 
-### Step 3: Get Sign Token
-
-```typescript
-// GET https://zonai.skport.com/web/v1/auth/refresh
-// Headers: cred, platform, vname, timestamp, sk-language
-// Returns: { code: 0, data: { token: "..." } }
-```
-
-### Step 4: Get Player Bindings (Auto-Detect Roles)
+### Step 3: Get Player Bindings (Auto-Detect Roles)
 
 ```typescript
 // GET https://zonai.skport.com/api/v1/game/player/binding
@@ -72,10 +64,12 @@ const payload = { kind: 1, code: oauthCode };
 // Returns game roles like "3_{roleId}_{serverId}" for all regions
 ```
 
-## Signing (HMAC-SHA256 + MD5)
+## Signing (V2 - HMAC-SHA256 + MD5)
+
+All requests use V2 signature with the salt (signToken) from `getCredAndSalt`:
 
 ```typescript
-function computeSign(path: string, body: string, timestamp: string, signToken: string): string {
+function computeSignV2(path: string, body: string, timestamp: string, signToken: string): string {
     const headerObj = { platform: "3", timestamp, dId: "", vName: "1.0.0" };
     const signString = path + body + timestamp + JSON.stringify(headerObj);
     const hmacHex = crypto.createHmac("sha256", signToken).update(signString).digest("hex");
@@ -97,6 +91,8 @@ POST https://zonai.skport.com/web/v1/game/endfield/attendance
 | `1001`  | Already signed in today  |
 | `10001` | Already signed in today  |
 | `10002` | Token expired            |
+| `19001` | Cannot get character position (need to login to game) |
+| `10000` | Request exception (check signature/headers) |
 | Other   | Error (check message)    |
 
 ## Service Implementation Pattern
@@ -106,10 +102,11 @@ export class EndfieldService {
     constructor(options: { accountToken: string; language?: string }) {}
 
     async claim(): Promise<EndfieldClaimResult> {
-        // 1. Run auth pipeline (OAuth → cred → signToken)
-        // 2. Get player bindings (auto-detect all game roles)
-        // 3. Send attendance for each role
-        // 4. Return aggregated results
+        // 1. Get OAuth code from ACCOUNT_TOKEN
+        // 2. Get cred and salt (signToken) from OAuth code
+        // 3. Get player bindings (auto-detect all game roles)
+        // 4. Send attendance for each role
+        // 5. Return aggregated results
     }
 }
 ```

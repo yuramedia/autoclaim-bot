@@ -16,6 +16,7 @@ import {
     ENDFIELD_BINDING_URL,
     ENDFIELD_BINDING_PATH,
     ENDFIELD_ATTENDANCE_URL,
+    ENDFIELD_ATTENDANCE_PATH,
     ENDFIELD_GAME_ID,
     ENDFIELD_PLATFORM,
     ENDFIELD_VERSION
@@ -27,21 +28,8 @@ export type { EndfieldClaimResult, EndfieldServiceOptions };
 // ── Crypto ──────────────────────────────────────────────────────────────
 
 /**
- * Compute V1 sign for SKPORT API requests (simple MD5)
- * Used for attendance requests
- * Reference: Areha11Fz/ArknightsEndfieldAutoCheckIn - generateSignV1
- * @param timestamp - Request timestamp
- * @param cred - Session credential
- * @returns Computed signature string
- */
-function computeSignV1(timestamp: string, cred: string): string {
-    const input = `timestamp=${timestamp}&cred=${cred}`;
-    return crypto.createHash("md5").update(input).digest("hex");
-}
-
-/**
  * Compute V2 sign for SKPORT API requests (HMAC-SHA256 + MD5)
- * Used for player binding requests
+ * Used for both player binding and attendance requests
  * Reference: Areha11Fz/ArknightsEndfieldAutoCheckIn - generateSignV2
  * @param path - API path
  * @param body - Request body
@@ -195,20 +183,24 @@ async function getPlayerBindings(cred: string, signToken: string): Promise<strin
 
 /**
  * Send attendance request for a single game role
+ * Reference: Uses V2 signature with salt (signToken) when available, V1 as fallback
  * @param cred - The session credential
+ * @param signToken - The sign token (salt) from getCredAndSalt
  * @param gameRole - Game role identifier
  * @param language - Language code for reward names
  * @returns Promise with API response
  */
 async function sendAttendanceRequest(
     cred: string,
+    signToken: string,
     gameRole: string,
     language: string
 ): Promise<{ code?: number; message?: string; data?: unknown }> {
     try {
         const timestamp = String(Math.floor(Date.now() / 1000));
-        // Use V1 signature for attendance requests (simple MD5)
-        const signature = computeSignV1(timestamp, cred);
+        // Use V2 signature (with salt/signToken) for attendance - matches reference implementation
+        // Reference: "const sign = salt ? generateSignV2(signPath, timestamp, salt) : generateSignV1(timestamp, cred)"
+        const signature = computeSignV2(ENDFIELD_ATTENDANCE_PATH, "", timestamp, signToken);
         const headers: Record<string, string> = {
             cred,
             platform: ENDFIELD_PLATFORM,
@@ -325,7 +317,7 @@ export class EndfieldService {
         // Step 4: Send attendance for each role in parallel
         const rolePromises = gameRoles.map(async (gameRole): Promise<EndfieldRoleResult> => {
             try {
-                const response = await sendAttendanceRequest(cred, gameRole, this.language);
+                const response = await sendAttendanceRequest(cred, signToken, gameRole, this.language);
                 logger.info(`[Endfield] Role ${gameRole} response: ${JSON.stringify(response)}`);
 
                 return this.handleResponse(gameRole, response);

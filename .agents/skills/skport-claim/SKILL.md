@@ -85,15 +85,15 @@ POST https://zonai.skport.com/web/v1/game/endfield/attendance
 
 ### Response Codes
 
-| code    | Meaning                  |
-| ------- | ------------------------ |
-| `0`     | Success (message = "OK") |
-| `1001`  | Already signed in today  |
-| `10001` | Already signed in today  |
-| `10002` | Token expired            |
+| code    | Meaning                                               |
+| ------- | ----------------------------------------------------- |
+| `0`     | Success (message = "OK")                              |
+| `1001`  | Already signed in today                               |
+| `10001` | Already signed in today                               |
+| `10002` | Token expired                                         |
 | `19001` | Cannot get character position (need to login to game) |
-| `10000` | Request exception (check signature/headers) |
-| Other   | Error (check message)    |
+| `10000` | Request exception (check signature/headers)           |
+| Other   | Error (check message)                                 |
 
 ## Service Implementation Pattern
 

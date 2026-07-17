@@ -20,17 +20,54 @@ import { getMaxDownloadSize } from "../constants/media-downloader";
 import { checkAntihack } from "./antihack";
 import { logger } from "../core/logger";
 
+import type { VKRFormat } from "../types/media-downloader";
+
 /**
  * Cache for storing video URLs and format details for interactive resolution selection.
  */
-export const videoSelectionCache = new Map<
-    string,
-    { url: string; platform: PlatformId; formats?: import("../types/media-downloader").VKRFormat[] }
->();
+export const videoSelectionCache = new Map<string, { url: string; platform: PlatformId; formats?: VKRFormat[] }>();
 
 // Cache to avoid processing same message twice
 const processedMessages = new Set<string>();
 const CACHE_TTL = 60000; // 1 minute
+const VIDEO_SELECTION_TTL = 15 * 60 * 1000; // 15 minutes
+
+/**
+ * Creates a resolution selection menu for oversized videos.
+ * @param formats - Available video formats
+ * @param url - Original video URL
+ * @param platform - Platform ID
+ * @returns Object containing the select menu and selection ID
+ */
+function createResolutionSelectMenu(
+    formats: VKRFormat[],
+    url: string,
+    platform: PlatformId
+): { selectMenu: StringSelectMenuBuilder; selectionId: string } {
+    const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+
+    videoSelectionCache.set(selectionId, {
+        url,
+        platform,
+        formats
+    });
+    setTimeout(() => videoSelectionCache.delete(selectionId), VIDEO_SELECTION_TTL);
+
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`res_select|${selectionId}`)
+        .setPlaceholder("Video too large. Select a smaller resolution.")
+        .addOptions(
+            formats
+                .slice(0, 25)
+                .map((fmt, idx) =>
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel(`${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`)
+                        .setValue(idx.toString())
+                )
+        );
+
+    return { selectMenu, selectionId };
+}
 
 /**
  * Handles the messageCreate event. Checks if the message contains social media URLs,
@@ -226,28 +263,11 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
                         });
                         files.push(attachment);
                     } else if (downloadResult.oversized && downloadResult.availableFormats) {
-                        const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-                        videoSelectionCache.set(selectionId, {
-                            url: processed.originalUrl,
-                            platform: processed.platform.id,
-                            formats: downloadResult.availableFormats
-                        });
-                        setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
-
-                        const selectMenu = new StringSelectMenuBuilder()
-                            .setCustomId(`res_select|${selectionId}`)
-                            .setPlaceholder("Video too large. Select a smaller resolution.")
-                            .addOptions(
-                                downloadResult.availableFormats
-                                    .slice(0, 25)
-                                    .map((fmt, idx) =>
-                                        new StringSelectMenuOptionBuilder()
-                                            .setLabel(
-                                                `${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`
-                                            )
-                                            .setValue(idx.toString())
-                                    )
-                            );
+                        const { selectMenu } = createResolutionSelectMenu(
+                            downloadResult.availableFormats,
+                            processed.originalUrl,
+                            processed.platform.id
+                        );
                         components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
                     }
                 }
@@ -266,26 +286,11 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
                     });
                     files.push(attachment);
                 } else if (downloadResult.oversized && downloadResult.availableFormats) {
-                    const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-                    videoSelectionCache.set(selectionId, {
-                        url: processed.originalUrl,
-                        platform: processed.platform.id,
-                        formats: downloadResult.availableFormats
-                    });
-                    setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
-
-                    const selectMenu = new StringSelectMenuBuilder()
-                        .setCustomId(`res_select|${selectionId}`)
-                        .setPlaceholder("Video too large. Select a smaller resolution.")
-                        .addOptions(
-                            downloadResult.availableFormats
-                                .slice(0, 25)
-                                .map((fmt, idx) =>
-                                    new StringSelectMenuOptionBuilder()
-                                        .setLabel(`${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`)
-                                        .setValue(idx.toString())
-                                )
-                        );
+                    const { selectMenu } = createResolutionSelectMenu(
+                        downloadResult.availableFormats,
+                        processed.originalUrl,
+                        processed.platform.id
+                    );
                     components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
                 } else if (processed.fixedUrl !== processed.originalUrl) {
                     // Fallback to fixed URL

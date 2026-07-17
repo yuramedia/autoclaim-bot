@@ -1,11 +1,51 @@
 /**
  * Command Cooldown Utility
- * In-memory per-user cooldown tracker.
- * Resets on bot restart (intentional — keeps it simple, no DB needed).
+ * In-memory per-user cooldown tracker with automatic cleanup.
  */
 
 // Map<commandName, Map<userId, lastUsedTimestamp>>
 const cooldowns = new Map<string, Map<string, number>>();
+
+/** Cleanup interval (5 minutes) */
+const CLEANUP_INTERVAL = 5 * 60 * 1000;
+
+/** Maximum age for cooldown entries (1 hour) */
+const MAX_COOLDOWN_AGE = 60 * 60 * 1000;
+
+/**
+ * Cleanup expired cooldown entries to prevent memory leaks.
+ * Removes entries older than MAX_COOLDOWN_AGE.
+ */
+function cleanupExpiredCooldowns(): void {
+    const now = Date.now();
+    let totalRemoved = 0;
+
+    for (const [commandName, userMap] of cooldowns) {
+        let removed = 0;
+        for (const [userId, timestamp] of userMap) {
+            if (now - timestamp > MAX_COOLDOWN_AGE) {
+                userMap.delete(userId);
+                removed++;
+            }
+        }
+        // Remove empty command maps
+        if (userMap.size === 0) {
+            cooldowns.delete(commandName);
+        }
+        totalRemoved += removed;
+    }
+
+    if (totalRemoved > 0) {
+        // Log at debug level for troubleshooting
+    }
+}
+
+// Run cleanup periodically
+const cleanupTimer = setInterval(cleanupExpiredCooldowns, CLEANUP_INTERVAL);
+// Prevent the timer from keeping the process alive
+if (cleanupTimer.unref) {
+    cleanupTimer.unref();
+}
 
 /**
  * Returns the remaining cooldown in milliseconds.
@@ -50,4 +90,13 @@ export function formatCooldown(remainingMs: number): string {
     const seconds = totalSec % 60;
     if (minutes > 0) return `${minutes}m ${seconds}s`;
     return `${seconds}s`;
+}
+
+/**
+ * Gracefully shutdown the cooldown cleanup timer.
+ * Call this during bot shutdown to clean up resources.
+ */
+export function shutdownCooldown(): void {
+    clearInterval(cleanupTimer);
+    cooldowns.clear();
 }

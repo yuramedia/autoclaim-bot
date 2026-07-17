@@ -137,27 +137,32 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
 
         logger.info(`📺 Found ${enrichedEpisodes.length} new/edited Crunchyroll episode(s)`);
 
-        // Enrich with Metadata (MAL/Anilist/AniDB) in parallel
-        await Promise.all(
-            enrichedEpisodes.map(async ep => {
-                try {
-                    const metadata = await searchAnime(ep.seriesTitle);
-                    if (metadata) {
-                        ep.externalLinks = {
-                            anilist: metadata.siteUrl || `https://anilist.co/anime/${metadata.id}`,
-                            mal: metadata.idMal ? `https://myanimelist.net/anime/${metadata.idMal}` : undefined
-                        };
-                    } else {
-                        ep.externalLinks = {
-                            anilist: `https://anilist.co/search/anime?search=${encodeURIComponent(ep.seriesTitle)}`,
-                            mal: `https://myanimelist.net/anime.php?q=${encodeURIComponent(ep.seriesTitle)}`
-                        };
+        // Enrich with Metadata (MAL/Anilist/AniDB) with concurrency control
+        // Process in batches of 10 to avoid overwhelming the API
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < enrichedEpisodes.length; i += BATCH_SIZE) {
+            const batch = enrichedEpisodes.slice(i, i + BATCH_SIZE);
+            await Promise.all(
+                batch.map(async ep => {
+                    try {
+                        const metadata = await searchAnime(ep.seriesTitle);
+                        if (metadata) {
+                            ep.externalLinks = {
+                                anilist: metadata.siteUrl || `https://anilist.co/anime/${metadata.id}`,
+                                mal: metadata.idMal ? `https://myanimelist.net/anime/${metadata.idMal}` : undefined
+                            };
+                        } else {
+                            ep.externalLinks = {
+                                anilist: `https://anilist.co/search/anime?search=${encodeURIComponent(ep.seriesTitle)}`,
+                                mal: `https://myanimelist.net/anime.php?q=${encodeURIComponent(ep.seriesTitle)}`
+                            };
+                        }
+                    } catch (e) {
+                        logger.error(e as Error, `Error enriching metadata for ${ep.seriesTitle}`);
                     }
-                } catch (e) {
-                    logger.error(e as Error, `Error enriching metadata for ${ep.seriesTitle}`);
-                }
-            })
-        );
+                })
+            );
+        }
 
         // Build edit lookup from newEpisodes
         const editedSet = new Set(newEpisodes.filter(e => e.isEdited).map(e => e.episode.episodeId));

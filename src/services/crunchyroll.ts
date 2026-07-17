@@ -129,15 +129,16 @@ export class CrunchyrollService {
             }
 
             // Sort by release date (newest first)
-            return data.data.toSorted((a, b) => {
-                const dateA = new Date(
-                    a.episode_metadata.premium_available_date ?? a.episode_metadata.availability_starts ?? a.last_public
-                ).getTime();
-                const dateB = new Date(
-                    b.episode_metadata.premium_available_date ?? b.episode_metadata.availability_starts ?? b.last_public
-                ).getTime();
-                return dateB - dateA;
-            });
+            // Pre-compute timestamps to avoid creating multiple Date objects per comparison
+            const withTimestamps = data.data.map(ep => ({
+                ep,
+                timestamp: new Date(
+                    ep.episode_metadata.premium_available_date ??
+                        ep.episode_metadata.availability_starts ??
+                        ep.last_public
+                ).getTime()
+            }));
+            return withTimestamps.toSorted((a, b) => b.timestamp - a.timestamp).map(({ ep }) => ep);
         } catch (error) {
             logger.error(error as Error, "Crunchyroll fetch error");
             return [];

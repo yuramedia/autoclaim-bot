@@ -21,6 +21,14 @@ interface RamenIpcMessage {
 }
 
 /**
+ * Subscription handle returned by subscribe() for cleanup.
+ */
+export interface RamenSubscription {
+    topic: string;
+    handler: (data: unknown, meta: RamenMetadata) => void | Promise<void>;
+}
+
+/**
  * Event bus wrapper supporting cross-shard IPC in a Discord.js sharded setup.
  */
 export class RamenBus {
@@ -69,12 +77,32 @@ export class RamenBus {
      * Subscribes a handler to a specific event topic.
      * @param topic - The event channel/topic name
      * @param handler - Callback function invoked when the event is published
+     * @returns A subscription handle that can be used to unsubscribe
      */
     public subscribe<T = unknown>(
         topic: string,
         handler: (data: T, meta: RamenMetadata) => void | Promise<void>
-    ): void {
-        this.emitter.on(topic, handler);
+    ): RamenSubscription {
+        // Wrap handler to handle the generic type
+        const wrappedHandler = (data: unknown, meta: RamenMetadata) => handler(data as T, meta);
+        this.emitter.on(topic, wrappedHandler);
+        return { topic, handler: wrappedHandler };
+    }
+
+    /**
+     * Unsubscribes a handler using the subscription handle.
+     * @param subscription - The subscription handle returned by subscribe()
+     */
+    public unsubscribe(subscription: RamenSubscription): void {
+        this.emitter.off(subscription.topic, subscription.handler);
+    }
+
+    /**
+     * Removes all listeners for a specific topic.
+     * @param topic - The event channel/topic name
+     */
+    public unsubscribeAll(topic: string): void {
+        this.emitter.removeAllListeners(topic);
     }
 
     /**

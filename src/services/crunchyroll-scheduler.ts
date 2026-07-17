@@ -148,8 +148,8 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
                         const metadata = await searchAnime(ep.seriesTitle);
                         if (metadata) {
                             ep.externalLinks = {
-                                anilist: metadata.siteUrl || `https://anilist.co/anime/${metadata.id}`,
-                                mal: metadata.idMal ? `https://myanimelist.net/anime/${metadata.idMal}` : undefined
+                                anilist: metadata.anilistUrl || `https://anilist.co/anime/${metadata.anilistId}`,
+                                mal: metadata.malUrl
                             };
                         } else {
                             ep.externalLinks = {

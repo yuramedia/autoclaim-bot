@@ -80,16 +80,18 @@ function buildEpisodeEmbed(episode: FormattedEpisode, isEdited: boolean): EmbedB
 
         // MAL
         if (mal) {
-            const malId = mal.split("/").pop() || "Link";
-            embed.addFields({ name: "MAL", value: `[${malId}](${mal})`, inline: true });
+            const isSearch = mal.includes("anime.php");
+            const malLabel = isSearch ? "Search" : mal.split("/").filter(Boolean).pop() || "Link";
+            embed.addFields({ name: "MAL", value: `[${malLabel}](${mal})`, inline: true });
         } else {
             embed.addFields({ name: "MAL", value: "-", inline: true });
         }
 
         // Anilist
         if (anilist) {
-            const anilistId = anilist.split("/").pop() || "Link";
-            embed.addFields({ name: "Anilist", value: `[${anilistId}](${anilist})`, inline: true });
+            const isSearch = anilist.includes("search");
+            const anilistLabel = isSearch ? "Search" : anilist.split("/").filter(Boolean).pop() || "Link";
+            embed.addFields({ name: "Anilist", value: `[${anilistLabel}](${anilist})`, inline: true });
         } else {
             embed.addFields({ name: "Anilist", value: "-", inline: true });
         }

@@ -15,7 +15,8 @@ import {
     AMENZB_SCREENSHOTS_PATH,
     AMENZB_COVERS_PATH
 } from "../constants/amenzb.js";
-import { ANILIST_API_URL, ANILIST_USER_AGENT, BROWSER_USER_AGENT } from "../constants/anime.js";
+import { BROWSER_USER_AGENT } from "../constants/anime.js";
+import { searchAnime, fetchAnimeByAnidbId } from "./anime-metadata.js";
 import type { AmeNZBImages } from "../types/amenzb.js";
 
 /**
@@ -410,44 +411,15 @@ export async function fetchAnilistCoverByTitle(title: string): Promise<string | 
     cleanTitle = cleanTitle.replace(/[-_.]/g, " ");
 
     cleanTitle = cleanTitle.replace(/\s+/g, " ").trim();
-
     try {
-        const query = `
-      query($search: String) {
-        Media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
-          coverImage { extraLarge }
-        }
-      }
-    `;
-
-        const aniResponse = await axios.post(
-            ANILIST_API_URL,
-            {
-                query,
-                variables: { search: cleanTitle }
-            },
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                    "User-Agent": ANILIST_USER_AGENT
-                }
-            }
-        );
-
-        const target = aniResponse.data?.data?.Media;
-        if (target) {
-            return target.coverImage?.extraLarge || null;
+        const metadata = await searchAnime(cleanTitle);
+        if (metadata?.anilistId) {
+            return `https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b${metadata.anilistId}.jpg`;
         }
         return null;
     } catch (error: unknown) {
-        let errorMessage = "Unknown error";
-        if (axios.isAxiosError(error)) {
-            errorMessage = error.response?.data ? JSON.stringify(error.response.data) : error.message;
-        } else if (error instanceof Error) {
-            errorMessage = error.message;
-        }
-        logger.error(`[Anilist Cover] Error fetching cover for title ${cleanTitle}: ${errorMessage}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`[Anime Cover] Error fetching cover for title ${cleanTitle}: ${errorMessage}`);
         return null;
     }
 }
@@ -535,44 +507,14 @@ function extractTitleFromXml(xml: string): string | null {
  */
 export async function fetchAnilistCover(anidbId: number | string): Promise<string | null> {
     try {
-        // Get Anilist ID from the mapping API
-        const mapResponse = await axios.get(`https://animeapi.my.id/anidb/${anidbId}`, {
-            timeout: 10000,
-            headers: { "User-Agent": ANILIST_USER_AGENT }
-        });
-        const anilistId = mapResponse.data?.anilist;
-
-        if (!anilistId) return null;
-
-        // Query Anilist GraphQL for the Cover Image
-        const query = `
-      query($id: Int) {
-        Media(id: $id, type: ANIME) {
-          coverImage { extraLarge }
+        const animeData = await fetchAnimeByAnidbId(anidbId);
+        if (animeData?.anilist) {
+            return `https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b${animeData.anilist}.jpg`;
         }
-      }
-    `;
-
-        const aniResponse = await axios.post(
-            ANILIST_API_URL,
-            {
-                query,
-                variables: { id: parseInt(anilistId.toString()) }
-            },
-            {
-                headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                    "User-Agent": ANILIST_USER_AGENT
-                }
-            }
-        );
-
-        const coverUrl = aniResponse.data?.data?.Media?.coverImage?.extraLarge;
-        return coverUrl || null;
+        return null;
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
-        logger.error(`[Anilist Cover] Error fetching cover for AniDB ${anidbId}: ${msg}`);
+        logger.error(`[Anime Cover] Error fetching cover for AniDB ${anidbId}: ${msg}`);
         return null;
     }
 }

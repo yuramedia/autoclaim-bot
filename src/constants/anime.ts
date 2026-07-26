@@ -15,18 +15,6 @@ export const ANIME_API_URL = "https://animeapi.my.id";
 export const ANIME_API_USER_AGENT = "Mozilla/5.0 (compatible; AutoClaimBot/1.0)";
 
 /**
- * @deprecated Use ANIME_API_URL instead
- * Legacy Anilist GraphQL API Endpoint.
- */
-export const ANILIST_API_URL = "https://graphql.anilist.co";
-
-/**
- * @deprecated Use ANIME_API_USER_AGENT instead
- * Legacy Anilist API request User-Agent.
- */
-export const ANILIST_USER_AGENT = "Mozilla/5.0 (compatible; AutoClaimBot/1.0)";
-
-/**
  * Generic browser User-Agent for scraping.
  */
 export const BROWSER_USER_AGENT =

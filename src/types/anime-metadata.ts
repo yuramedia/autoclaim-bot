@@ -86,26 +86,3 @@ export interface AnimeMetadata {
     /** MAL URL */
     malUrl?: string;
 }
-
-/**
- * @deprecated Use AnimeApiResponse instead
- * Legacy Anilist media type for backwards compatibility
- */
-export interface AnilistMedia {
-    id: number;
-    idMal: number | null;
-    siteUrl: string | null;
-    title: {
-        romaji: string;
-        english: string | null;
-        native: string | null;
-    };
-}
-
-/**
- * @deprecated Use AnimeApiResponse instead
- * Legacy Anilist response type for backwards compatibility
- */
-export interface AnilistResponse {
-    Media: AnilistMedia;
-}

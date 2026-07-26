@@ -40,7 +40,7 @@ export type { InteractionHandler, ApiResponse, UserSettings, HoyolabGames } from
 export type { AnimeRelease, AnimeEntry } from "./bestrelease";
 
 // Anime Metadata types
-export type { AnimeApiResponse, AnimeMetadata, AnilistMedia, AnilistResponse } from "./anime-metadata";
+export type { AnimeApiResponse, AnimeMetadata } from "./anime-metadata";
 
 // Jisho types
 export type { JishoResult, JishoAPIResponse, JishoWord } from "./jisho";

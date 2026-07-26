@@ -9,35 +9,27 @@ import type { AnimeApiResponse, AnimeMetadata } from "../types";
 import { ANIME_API_URL, ANIME_API_USER_AGENT } from "../constants";
 
 /**
+ * Convert an anime title to a URL-safe slug for platform lookups
+ * @param title - Anime title
+ * @returns Clean slug string
+ */
+function titleToSlug(title: string): string {
+    return title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+}
+
+/**
  * Search for anime by title using animeApi.my.id
- * Uses the redirect service to find mappings
+ * Queries platform slug endpoints (animeplanet, kaize) on animeApi.my.id
  * @param title - Anime title to search for
  * @returns Anime metadata including MAL and Anilist IDs
  */
 export async function searchAnime(title: string): Promise<AnimeMetadata | null> {
     try {
-        // First, try to search using the Anilist platform
-        // animeApi doesn't have direct search, so we use the redirect service
-        const searchUrl = `${ANIME_API_URL}/anilist?search=${encodeURIComponent(title)}`;
-
-        const response = await fetch(searchUrl, {
-            headers: {
-                "User-Agent": ANIME_API_USER_AGENT,
-                Accept: "application/json"
-            }
-        });
-
-        if (!response.ok) {
-            logger.error(`AnimeApi search failed: ${response.status}`);
-            return null;
-        }
-
-        // Try to get the redirected URL which contains the Anilist ID
-        const finalUrl = response.url;
-        const anilistMatch = finalUrl.match(/anilist\/(\d+)/);
-
-        if (!anilistMatch) {
-            // Fallback to search URLs
+        const slug = titleToSlug(title);
+        if (!slug) {
             return {
                 title,
                 anilistUrl: `https://anilist.co/search/anime?search=${encodeURIComponent(title)}`,
@@ -45,29 +37,54 @@ export async function searchAnime(title: string): Promise<AnimeMetadata | null> 
             };
         }
 
-        const anilistId = parseInt(anilistMatch[1]!, 10);
+        // Try animeplanet slug lookup first, then kaize fallback
+        let response = await fetch(`${ANIME_API_URL}/animeplanet/${slug}`, {
+            headers: {
+                "User-Agent": ANIME_API_USER_AGENT,
+                Accept: "application/json"
+            }
+        });
 
-        // Now fetch the full anime data using the Anilist ID
-        const animeData = await fetchAnimeByAnilistId(anilistId);
+        if (!response.ok) {
+            response = await fetch(`${ANIME_API_URL}/kaize/${slug}`, {
+                headers: {
+                    "User-Agent": ANIME_API_USER_AGENT,
+                    Accept: "application/json"
+                }
+            });
+        }
 
-        if (!animeData) {
+        if (response.ok) {
+            const animeData = (await response.json()) as AnimeApiResponse;
+            const malId = animeData.myanimelist ?? undefined;
+            const anilistId = animeData.anilist ?? undefined;
+
             return {
-                title,
+                title: animeData.title || title,
+                malId,
                 anilistId,
-                anilistUrl: `https://anilist.co/anime/${anilistId}`
+                anilistUrl: anilistId
+                    ? `https://anilist.co/anime/${anilistId}`
+                    : `https://anilist.co/search/anime?search=${encodeURIComponent(title)}`,
+                malUrl: malId
+                    ? `https://myanimelist.net/anime/${malId}`
+                    : `https://myanimelist.net/anime.php?q=${encodeURIComponent(title)}`
             };
         }
 
+        // Fallback to search URLs if slug lookup is not matched
         return {
-            title: animeData.title || title,
-            malId: animeData.myanimelist ?? undefined,
-            anilistId: animeData.anilist ?? undefined,
-            anilistUrl: animeData.anilist ? `https://anilist.co/anime/${animeData.anilist}` : undefined,
-            malUrl: animeData.myanimelist ? `https://myanimelist.net/anime/${animeData.myanimelist}` : undefined
+            title,
+            anilistUrl: `https://anilist.co/search/anime?search=${encodeURIComponent(title)}`,
+            malUrl: `https://myanimelist.net/anime.php?q=${encodeURIComponent(title)}`
         };
     } catch (error) {
         logger.error(error as Error, `AnimeApi search failed for "${title}"`);
-        return null;
+        return {
+            title,
+            anilistUrl: `https://anilist.co/search/anime?search=${encodeURIComponent(title)}`,
+            malUrl: `https://myanimelist.net/anime.php?q=${encodeURIComponent(title)}`
+        };
     }
 }
 
@@ -121,6 +138,33 @@ export async function fetchAnimeByMalId(malId: number): Promise<AnimeApiResponse
         return (await response.json()) as AnimeApiResponse;
     } catch (error) {
         logger.error(error as Error, `AnimeApi fetch failed for MAL ID ${malId}`);
+        return null;
+    }
+}
+
+/**
+ * Fetch anime data by AniDB ID
+ * @param anidbId - AniDB ID
+ * @returns Anime API response or null
+ */
+export async function fetchAnimeByAnidbId(anidbId: number | string): Promise<AnimeApiResponse | null> {
+    try {
+        const url = `${ANIME_API_URL}/anidb/${anidbId}`;
+
+        const response = await fetch(url, {
+            headers: {
+                "User-Agent": ANIME_API_USER_AGENT,
+                Accept: "application/json"
+            }
+        });
+
+        if (!response.ok) {
+            return null;
+        }
+
+        return (await response.json()) as AnimeApiResponse;
+    } catch (error) {
+        logger.error(error as Error, `AnimeApi fetch failed for AniDB ID ${anidbId}`);
         return null;
     }
 }

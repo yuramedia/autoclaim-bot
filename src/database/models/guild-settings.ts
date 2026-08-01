@@ -46,6 +46,24 @@ export interface IAntihackSettings {
 }
 
 /**
+ * Settings configuration for individual YouTube channels subscribed to.
+ */
+export interface IYouTubeFeedChannel {
+    channelId: string;
+    channelName: string;
+    handle: string;
+}
+
+/**
+ * Settings configuration for the YouTube channel release monitoring feed.
+ */
+export interface IYouTubeFeedSettings {
+    enabled: boolean;
+    channelId: string | null;
+    youtubeChannels: IYouTubeFeedChannel[];
+}
+
+/**
  * Document interface representing guild-specific configuration settings stored in MongoDB.
  */
 export interface IGuildSettings extends Document {
@@ -55,6 +73,7 @@ export interface IGuildSettings extends Document {
     crunchyrollLineup: ICrunchyrollFeedSettings;
     u2Feed: IU2FeedSettings;
     antihack: IAntihackSettings;
+    youtubeFeed: IYouTubeFeedSettings;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -84,6 +103,18 @@ const AntihackSettingsSchema = new Schema<IAntihackSettings>({
     logChannelId: { type: String, default: null }
 });
 
+const YouTubeFeedChannelSchema = new Schema<IYouTubeFeedChannel>({
+    channelId: { type: String, required: true },
+    channelName: { type: String, required: true },
+    handle: { type: String, required: true }
+});
+
+const YouTubeFeedSettingsSchema = new Schema<IYouTubeFeedSettings>({
+    enabled: { type: Boolean, default: false },
+    channelId: { type: String, default: null },
+    youtubeChannels: { type: [YouTubeFeedChannelSchema], default: [] }
+});
+
 const GuildSettingsSchema = new Schema<IGuildSettings>(
     {
         guildId: { type: String, required: true, unique: true, index: true },
@@ -91,7 +122,8 @@ const GuildSettingsSchema = new Schema<IGuildSettings>(
         crunchyrollFeed: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) },
         crunchyrollLineup: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) },
         u2Feed: { type: U2FeedSettingsSchema, default: () => ({}) },
-        antihack: { type: AntihackSettingsSchema, default: () => ({}) }
+        antihack: { type: AntihackSettingsSchema, default: () => ({}) },
+        youtubeFeed: { type: YouTubeFeedSettingsSchema, default: () => ({}) }
     },
     {
         timestamps: true

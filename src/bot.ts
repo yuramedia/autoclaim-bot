@@ -5,6 +5,7 @@ import { startScheduler, checkMissedClaims } from "./services/scheduler";
 import { startCrunchyrollFeed } from "./services/crunchyroll-scheduler";
 import { startCrunchyrollLineupFeed } from "./services/crunchyroll-lineup-scheduler";
 import { startU2Feed } from "./services/u2-feed-scheduler";
+import { startYouTubeFeed } from "./services/youtube-feed-scheduler";
 import { handleInteraction } from "./handlers/interaction";
 import { handleMessage } from "./handlers/message";
 import { startPresenceUpdater } from "./utils/presence";
@@ -15,6 +16,7 @@ import { fetchCrunchyrollLanguages } from "./constants";
 import "./services/ramen/crunchyroll-subscriber";
 import "./services/ramen/u2-subscriber";
 import "./services/ramen/claim-subscriber";
+import "./services/ramen/youtube-subscriber";
 
 // Ready event
 client.once(Events.ClientReady, readyClient => {
@@ -38,6 +40,9 @@ client.once(Events.ClientReady, readyClient => {
 
     // Start U2 BDMV feed
     startU2Feed(client);
+
+    // Start YouTube feed
+    startYouTubeFeed(client);
 
     // Start presence updater
     startPresenceUpdater(readyClient);

@@ -45,6 +45,7 @@ export class RamenBus {
         if (this.initialized) return;
         this.client = client;
         this.initialized = true;
+        this.emitter.setMaxListeners(50);
 
         if (this.client.shard) {
             // Listen for messages from the master process

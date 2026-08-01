@@ -5,7 +5,8 @@
  * Based on Rimuru-Bot's Feed.kt / FeedItem.kt patterns
  */
 
-import { decode } from "he";
+import he from "he";
+const { decode } = he;
 import type { U2FeedItem, FormattedU2Item } from "../types/u2-feed";
 import { U2_IMAGE_PATTERN, U2_ATTACH_IMAGE_PATTERN } from "../constants/u2-feed";
 import { logger } from "../core/logger.js";
@@ -51,21 +52,25 @@ export class U2FeedService {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-            const response = await fetch(lightEscapeURL(feedUrl), {
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (compatible; AutoClaimBot/1.0)"
-                },
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
+            let xml = "";
+            try {
+                const response = await fetch(lightEscapeURL(feedUrl), {
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (compatible; AutoClaimBot/1.0)"
+                    },
+                    signal: controller.signal
+                });
 
-            if (!response.ok) {
-                logger.error(`U2 RSS fetch failed: ${response.status}`);
-                return [];
+                if (!response.ok) {
+                    logger.error(`U2 RSS fetch failed: ${response.status}`);
+                    return [];
+                }
+
+                xml = await response.text();
+            } finally {
+                clearTimeout(timeoutId);
             }
-
-            const xml = await response.text();
-            return await this.parseItems(xml);
+            return this.parseItems(xml);
         } catch (error) {
             logger.error(error, "U2 RSS fetch error");
             return [];
@@ -73,34 +78,43 @@ export class U2FeedService {
     }
 
     /**
-     * Parse RSS XML into U2FeedItem array using xml2js.
+     * Parse RSS XML into U2FeedItem array using fast-xml-parser.
      * @param xml - Raw RSS XML string.
      * @returns Array of parsed U2FeedItems.
      */
-    private async parseItems(xml: string): Promise<U2FeedItem[]> {
+    private parseItems(xml: string): U2FeedItem[] {
         const items: U2FeedItem[] = [];
         try {
-            const { parseStringPromise } = await import("xml2js");
-            const result = await parseStringPromise(xml);
-            const rawItems = result?.rss?.channel?.[0]?.item || [];
+            const { XMLParser } = require("fast-xml-parser");
+            const parser = new XMLParser({
+                ignoreAttributes: false,
+                attributeNamePrefix: "@_",
+                isArray: (name: string) => name === "item"
+            });
+            const result = parser.parse(xml);
+            const rawItems = result?.rss?.channel?.item || [];
 
             for (const item of rawItems) {
                 try {
-                    const title = item.title?.[0] || "";
-                    const link = item.link?.[0] || "";
-                    const description = item.description?.[0] || "";
-                    const author = item.author?.[0] || "";
+                    const title = String(item.title || "");
+                    const link = String(item.link || "");
+                    const description = String(item.description || "");
+                    const author = String(item.author || "");
 
-                    const guidRaw = item.guid?.[0];
-                    const guid = (typeof guidRaw === "object" ? guidRaw?._ : guidRaw) || "";
+                    const guidRaw = item.guid;
+                    const guid =
+                        (typeof guidRaw === "object" ? String(guidRaw?.["#text"] || "") : String(guidRaw || "")) || "";
 
-                    const pubDate = item.pubDate?.[0] || "";
+                    const pubDate = String(item.pubDate || "");
 
-                    const categoryRaw = item.category?.[0];
-                    const category = (typeof categoryRaw === "object" ? categoryRaw?._ : categoryRaw) || "";
+                    const categoryRaw = item.category;
+                    const category =
+                        (typeof categoryRaw === "object"
+                            ? String(categoryRaw?.["#text"] || "")
+                            : String(categoryRaw || "")) || "";
 
-                    const lengthAttr = item.enclosure?.[0]?.$?.length;
-                    const sizeBytes = lengthAttr ? parseInt(lengthAttr, 10) : null;
+                    const lengthAttr = item.enclosure?.["@_length"];
+                    const sizeBytes = lengthAttr ? parseInt(String(lengthAttr), 10) : null;
 
                     items.push({
                         title,

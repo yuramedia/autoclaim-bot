@@ -19,6 +19,7 @@ import * as crrelease from "./crrelease";
 import * as embedCommand from "./embed";
 import * as antihack from "./antihack";
 import * as cr from "./cr";
+import * as youtube from "./youtube";
 
 /**
  * A list of all available command modules.
@@ -44,7 +45,8 @@ export const commands = [
     crrelease,
     embedCommand,
     antihack,
-    cr
+    cr,
+    youtube
 ];
 
 /**

@@ -59,3 +59,11 @@ export type { TsukihimeTorrent, TsukihimeAnime, TsukihimeImages } from "./tsukih
 
 // Antihack types
 export type { AntihackBanResult, AntihackLogData } from "./antihack";
+
+// YouTube Feed types
+export type {
+    YouTubeFeedEntry,
+    FormattedYouTubeVideo,
+    IYouTubeFeedSettings,
+    IYouTubeFeedChannel
+} from "./youtube-feed";

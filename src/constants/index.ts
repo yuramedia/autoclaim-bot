@@ -17,6 +17,7 @@ export * from "./nekobt";
 export * from "./amenzb";
 export * from "./tsukihime";
 export * from "./antihack";
+export * from "./youtube-feed";
 
 /**
  * Discord Channel configurations.

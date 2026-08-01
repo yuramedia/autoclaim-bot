@@ -885,15 +885,20 @@ export class CrunchyrollService {
             }
 
             const xml = await response.text();
-            const { parseStringPromise } = await import("xml2js");
-            const result = await parseStringPromise(xml);
-            const items = result?.rss?.channel?.[0]?.item || [];
+            const { XMLParser } = await import("fast-xml-parser");
+            const parser = new XMLParser({
+                ignoreAttributes: false,
+                attributeNamePrefix: "@_",
+                isArray: (name: string) => name === "item"
+            });
+            const result = parser.parse(xml);
+            const items = result?.rss?.channel?.item || [];
 
             const announcements: LineupAnnouncement[] = [];
 
             for (const item of items) {
-                const title = item.title?.[0] || "";
-                const url = item.link?.[0] || "";
+                const title = String(item.title || "");
+                const url = String(item.link || "");
 
                 if (onlySeasonal) {
                     const isSeasonal =
@@ -902,17 +907,22 @@ export class CrunchyrollService {
                     if (!isSeasonal) continue;
                 }
 
-                const description = item.description?.[0] || "";
-                const author = item.author?.[0] || item["dc:creator"]?.[0] || null;
-                const thumbnail = item["media:thumbnail"]?.[0]?.$?.url || null;
-                const pubDate = item.pubDate?.[0] || new Date().toUTCString();
+                const description = String(item.description || "");
+                const author =
+                    (typeof item.author === "string"
+                        ? item.author
+                        : typeof item["dc:creator"] === "string"
+                          ? item["dc:creator"]
+                          : null) || null;
+                const thumbnail = item["media:thumbnail"]?.["@_url"] || null;
+                const pubDate = String(item.pubDate || new Date().toUTCString());
 
                 announcements.push({
                     title,
                     url,
                     description,
-                    thumbnail,
                     author,
+                    thumbnail,
                     pubDate
                 });
             }

@@ -10,12 +10,16 @@ import { logger } from "../core/logger";
 import type { YouTubeFeedEntry, FormattedYouTubeVideo, YouTubeVideoStatusType } from "../types/youtube-feed";
 
 export class YouTubeFeedService {
+    private channelIconCache: Map<string, string> = new Map();
+
     /**
      * Resolves a YouTube input (channel URL, @handle, or channel ID) to channel metadata.
      * @param input Raw input string from user (e.g., "https://www.youtube.com/@AniOneID", "@AniOneID", "UC...")
      * @returns Channel details or null if resolution fails
      */
-    async resolveChannelId(input: string): Promise<{ channelId: string; channelName: string; handle: string } | null> {
+    async resolveChannelId(
+        input: string
+    ): Promise<{ channelId: string; channelName: string; handle: string; channelIcon: string | null } | null> {
         try {
             const cleanInput = input.trim();
             let handle = "";
@@ -26,10 +30,12 @@ export class YouTubeFeedService {
                 const channelId = cleanInput;
                 const feed = await this.fetchFeed(channelId);
                 const channelName = feed[0]?.channelName ?? `Channel ${channelId}`;
+                const channelIcon = await this.getChannelIcon(channelId);
                 return {
                     channelId,
                     channelName,
-                    handle: `@${channelId}`
+                    handle: `@${channelId}`,
+                    channelIcon
                 };
             }
 
@@ -46,10 +52,12 @@ export class YouTubeFeedService {
                     if (candidateId && /^UC[a-zA-Z0-9_-]{22}$/.test(candidateId)) {
                         const feed = await this.fetchFeed(candidateId);
                         const channelName = feed[0]?.channelName ?? `Channel ${candidateId}`;
+                        const channelIcon = await this.getChannelIcon(candidateId);
                         return {
                             channelId: candidateId,
                             channelName,
-                            handle: `@${candidateId}`
+                            handle: `@${candidateId}`,
+                            channelIcon
                         };
                     }
                 }
@@ -61,7 +69,7 @@ export class YouTubeFeedService {
                 targetUrl = `https://www.youtube.com/${handle}`;
             }
 
-            // Fetch YouTube page HTML to extract channelId and channel name
+            // Fetch YouTube page HTML to extract channelId, channel name, and channel icon
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -87,9 +95,6 @@ export class YouTubeFeedService {
             }
 
             // Match channel ID patterns in YouTube HTML
-            // 1. <meta itemprop="identifier" content="UC..."> or <meta itemprop="channelId" content="UC...">
-            // 2. "channelId":"UC..." or "externalId":"UC..."
-            // 3. canonical link tag href="https://www.youtube.com/channel/UC..."
             let channelId: string | null = null;
 
             const metaIdMatch =
@@ -134,10 +139,21 @@ export class YouTubeFeedService {
                 if (nameStr) channelName = nameStr;
             }
 
+            // Extract channel avatar icon URL
+            let channelIcon: string | null = null;
+            const ogImageMatch =
+                html.match(/meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                html.match(/link\s+rel=["']image_src["']\s+href=["']([^"']+)["']/i);
+            if (ogImageMatch?.[1]) {
+                channelIcon = ogImageMatch[1];
+                this.channelIconCache.set(channelId, channelIcon);
+            }
+
             return {
                 channelId,
                 channelName,
-                handle: handle || `@${channelId}`
+                handle: handle || `@${channelId}`,
+                channelIcon
             };
         } catch (error) {
             logger.error(error, `Error resolving YouTube channel ID for input "${input}"`);
@@ -335,16 +351,66 @@ export class YouTubeFeedService {
     }
 
     /**
+     * Get or fetch channel avatar icon URL.
+     * @param channelId YouTube channel ID
+     * @param handle YouTube channel handle
+     */
+    async getChannelIcon(channelId: string, handle?: string): Promise<string | null> {
+        if (this.channelIconCache.has(channelId)) {
+            return this.channelIconCache.get(channelId)!;
+        }
+
+        try {
+            const targetUrl = handle
+                ? `https://www.youtube.com/${handle}`
+                : `https://www.youtube.com/channel/${channelId}`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            let html = "";
+            try {
+                const response = await fetch(targetUrl, {
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    },
+                    signal: controller.signal
+                });
+                if (response.ok) {
+                    html = await response.text();
+                }
+            } finally {
+                clearTimeout(timeoutId);
+            }
+
+            const ogImageMatch =
+                html.match(/meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+                html.match(/link\s+rel=["']image_src["']\s+href=["']([^"']+)["']/i);
+
+            if (ogImageMatch?.[1]) {
+                const iconUrl = ogImageMatch[1];
+                this.channelIconCache.set(channelId, iconUrl);
+                return iconUrl;
+            }
+        } catch {
+            // Ignore error and fall back to null
+        }
+        return null;
+    }
+
+    /**
      * Formats a raw YouTube feed entry for Discord embed consumption.
      * @param entry Raw entry
      * @param statusInfo Optional video status info (statusType, scheduledStartTimeUnix)
+     * @param channelIcon Optional channel avatar icon URL
      */
     formatEntry(
         entry: YouTubeFeedEntry,
         statusInfo: { statusType: YouTubeVideoStatusType; scheduledStartTimeUnix: number | null } = {
             statusType: "video",
             scheduledStartTimeUnix: null
-        }
+        },
+        channelIcon: string | null = null
     ): FormattedYouTubeVideo {
         const rawTitle = entry.title || "Untitled Video";
         let title = decode(rawTitle.replace(/<[^>]+>/g, "").trim());
@@ -369,6 +435,7 @@ export class YouTubeFeedService {
             thumbnail: entry.thumbnail,
             channelName: entry.channelName || "YouTube",
             channelUrl,
+            channelIcon: channelIcon || this.channelIconCache.get(entry.channelId) || null,
             publishedAt: publishedDate,
             publishedUnix,
             description,

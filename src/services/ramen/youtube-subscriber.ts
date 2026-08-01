@@ -36,7 +36,7 @@ function buildVideoEmbed(video: FormattedYouTubeVideo): EmbedBuilder {
         .setAuthor({
             name: video.channelName,
             url: video.channelUrl,
-            iconURL: YT_ICON
+            iconURL: video.channelIcon || YT_ICON
         })
         .setTitle(`${statusPrefix}${video.title}`)
         .setURL(video.videoUrl)

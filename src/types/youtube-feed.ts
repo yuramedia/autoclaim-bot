@@ -44,6 +44,8 @@ export interface FormattedYouTubeVideo {
     channelName: string;
     /** Channel URL */
     channelUrl: string;
+    /** Channel avatar icon URL */
+    channelIcon: string | null;
     /** Published Date object */
     publishedAt: Date;
     /** Unix timestamp in seconds */

@@ -109,10 +109,12 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
 
                 const newlyDiscoveredVideos: FormattedYouTubeVideo[] = [];
 
+                const channelIcon = await service.getChannelIcon(ytChannelId);
+
                 for (const raw of rawEntries) {
                     try {
                         const statusInfo = await service.fetchVideoStatus(raw.videoId);
-                        const formatted = service.formatEntry(raw, statusInfo);
+                        const formatted = service.formatEntry(raw, statusInfo, channelIcon);
                         const existing = channelCache.find(v => videoEquals(v, formatted));
 
                         if (existing) {

@@ -121,7 +121,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 const embed = new EmbedBuilder()
                     .setColor(YT_COLOR)
                     .setTitle("✅ Channel YouTube Ditambahkan")
-                    .setThumbnail(YT_ICON)
+                    .setThumbnail(resolved.channelIcon || YT_ICON)
                     .addFields(
                         { name: "Nama Channel", value: resolved.channelName, inline: true },
                         { name: "Handle", value: resolved.handle, inline: true },

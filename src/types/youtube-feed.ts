@@ -28,6 +28,8 @@ export interface YouTubeFeedEntry {
     link: string;
 }
 
+export type YouTubeVideoStatusType = "upcoming" | "live" | "video";
+
 /** Formatted feed item ready for Discord embed */
 export interface FormattedYouTubeVideo {
     /** Video ID */
@@ -48,6 +50,12 @@ export interface FormattedYouTubeVideo {
     publishedUnix: number;
     /** Shortened description */
     description: string;
+    /** Smart status badge type ("upcoming" | "live" | "video") */
+    statusType: YouTubeVideoStatusType;
+    /** Scheduled start time unix timestamp in seconds (if applicable) */
+    scheduledStartTimeUnix: number | null;
     /** Whether item was posted to Discord */
     wasPosted: boolean;
+    /** Last status posted to Discord ("upcoming" | "live" | "video") */
+    lastPostedStatus?: YouTubeVideoStatusType;
 }

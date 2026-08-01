@@ -7,7 +7,7 @@ import he from "he";
 const { decode } = he;
 import { YT_FEED_BASE_URL } from "../constants/youtube-feed";
 import { logger } from "../core/logger";
-import type { YouTubeFeedEntry, FormattedYouTubeVideo } from "../types/youtube-feed";
+import type { YouTubeFeedEntry, FormattedYouTubeVideo, YouTubeVideoStatusType } from "../types/youtube-feed";
 
 export class YouTubeFeedService {
     /**
@@ -267,10 +267,85 @@ export class YouTubeFeedService {
     }
 
     /**
+     * Fetch video status metadata (Upcoming, Live, or Regular Video) and scheduled start time.
+     * @param videoId Unique YouTube video ID
+     */
+    async fetchVideoStatus(
+        videoId: string
+    ): Promise<{ statusType: YouTubeVideoStatusType; scheduledStartTimeUnix: number | null }> {
+        try {
+            const url = `https://www.youtube.com/watch?v=${videoId}`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+            let html = "";
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept-Language": "en-US,en;q=0.9"
+                    },
+                    signal: controller.signal
+                });
+
+                if (!response.ok) {
+                    return { statusType: "video", scheduledStartTimeUnix: null };
+                }
+
+                html = await response.text();
+            } finally {
+                clearTimeout(timeoutId);
+            }
+
+            // Extract scheduled start time from HTML meta or JSON
+            let scheduledStartTimeUnix: number | null = null;
+            const startDateMatch =
+                html.match(/meta\s+itemprop=["']startDate["']\s+content=["']([^"']+)["']/i) ||
+                html.match(/["']startTimestamp["']\s*:\s*["']([^"']+)["']/);
+
+            if (startDateMatch?.[1]) {
+                const dateObj = new Date(startDateMatch[1]);
+                if (!isNaN(dateObj.getTime())) {
+                    scheduledStartTimeUnix = Math.floor(dateObj.getTime() / 1000);
+                }
+            }
+
+            // Check if live now
+            const isLiveNowMatch = html.match(/["']isLiveNow["']\s*:\s*true/i);
+            if (isLiveNowMatch) {
+                return { statusType: "live", scheduledStartTimeUnix };
+            }
+
+            // Check if upcoming
+            const isUpcomingMatch =
+                html.match(/["']upcomingEventData["']|["']isUpcoming["']\s*:\s*true/i) ||
+                html.match(/meta\s+itemprop=["']isLiveBroadcast["']\s+content=["']True["']/i);
+
+            const nowUnix = Math.floor(Date.now() / 1000);
+
+            if (isUpcomingMatch || (scheduledStartTimeUnix && scheduledStartTimeUnix > nowUnix)) {
+                return { statusType: "upcoming", scheduledStartTimeUnix };
+            }
+
+            return { statusType: "video", scheduledStartTimeUnix };
+        } catch {
+            return { statusType: "video", scheduledStartTimeUnix: null };
+        }
+    }
+
+    /**
      * Formats a raw YouTube feed entry for Discord embed consumption.
      * @param entry Raw entry
+     * @param statusInfo Optional video status info (statusType, scheduledStartTimeUnix)
      */
-    formatEntry(entry: YouTubeFeedEntry): FormattedYouTubeVideo {
+    formatEntry(
+        entry: YouTubeFeedEntry,
+        statusInfo: { statusType: YouTubeVideoStatusType; scheduledStartTimeUnix: number | null } = {
+            statusType: "video",
+            scheduledStartTimeUnix: null
+        }
+    ): FormattedYouTubeVideo {
         const rawTitle = entry.title || "Untitled Video";
         let title = decode(rawTitle.replace(/<[^>]+>/g, "").trim());
         if (title.length > 256) title = title.substring(0, 250) + "...";
@@ -297,6 +372,8 @@ export class YouTubeFeedService {
             publishedAt: publishedDate,
             publishedUnix,
             description,
+            statusType: statusInfo.statusType,
+            scheduledStartTimeUnix: statusInfo.scheduledStartTimeUnix,
             wasPosted: false
         };
     }

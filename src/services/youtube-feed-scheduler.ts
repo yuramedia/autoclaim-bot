@@ -111,10 +111,30 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
 
                 for (const raw of rawEntries) {
                     try {
-                        const formatted = service.formatEntry(raw);
+                        const statusInfo = await service.fetchVideoStatus(raw.videoId);
+                        const formatted = service.formatEntry(raw, statusInfo);
                         const existing = channelCache.find(v => videoEquals(v, formatted));
-                        if (existing) continue;
 
+                        if (existing) {
+                            // Check if status transitioned (e.g. from "upcoming" -> "live" or "video")
+                            if (existing.lastPostedStatus === "upcoming" && statusInfo.statusType !== "upcoming") {
+                                existing.statusType = statusInfo.statusType;
+                                existing.scheduledStartTimeUnix = statusInfo.scheduledStartTimeUnix;
+                                existing.lastPostedStatus = statusInfo.statusType;
+
+                                // Trigger transition update notification to Discord
+                                if (!isFirstCheckForChannel) {
+                                    newlyDiscoveredVideos.push({
+                                        ...existing,
+                                        wasPosted: false
+                                    });
+                                }
+                            }
+                            continue;
+                        }
+
+                        // New item
+                        formatted.lastPostedStatus = formatted.statusType;
                         if (isFirstCheckForChannel) {
                             formatted.wasPosted = true;
                         }

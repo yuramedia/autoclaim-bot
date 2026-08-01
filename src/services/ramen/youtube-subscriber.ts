@@ -14,14 +14,31 @@ export interface YouTubeNewVideosEvent {
 }
 
 function buildVideoEmbed(video: FormattedYouTubeVideo): EmbedBuilder {
+    let statusPrefix = "";
+    let embedColor = YT_COLOR; // 0xFF0000 (red)
+    let footerText = "YouTube Feed";
+
+    if (video.statusType === "upcoming") {
+        statusPrefix = "⏳ [AKAN SEGERA TAYANG] ";
+        embedColor = 0xffa500; // Orange
+        footerText = "YouTube Feed • Scheduled Premiere / Stream";
+    } else if (video.statusType === "live") {
+        statusPrefix = "🔴 [SEKARANG TAYANG] ";
+        embedColor = 0xff0000; // Red
+        footerText = "YouTube Feed • Live Now";
+    } else {
+        statusPrefix = "🎬 [VIDEO BARU] ";
+        footerText = "YouTube Feed • New Upload";
+    }
+
     const embed = new EmbedBuilder()
-        .setColor(YT_COLOR)
+        .setColor(embedColor)
         .setAuthor({
             name: video.channelName,
             url: video.channelUrl,
             iconURL: YT_ICON
         })
-        .setTitle(video.title)
+        .setTitle(`${statusPrefix}${video.title}`)
         .setURL(video.videoUrl)
         .setTimestamp(video.publishedAt);
 
@@ -29,11 +46,25 @@ function buildVideoEmbed(video: FormattedYouTubeVideo): EmbedBuilder {
         embed.setDescription(video.description);
     }
 
+    if (video.statusType === "upcoming" && video.scheduledStartTimeUnix) {
+        embed.addFields({
+            name: "📅 Jadwal Tayang",
+            value: `<t:${video.scheduledStartTimeUnix}:F> (<t:${video.scheduledStartTimeUnix}:R>)`,
+            inline: false
+        });
+    } else if (video.statusType === "live" && video.scheduledStartTimeUnix) {
+        embed.addFields({
+            name: "🕒 Waktu Mulai Tayang",
+            value: `<t:${video.scheduledStartTimeUnix}:F> (<t:${video.scheduledStartTimeUnix}:R>)`,
+            inline: false
+        });
+    }
+
     if (video.thumbnail) {
         embed.setImage(video.thumbnail);
     }
 
-    embed.setFooter({ text: "YouTube Feed" });
+    embed.setFooter({ text: footerText });
 
     return embed;
 }

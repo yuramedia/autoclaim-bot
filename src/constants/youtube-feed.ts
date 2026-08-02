@@ -20,6 +20,18 @@ export const YT_MAX_ITEMS = 30;
 /** Maximum number of YouTube channels allowed per guild */
 export const YT_MAX_CHANNELS_PER_GUILD = 10;
 
+/** Maximum concurrent fetchVideoStatus() calls to avoid rate-limiting */
+export const YT_FETCH_CONCURRENCY = 3;
+
+/** Delay (ms) between polling different YouTube channels to avoid burst traffic */
+export const YT_CHANNEL_POLL_DELAY = 2000;
+
+/** TTL (ms) for channel icon URL cache — 1 hour */
+export const YT_ICON_CACHE_TTL = 3600000;
+
+/** Maximum age (seconds) for videos on first-run silent cache — 24 hours */
+export const YT_FIRST_RUN_MAX_AGE = 86400;
+
 /** Supported region list for YouTube feed scraping & localization */
 export const YT_REGIONS = [
     { name: "Indonesia 🇮🇩", value: "ID" },

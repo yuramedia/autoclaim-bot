@@ -1,4 +1,4 @@
-import { TextChannel, EmbedBuilder } from "discord.js";
+import { EmbedBuilder, ChannelType } from "discord.js";
 import { client } from "../../core/client";
 import { ramen } from "../../core/ramen";
 import { logger } from "../../core/logger";
@@ -13,6 +13,25 @@ export interface YouTubeNewVideosEvent {
     targets: string[]; // List of Discord channel IDs
 }
 
+/**
+ * Delay between sending embeds to different Discord channels (ms).
+ * Prevents hitting Discord API rate limits on burst sends.
+ */
+const DISCORD_SEND_DELAY = 500;
+
+/**
+ * Sleep for a given number of milliseconds.
+ * @param ms Milliseconds to sleep
+ */
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Build a Discord embed for a YouTube video notification.
+ * @param video Formatted video data
+ * @returns Discord EmbedBuilder instance
+ */
 function buildVideoEmbed(video: FormattedYouTubeVideo): EmbedBuilder {
     let statusPrefix = "";
     let embedColor = YT_COLOR; // 0xFF0000 (red)
@@ -76,27 +95,46 @@ function buildVideoEmbed(video: FormattedYouTubeVideo): EmbedBuilder {
 ramen.subscribe<YouTubeNewVideosEvent>("youtube:new_videos", async (data): Promise<void> => {
     try {
         const { videos, targets } = data;
+        let sentCount = 0;
 
-        for (const channelId of targets) {
+        for (let i = 0; i < targets.length; i++) {
+            const channelId = targets[i]!;
             try {
+                // Stagger sends between different Discord channels
+                if (i > 0) {
+                    await sleep(DISCORD_SEND_DELAY);
+                }
+
                 const channel = client.channels.cache.get(channelId);
-                if (channel && channel instanceof TextChannel) {
+                if (
+                    channel &&
+                    (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement)
+                ) {
                     for (const video of videos) {
                         const embed = buildVideoEmbed(video);
                         const message = await channel.send({ embeds: [embed] });
 
                         // Cross-post if the channel is an announcement channel
-                        try {
-                            await message.crosspost();
-                        } catch {
-                            // Not an announcement channel or missing permissions — ignore
+                        if (channel.type === ChannelType.GuildAnnouncement) {
+                            try {
+                                await message.crosspost();
+                            } catch {
+                                // Missing permissions for crosspost — ignore
+                            }
                         }
+                        sentCount++;
                     }
                 }
             } catch (error: unknown) {
                 const err = error instanceof Error ? error : new Error(String(error));
                 logger.error(err, `RAMEN: Failed to send YouTube feed to channel ${channelId}`);
             }
+        }
+
+        if (sentCount > 0) {
+            logger.info(
+                `🎥 RAMEN: Sent ${videos.length} YouTube video(s) to ${targets.length} channel(s) (${sentCount} embeds total)`
+            );
         }
     } catch (outerError: unknown) {
         const err = outerError instanceof Error ? outerError : new Error(String(outerError));

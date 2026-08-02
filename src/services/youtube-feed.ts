@@ -5,12 +5,122 @@
 
 import he from "he";
 const { decode } = he;
-import { YT_FEED_BASE_URL } from "../constants/youtube-feed";
+import { XMLParser } from "fast-xml-parser";
+import { YT_FEED_BASE_URL, YT_ICON_CACHE_TTL } from "../constants/youtube-feed";
 import { logger } from "../core/logger";
 import type { YouTubeFeedEntry, FormattedYouTubeVideo, YouTubeVideoStatusType } from "../types/youtube-feed";
 
+/** Cached channel icon entry with TTL tracking */
+interface CachedIcon {
+    url: string;
+    cachedAt: number;
+}
+
+/** Language mapping for YouTube region geo-bypass */
+const REGION_HL_MAP: Record<string, string> = {
+    ID: "id",
+    JP: "ja",
+    US: "en",
+    SG: "en",
+    TW: "zh-TW",
+    HK: "zh-HK",
+    KR: "ko",
+    GLOBAL: "en"
+};
+
 export class YouTubeFeedService {
-    private channelIconCache: Map<string, string> = new Map();
+    private channelIconCache: Map<string, CachedIcon> = new Map();
+
+    /**
+     * Shared XML parser instance — reused across all feed parses to avoid reinstantiation.
+     */
+    private xmlParser = new XMLParser({
+        ignoreAttributes: false,
+        attributeNamePrefix: "@_",
+        isArray: (name: string) => name === "entry" || name === "link" || name === "media:thumbnail"
+    });
+
+    /**
+     * Fetch a URL with an abort timeout and standardized headers.
+     * Centralizes the repeated AbortController + setTimeout pattern.
+     * @param url URL to fetch
+     * @param timeoutMs Timeout in milliseconds before aborting
+     * @param headers Optional additional headers
+     * @returns Response text or null if the fetch failed
+     */
+    private async fetchWithTimeout(
+        url: string,
+        timeoutMs: number,
+        headers?: Record<string, string>
+    ): Promise<string | null> {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    "User-Agent":
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    ...headers
+                },
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                logger.error(`Fetch failed for ${url}: HTTP ${response.status}`);
+                return null;
+            }
+
+            return await response.text();
+        } catch (error: unknown) {
+            if (error instanceof Error && error.name === "AbortError") {
+                logger.error(`Fetch timed out after ${timeoutMs}ms for ${url}`);
+            } else {
+                logger.error(error, `Fetch error for ${url}`);
+            }
+            return null;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    /**
+     * Remove expired entries from the channel icon cache.
+     */
+    private clearExpiredIcons(): void {
+        const now = Date.now();
+        for (const [key, entry] of this.channelIconCache) {
+            if (now - entry.cachedAt > YT_ICON_CACHE_TTL) {
+                this.channelIconCache.delete(key);
+            }
+        }
+    }
+
+    /**
+     * Set a channel icon in the TTL-aware cache.
+     * @param channelId YouTube channel ID
+     * @param url Icon URL
+     */
+    private setCachedIcon(channelId: string, url: string): void {
+        this.channelIconCache.set(channelId, { url, cachedAt: Date.now() });
+    }
+
+    /**
+     * Get a channel icon from cache if it exists and hasn't expired.
+     * @param channelId YouTube channel ID
+     * @returns Cached icon URL or null
+     */
+    getCachedIcon(channelId: string): string | null {
+        const entry = this.channelIconCache.get(channelId);
+        if (!entry) return null;
+
+        if (Date.now() - entry.cachedAt > YT_ICON_CACHE_TTL) {
+            this.channelIconCache.delete(channelId);
+            return null;
+        }
+
+        return entry.url;
+    }
 
     /**
      * Resolves a YouTube input (channel URL, @handle, or channel ID) to channel metadata.
@@ -50,29 +160,11 @@ export class YouTubeFeedService {
             }
 
             // Fetch YouTube page HTML to extract channelId, channel name, handle, and icon
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const html = await this.fetchWithTimeout(targetUrl, 10000, {
+                "Accept-Language": "en-US,en;q=0.9"
+            });
 
-            let html = "";
-            try {
-                const response = await fetch(targetUrl, {
-                    headers: {
-                        "User-Agent":
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept-Language": "en-US,en;q=0.9"
-                    },
-                    signal: controller.signal
-                });
-
-                if (!response.ok) {
-                    logger.error(`Failed to fetch YouTube page for ${targetUrl}: HTTP ${response.status}`);
-                    return null;
-                }
-
-                html = await response.text();
-            } finally {
-                clearTimeout(timeoutId);
-            }
+            if (!html) return null;
 
             // Match channel ID patterns in YouTube HTML
             let channelId: string | null = /^UC[a-zA-Z0-9_-]{22}$/.test(cleanInput) ? cleanInput : null;
@@ -148,7 +240,7 @@ export class YouTubeFeedService {
                 html.match(/link\s+rel=["']image_src["']\s+href=["']([^"']+)["']/i);
             if (ogImageMatch?.[1]) {
                 channelIcon = ogImageMatch[1];
-                this.channelIconCache.set(channelId, channelIcon);
+                this.setCachedIcon(channelId, channelIcon);
             }
 
             return {
@@ -171,27 +263,12 @@ export class YouTubeFeedService {
     async fetchFeed(channelId: string): Promise<YouTubeFeedEntry[]> {
         try {
             const feedUrl = `${YT_FEED_BASE_URL}${channelId}`;
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const xml = await this.fetchWithTimeout(feedUrl, 15000, {
+                "User-Agent": "Mozilla/5.0 (compatible; AutoClaimBot/1.0)"
+            });
 
-            let xml = "";
-            try {
-                const response = await fetch(feedUrl, {
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (compatible; AutoClaimBot/1.0)"
-                    },
-                    signal: controller.signal
-                });
+            if (!xml) return [];
 
-                if (!response.ok) {
-                    logger.error(`YouTube Atom fetch failed for ${channelId}: status ${response.status}`);
-                    return [];
-                }
-
-                xml = await response.text();
-            } finally {
-                clearTimeout(timeoutId);
-            }
             return this.parseAtomFeed(xml);
         } catch (error) {
             logger.error(error, `YouTube Atom fetch error for channel ${channelId}`);
@@ -206,14 +283,7 @@ export class YouTubeFeedService {
     private parseAtomFeed(xml: string): YouTubeFeedEntry[] {
         const entries: YouTubeFeedEntry[] = [];
         try {
-            const { XMLParser } = require("fast-xml-parser");
-            const parser = new XMLParser({
-                ignoreAttributes: false,
-                attributeNamePrefix: "@_",
-                isArray: (name: string) => name === "entry" || name === "link" || name === "media:thumbnail"
-            });
-
-            const result = parser.parse(xml);
+            const result = this.xmlParser.parse(xml);
             const rawEntries = result?.feed?.entry || [];
 
             for (const entry of rawEntries) {
@@ -293,42 +363,18 @@ export class YouTubeFeedService {
         const entries: YouTubeFeedEntry[] = [];
         try {
             const cleanRegion = region === "GLOBAL" ? "US" : region;
-            const hlMap: Record<string, string> = {
-                ID: "id",
-                JP: "ja",
-                US: "en",
-                SG: "en",
-                TW: "zh-TW",
-                HK: "zh-HK",
-                KR: "ko",
-                GLOBAL: "en"
-            };
-            const hl = hlMap[region] || "id";
+            const hl = REGION_HL_MAP[region] || "id";
 
             const targetUrl = channelIdOrHandle.startsWith("UC")
                 ? `https://www.youtube.com/channel/${channelIdOrHandle}/videos?gl=${cleanRegion}&hl=${hl}`
                 : `https://www.youtube.com/${channelIdOrHandle.startsWith("@") ? channelIdOrHandle : `@${channelIdOrHandle}`}/videos?gl=${cleanRegion}&hl=${hl}`;
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 12000);
+            const html = await this.fetchWithTimeout(targetUrl, 12000, {
+                "Accept-Language": `${hl};q=0.9,en-US;q=0.8,en;q=0.7`,
+                Cookie: `PREF=f6=40000000&gl=${cleanRegion}&hl=${hl};`
+            });
 
-            let html = "";
-            try {
-                const response = await fetch(targetUrl, {
-                    headers: {
-                        "User-Agent":
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept-Language": `${hl};q=0.9,en-US;q=0.8,en;q=0.7`,
-                        Cookie: `PREF=f6=40000000&gl=${cleanRegion}&hl=${hl};`
-                    },
-                    signal: controller.signal
-                });
-
-                if (!response.ok) return entries;
-                html = await response.text();
-            } finally {
-                clearTimeout(timeoutId);
-            }
+            if (!html) return entries;
 
             const match =
                 html.match(/var\s+ytInitialData\s*=\s*({.*?});<\/script>/s) ||
@@ -339,19 +385,43 @@ export class YouTubeFeedService {
             const data = JSON.parse(match[1]);
             const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs || [];
 
-            let videoTab = tabs.find(
-                (t: any) =>
-                    t?.tabRenderer?.selected ||
-                    t?.tabRenderer?.title === "Video" ||
-                    t?.tabRenderer?.title === "Videos" ||
-                    t?.tabRenderer?.endpoint?.commandMetadata?.webCommandMetadata?.url?.includes("/videos")
-            );
+            // Extract channel name from the page metadata for web-only entries
+            const webChannelName =
+                data?.metadata?.channelMetadataRenderer?.title || data?.header?.c4TabbedHeaderRenderer?.title || "";
+
+            let videoTab = tabs.find((t: Record<string, unknown>) => {
+                const tab = t?.tabRenderer as Record<string, unknown> | undefined;
+                return (
+                    tab?.selected ||
+                    tab?.title === "Video" ||
+                    tab?.title === "Videos" ||
+                    (((tab?.endpoint as Record<string, unknown>)?.commandMetadata as Record<string, unknown>)
+                        ?.webCommandMetadata &&
+                        String(
+                            (
+                                ((tab?.endpoint as Record<string, unknown>)?.commandMetadata as Record<string, unknown>)
+                                    ?.webCommandMetadata as Record<string, unknown>
+                            )?.url || ""
+                        ).includes("/videos"))
+                );
+            });
 
             if (!videoTab) {
-                videoTab = tabs.find((t: any) => t?.tabRenderer?.content?.richGridRenderer?.contents?.length > 0);
+                videoTab = tabs.find(
+                    (t: Record<string, unknown>) =>
+                        ((t?.tabRenderer as Record<string, unknown>)?.content as Record<string, unknown>)
+                            ?.richGridRenderer &&
+                        (
+                            (
+                                ((t?.tabRenderer as Record<string, unknown>)?.content as Record<string, unknown>)
+                                    ?.richGridRenderer as Record<string, unknown>
+                            )?.contents as unknown[]
+                        )?.length > 0
+                );
             }
 
-            const contents = videoTab?.tabRenderer?.content?.richGridRenderer?.contents || [];
+            /* oxlint-disable typescript/no-explicit-any */
+            const contents = (videoTab as any)?.tabRenderer?.content?.richGridRenderer?.contents || [];
 
             for (const item of contents) {
                 const content = item?.richItemRenderer?.content;
@@ -360,7 +430,6 @@ export class YouTubeFeedService {
                 let videoId = "";
                 let title = "";
                 let isMembersOnly = false;
-                const published = new Date().toISOString();
 
                 if (content.lockupViewModel) {
                     const vm = content.lockupViewModel;
@@ -404,15 +473,16 @@ export class YouTubeFeedService {
                         }
                     }
                 }
+                /* oxlint-enable typescript/no-explicit-any */
 
                 if (videoId && title) {
                     entries.push({
                         videoId,
                         title,
                         channelId: channelIdOrHandle,
-                        channelName: "",
-                        published,
-                        updated: published,
+                        channelName: webChannelName,
+                        published: "",
+                        updated: "",
                         thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
                         description: isMembersOnly ? "🟢 Konten khusus pelanggan (Members-only / Early Access)." : "",
                         link: `https://www.youtube.com/watch?v=${videoId}`
@@ -434,27 +504,12 @@ export class YouTubeFeedService {
     ): Promise<{ statusType: YouTubeVideoStatusType; scheduledStartTimeUnix: number | null; realTitle?: string }> {
         try {
             const url = `https://www.youtube.com/watch?v=${videoId}`;
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const html = await this.fetchWithTimeout(url, 8000, {
+                "Accept-Language": "en-US,en;q=0.9"
+            });
 
-            let html = "";
-            try {
-                const response = await fetch(url, {
-                    headers: {
-                        "User-Agent":
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept-Language": "en-US,en;q=0.9"
-                    },
-                    signal: controller.signal
-                });
-
-                if (!response.ok) {
-                    return { statusType: "video", scheduledStartTimeUnix: null };
-                }
-
-                html = await response.text();
-            } finally {
-                clearTimeout(timeoutId);
+            if (!html) {
+                return { statusType: "video", scheduledStartTimeUnix: null };
             }
 
             let realTitle: string | undefined;
@@ -511,37 +566,24 @@ export class YouTubeFeedService {
     }
 
     /**
-     * Get or fetch channel avatar icon URL.
+     * Get or fetch channel avatar icon URL (with TTL cache).
      * @param channelId YouTube channel ID
      * @param handle YouTube channel handle
      */
     async getChannelIcon(channelId: string, handle?: string): Promise<string | null> {
-        if (this.channelIconCache.has(channelId)) {
-            return this.channelIconCache.get(channelId)!;
-        }
+        // Periodically clear expired entries
+        this.clearExpiredIcons();
+
+        const cached = this.getCachedIcon(channelId);
+        if (cached) return cached;
 
         try {
             const targetUrl = handle
                 ? `https://www.youtube.com/${handle}`
                 : `https://www.youtube.com/channel/${channelId}`;
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-            let html = "";
-            try {
-                const response = await fetch(targetUrl, {
-                    headers: {
-                        "User-Agent":
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                    },
-                    signal: controller.signal
-                });
-                if (response.ok) {
-                    html = await response.text();
-                }
-            } finally {
-                clearTimeout(timeoutId);
-            }
+            const html = await this.fetchWithTimeout(targetUrl, 5000);
+            if (!html) return null;
 
             const ogImageMatch =
                 html.match(/meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
@@ -549,7 +591,7 @@ export class YouTubeFeedService {
 
             if (ogImageMatch?.[1]) {
                 const iconUrl = ogImageMatch[1];
-                this.channelIconCache.set(channelId, iconUrl);
+                this.setCachedIcon(channelId, iconUrl);
                 return iconUrl;
             }
         } catch {
@@ -608,7 +650,7 @@ export class YouTubeFeedService {
             thumbnail,
             channelName: entry.channelName || "YouTube",
             channelUrl,
-            channelIcon: channelIcon || this.channelIconCache.get(entry.channelId) || null,
+            channelIcon: channelIcon || this.getCachedIcon(entry.channelId) || null,
             publishedAt: publishedDate,
             publishedUnix,
             description,

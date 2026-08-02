@@ -428,11 +428,20 @@ export class YouTubeFeedService {
             description = description.substring(0, 297) + "...";
         }
 
+        const thumbnail = entry.videoId
+            ? `https://i.ytimg.com/vi/${entry.videoId}/maxresdefault.jpg`
+            : entry.thumbnail
+              ? entry.thumbnail.replace(
+                    /\/(hqdefault|mqdefault|sddefault|default|hqdefault_live)\.jpg/g,
+                    "/maxresdefault.jpg"
+                )
+              : null;
+
         return {
             videoId: entry.videoId,
             title,
             videoUrl,
-            thumbnail: entry.thumbnail,
+            thumbnail,
             channelName: entry.channelName || "YouTube",
             channelUrl,
             channelIcon: channelIcon || this.channelIconCache.get(entry.channelId) || null,

@@ -112,11 +112,10 @@ export async function downloadMedia(
         const sortedFormats = info.formats.toSorted((a, b) => parseSizeToBytes(b.size) - parseSizeToBytes(a.size));
         const validFormats = sortedFormats.filter(f => parseSizeToBytes(f.size) <= maxSizeLimit);
 
-        // Try downloading the best valid format automatically
-        if (validFormats.length > 0) {
+        // Try downloading top valid formats automatically (up to 3 candidates)
+        for (const candidateFormat of validFormats.slice(0, 3)) {
             try {
-                const firstValid = validFormats[0]!;
-                const response = await axios.get(firstValid.url, {
+                const response = await axios.get(candidateFormat.url, {
                     responseType: "arraybuffer",
                     timeout: 60000,
                     maxContentLength: maxSizeLimit,
@@ -128,7 +127,7 @@ export async function downloadMedia(
                 const buffer = Buffer.from(response.data);
 
                 if (buffer.length <= maxSizeLimit) {
-                    const ext = firstValid.ext || "mp4";
+                    const ext = candidateFormat.ext || "mp4";
                     const filename = `${(info.title || "video").slice(0, 50).replace(/[^\w\s-]/g, "")}_${Date.now()}.${ext}`;
 
                     return {
@@ -140,7 +139,7 @@ export async function downloadMedia(
                     };
                 }
             } catch {
-                // If download fails (e.g. maxContentLength exceeded), we fall through to the select menu
+                // If this format fails, try the next valid candidate format
             }
         }
 

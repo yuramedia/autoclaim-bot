@@ -118,7 +118,8 @@ ramen.subscribe<CrunchyrollEpisodesEvent>("crunchyroll:new_episodes", async (dat
 
         for (const channelId of targetChannelIds) {
             try {
-                const channel = client.channels.cache.get(channelId);
+                const channel =
+                    client.channels.cache.get(channelId) ?? (await client.channels.fetch(channelId).catch(() => null));
                 if (channel && channel instanceof TextChannel) {
                     for (const { episode, isEdited } of episodes) {
                         const embed = buildEpisodeEmbed(episode, isEdited);
@@ -158,7 +159,8 @@ ramen.subscribe<CrunchyrollLineupEvent>("crunchyroll:new_lineup_announcement", a
 
         for (const channelId of targetChannelIds) {
             try {
-                const channel = client.channels.cache.get(channelId);
+                const channel =
+                    client.channels.cache.get(channelId) ?? (await client.channels.fetch(channelId).catch(() => null));
                 if (channel && channel instanceof TextChannel) {
                     for (const announcement of announcements) {
                         const embed = buildLineupEmbed(announcement);

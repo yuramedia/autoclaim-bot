@@ -33,9 +33,11 @@ export function extractUrls(content: string): { url: string; spoilered: boolean 
     const urlPattern = /(https?:\/\/[^\s<>|]+)/g;
     let urlMatch: RegExpExecArray | null;
     while ((urlMatch = urlPattern.exec(cleanContent)) !== null) {
+        // Trim trailing punctuation attached to URLs at end of sentences or in parentheses
+        const cleanUrl = urlMatch[1]!.replace(/[.,;:!?)]+$/, "");
         // Skip if already added as spoilered
-        if (!results.some(r => r.url === urlMatch![1])) {
-            results.push({ url: urlMatch[1]!, spoilered: false });
+        if (!results.some(r => r.url === cleanUrl)) {
+            results.push({ url: cleanUrl, spoilered: false });
         }
     }
 

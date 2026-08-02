@@ -105,7 +105,8 @@ ramen.subscribe<YouTubeNewVideosEvent>("youtube:new_videos", async (data): Promi
                     await sleep(DISCORD_SEND_DELAY);
                 }
 
-                const channel = client.channels.cache.get(channelId);
+                const channel =
+                    client.channels.cache.get(channelId) ?? (await client.channels.fetch(channelId).catch(() => null));
                 if (
                     channel &&
                     (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement)

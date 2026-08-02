@@ -115,7 +115,14 @@ async function checkForNewAnnouncements(): Promise<void> {
             "crunchyrollLineup.channelId": { $ne: null }
         }).lean();
 
-        if (guilds.length === 0) return;
+        if (guilds.length === 0) {
+            // Commit seen URLs even if no active guilds are subscribed right now
+            for (const url of pendingUrls) {
+                seenLineups.add(url);
+            }
+            pruneSeenLineups();
+            return;
+        }
 
         const targetChannelIds = guilds.map(g => g.crunchyrollLineup.channelId!);
 
@@ -125,7 +132,7 @@ async function checkForNewAnnouncements(): Promise<void> {
             targetChannelIds
         });
 
-        // Commit seen URLs only after successful publish
+        // Commit seen URLs after processing/publishing
         for (const url of pendingUrls) {
             seenLineups.add(url);
         }

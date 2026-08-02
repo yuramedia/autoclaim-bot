@@ -25,6 +25,9 @@ export async function handleResolutionSelect(interaction: StringSelectMenuIntera
             return;
         }
 
+        // Clean up cache entry immediately to free memory
+        videoSelectionCache.delete(selectionId);
+
         // The select menu value is a format index into the cached formats array
         const selectedIndex = parseInt(interaction.values[0] ?? "", 10);
         const formats = cachedData.formats;

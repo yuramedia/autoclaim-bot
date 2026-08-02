@@ -173,7 +173,14 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
             "crunchyrollFeed.channelId": { $ne: null }
         }).lean();
 
-        if (guilds.length === 0) return;
+        if (guilds.length === 0) {
+            // Commit seen episodes even if no active guilds are subscribed right now
+            for (const [id, title] of pendingSeen) {
+                seenEpisodes.set(id, title);
+            }
+            pruneSeenEpisodes();
+            return;
+        }
 
         const targetChannelIds = guilds.map(g => g.crunchyrollFeed.channelId!);
 
@@ -188,13 +195,12 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
                 episodes: episodesToPublish,
                 targetChannelIds
             });
-
-            // Commit seen episodes only after successful publish
-            for (const [id, title] of pendingSeen) {
-                seenEpisodes.set(id, title);
-            }
         }
 
+        // Commit seen episodes after processing/publishing
+        for (const [id, title] of pendingSeen) {
+            seenEpisodes.set(id, title);
+        }
         pruneSeenEpisodes();
     } catch (error) {
         logger.error(error as Error, "Crunchyroll feed check error");

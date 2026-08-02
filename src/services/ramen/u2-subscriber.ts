@@ -82,7 +82,9 @@ ramen.subscribe<U2TorrentsEvent>("u2:new_torrents", async (data): Promise<void> 
 
         for (const target of targets) {
             try {
-                const channel = client.channels.cache.get(target.channelId);
+                const channel =
+                    client.channels.cache.get(target.channelId) ??
+                    (await client.channels.fetch(target.channelId).catch(() => null));
                 if (channel && channel instanceof TextChannel) {
                     // Apply guild's filter — use regex only if pattern is safe,
                     // otherwise fall back to simple string matching to prevent ReDoS.

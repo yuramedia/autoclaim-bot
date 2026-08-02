@@ -149,30 +149,30 @@ interface U2FeedGuild {
  */
 async function postNewItems(): Promise<void> {
     try {
+        const newItems = cachedItems.filter(item => !item.wasPosted);
+        if (newItems.length === 0) return;
+
         // Get all guilds with U2 feed enabled
         const guilds = (await GuildSettings.find({
             "u2Feed.enabled": true,
             "u2Feed.channelId": { $ne: null }
         }).lean()) as unknown as U2FeedGuild[];
 
-        if (guilds.length === 0) return;
+        if (guilds.length > 0) {
+            const targets = guilds.map((g: U2FeedGuild) => ({
+                channelId: g.u2Feed.channelId!,
+                filter: g.u2Feed.filter || U2_DEFAULT_FILTER
+            }));
 
-        const targets = guilds.map((g: U2FeedGuild) => ({
-            channelId: g.u2Feed.channelId!,
-            filter: g.u2Feed.filter || U2_DEFAULT_FILTER
-        }));
-
-        const newItems = cachedItems.filter(item => !item.wasPosted);
-
-        if (newItems.length > 0) {
             ramen.publish("u2:new_torrents", {
                 items: newItems,
                 targets
             });
+        }
 
-            for (const item of newItems) {
-                item.wasPosted = true;
-            }
+        // Always mark new items as posted to prevent retroactive flood if a guild subscribes later
+        for (const item of newItems) {
+            item.wasPosted = true;
         }
     } catch (error) {
         logger.error(error, "U2 feed postNewItems error:");

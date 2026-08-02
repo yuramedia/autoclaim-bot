@@ -22,54 +22,34 @@ export class YouTubeFeedService {
     ): Promise<{ channelId: string; channelName: string; handle: string; channelIcon: string | null } | null> {
         try {
             const cleanInput = input.trim();
-            let handle = "";
+            let initialHandle = "";
             let targetUrl = "";
 
             // Check if input is direct channel ID starting with UC (24 characters)
             if (/^UC[a-zA-Z0-9_-]{22}$/.test(cleanInput)) {
-                const channelId = cleanInput;
-                const feed = await this.fetchFeed(channelId);
-                const channelName = feed[0]?.channelName ?? `Channel ${channelId}`;
-                const channelIcon = await this.getChannelIcon(channelId);
-                return {
-                    channelId,
-                    channelName,
-                    handle: `@${channelId}`,
-                    channelIcon
-                };
-            }
-
-            // Extract handle or path
-            if (cleanInput.startsWith("http://") || cleanInput.startsWith("https://")) {
+                targetUrl = `https://www.youtube.com/channel/${cleanInput}`;
+            } else if (cleanInput.startsWith("http://") || cleanInput.startsWith("https://")) {
                 targetUrl = cleanInput;
                 const urlObj = new URL(cleanInput);
                 const pathname = urlObj.pathname;
 
                 if (pathname.startsWith("/@")) {
-                    handle = pathname.substring(1); // e.g. "@AniOneID"
+                    initialHandle = pathname.substring(1); // e.g. "@AniOneID"
                 } else if (pathname.startsWith("/channel/")) {
                     const candidateId = pathname.split("/")[2];
                     if (candidateId && /^UC[a-zA-Z0-9_-]{22}$/.test(candidateId)) {
-                        const feed = await this.fetchFeed(candidateId);
-                        const channelName = feed[0]?.channelName ?? `Channel ${candidateId}`;
-                        const channelIcon = await this.getChannelIcon(candidateId);
-                        return {
-                            channelId: candidateId,
-                            channelName,
-                            handle: `@${candidateId}`,
-                            channelIcon
-                        };
+                        targetUrl = `https://www.youtube.com/channel/${candidateId}`;
                     }
                 }
             } else if (cleanInput.startsWith("@")) {
-                handle = cleanInput;
-                targetUrl = `https://www.youtube.com/${handle}`;
+                initialHandle = cleanInput;
+                targetUrl = `https://www.youtube.com/${initialHandle}`;
             } else {
-                handle = `@${cleanInput}`;
-                targetUrl = `https://www.youtube.com/${handle}`;
+                initialHandle = `@${cleanInput}`;
+                targetUrl = `https://www.youtube.com/${initialHandle}`;
             }
 
-            // Fetch YouTube page HTML to extract channelId, channel name, and channel icon
+            // Fetch YouTube page HTML to extract channelId, channel name, handle, and icon
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -95,16 +75,20 @@ export class YouTubeFeedService {
             }
 
             // Match channel ID patterns in YouTube HTML
-            let channelId: string | null = null;
+            let channelId: string | null = /^UC[a-zA-Z0-9_-]{22}$/.test(cleanInput) ? cleanInput : null;
 
-            const metaIdMatch =
-                html.match(
-                    /meta\s+itemprop=["'](?:channelId|identifier)["']\s+content=["'](UC[a-zA-Z0-9_-]{22})["']/i
-                ) ||
-                html.match(/meta\s+content=["'](UC[a-zA-Z0-9_-]{22})["']\s+itemprop=["'](?:channelId|identifier)["']/i);
+            if (!channelId) {
+                const metaIdMatch =
+                    html.match(
+                        /meta\s+itemprop=["'](?:channelId|identifier)["']\s+content=["'](UC[a-zA-Z0-9_-]{22})["']/i
+                    ) ||
+                    html.match(
+                        /meta\s+content=["'](UC[a-zA-Z0-9_-]{22})["']\s+itemprop=["'](?:channelId|identifier)["']/i
+                    );
 
-            if (metaIdMatch?.[1]) {
-                channelId = metaIdMatch[1];
+                if (metaIdMatch?.[1]) {
+                    channelId = metaIdMatch[1];
+                }
             }
 
             if (!channelId) {
@@ -126,6 +110,24 @@ export class YouTubeFeedService {
             if (!channelId) {
                 logger.error(`Could not extract channelId from HTML for input: ${input}`);
                 return null;
+            }
+
+            // Extract canonical handle (@AniOneID)
+            let handle = initialHandle;
+            const handleMatch =
+                html.match(/["']vanityChannelUrl["']\s*:\s*["']https?:\/\/[^"']+\/(@[a-zA-Z0-9_.-]+)["']/i) ||
+                html.match(/["']canonicalChannelUrl["']\s*:\s*["']https?:\/\/[^"']+\/(@[a-zA-Z0-9_.-]+)["']/i) ||
+                html.match(
+                    /link\s+rel=["']canonical["']\s+href=["']https?:\/\/www\.youtube\.com\/(@[a-zA-Z0-9_.-]+)["']/i
+                ) ||
+                html.match(
+                    /meta\s+property=["']og:url["']\s+content=["']https?:\/\/www\.youtube\.com\/(@[a-zA-Z0-9_.-]+)["']/i
+                );
+
+            if (handleMatch?.[1]) {
+                handle = handleMatch[1];
+            } else if (!handle) {
+                handle = `@${channelId}`;
             }
 
             // Extract channel title
@@ -152,7 +154,7 @@ export class YouTubeFeedService {
             return {
                 channelId,
                 channelName,
-                handle: handle || `@${channelId}`,
+                handle,
                 channelIcon
             };
         } catch (error) {

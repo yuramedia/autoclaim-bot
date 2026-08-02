@@ -9,7 +9,7 @@ import { YouTubeFeedService } from "./youtube-feed";
 import { ramen } from "../core/ramen";
 import { YT_POLL_INTERVAL, YT_MAX_ITEMS } from "../constants/youtube-feed";
 import { logger } from "../core/logger";
-import type { FormattedYouTubeVideo } from "../types/youtube-feed";
+import type { FormattedYouTubeVideo, YouTubeFeedEntry } from "../types/youtube-feed";
 
 /** Map of channelId -> list of cached FormattedYouTubeVideo items */
 const cachedChannelVideos: Map<string, FormattedYouTubeVideo[]> = new Map();
@@ -78,6 +78,7 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
         // Build list of target Discord channels per subscribed YouTube channel ID
         // ytChannelId -> list of Discord target channelIds
         const channelToTargetsMap: Map<string, string[]> = new Map();
+        const channelToRegionMap: Map<string, string> = new Map();
         const allYtChannelIds: Set<string> = new Set();
 
         for (const guild of guilds) {
@@ -89,6 +90,9 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
             for (const ytChan of ytChannels) {
                 const ytId = ytChan.channelId;
                 allYtChannelIds.add(ytId);
+                if (ytChan.region) {
+                    channelToRegionMap.set(ytId, ytChan.region);
+                }
 
                 const existingTargets = channelToTargetsMap.get(ytId) || [];
                 if (!existingTargets.includes(discordChannelId)) {
@@ -101,8 +105,22 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
         // Process each YouTube channel feed
         for (const ytChannelId of allYtChannelIds) {
             try {
-                const rawEntries = await service.fetchFeed(ytChannelId);
-                if (!rawEntries || rawEntries.length === 0) continue;
+                const region = channelToRegionMap.get(ytChannelId) || "ID";
+                const rssEntries = await service.fetchFeed(ytChannelId);
+                const webEntries = await service.fetchVideosFromWeb(ytChannelId, region);
+
+                // Merge RSS & Web scraper entries uniquely by videoId
+                const rawEntriesMap = new Map<string, YouTubeFeedEntry>();
+                for (const item of rssEntries) {
+                    rawEntriesMap.set(item.videoId, item);
+                }
+                for (const item of webEntries) {
+                    if (!rawEntriesMap.has(item.videoId)) {
+                        rawEntriesMap.set(item.videoId, item);
+                    }
+                }
+                const rawEntries = Array.from(rawEntriesMap.values());
+                if (rawEntries.length === 0) continue;
 
                 let channelCache = cachedChannelVideos.get(ytChannelId) || [];
                 const isFirstCheckForChannel = !initializedChannels.has(ytChannelId);

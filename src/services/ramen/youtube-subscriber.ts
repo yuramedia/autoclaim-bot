@@ -26,6 +26,10 @@ function buildVideoEmbed(video: FormattedYouTubeVideo): EmbedBuilder {
         statusPrefix = "🔴 [SEKARANG TAYANG] ";
         embedColor = 0xff0000; // Red
         footerText = "YouTube Feed • Live Now";
+    } else if (video.statusType === "members_only") {
+        statusPrefix = "🟢 [KHUSUS PELANGGAN] ";
+        embedColor = 0x2ecc71; // Green
+        footerText = "YouTube Feed • Members-Only Content";
     } else {
         statusPrefix = "🎬 [VIDEO BARU] ";
         footerText = "YouTube Feed • New Upload";

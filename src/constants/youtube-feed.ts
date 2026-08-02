@@ -19,3 +19,15 @@ export const YT_MAX_ITEMS = 30;
 
 /** Maximum number of YouTube channels allowed per guild */
 export const YT_MAX_CHANNELS_PER_GUILD = 10;
+
+/** Supported region list for YouTube feed scraping & localization */
+export const YT_REGIONS = [
+    { name: "Indonesia 🇮🇩", value: "ID" },
+    { name: "Japan 🇯🇵", value: "JP" },
+    { name: "United States 🇺🇸", value: "US" },
+    { name: "Singapore 🇸🇬", value: "SG" },
+    { name: "Taiwan 🇹🇼", value: "TW" },
+    { name: "Hong Kong 🇭🇰", value: "HK" },
+    { name: "South Korea 🇰🇷", value: "KR" },
+    { name: "Global 🌐", value: "GLOBAL" }
+] as const;

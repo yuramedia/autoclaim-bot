@@ -33,6 +33,22 @@ export const data = new SlashCommandBuilder()
                     .setDescription("URL channel YouTube, handle (@username), atau ID channel")
                     .setRequired(true)
             )
+            .addStringOption(opt =>
+                opt
+                    .setName("region")
+                    .setDescription("Region / negara katalog YouTube (default: Indonesia ID)")
+                    .setRequired(false)
+                    .addChoices(
+                        { name: "Indonesia 🇮🇩 (ID)", value: "ID" },
+                        { name: "Japan 🇯🇵 (JP)", value: "JP" },
+                        { name: "United States 🇺🇸 (US)", value: "US" },
+                        { name: "Singapore 🇸🇬 (SG)", value: "SG" },
+                        { name: "Taiwan 🇹🇼 (TW)", value: "TW" },
+                        { name: "Hong Kong 🇭🇰 (HK)", value: "HK" },
+                        { name: "South Korea 🇰🇷 (KR)", value: "KR" },
+                        { name: "Global 🌐 (GLOBAL)", value: "GLOBAL" }
+                    )
+            )
     )
     .addSubcommand(sub =>
         sub
@@ -85,6 +101,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         switch (subcommand) {
             case "add": {
                 const input = interaction.options.getString("channel", true);
+                const region = interaction.options.getString("region") || "ID";
                 const currentChannels = settings.youtubeFeed?.youtubeChannels || [];
 
                 if (currentChannels.length >= YT_MAX_CHANNELS_PER_GUILD) {
@@ -113,7 +130,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 settings.youtubeFeed.youtubeChannels.push({
                     channelId: resolved.channelId,
                     channelName: resolved.channelName,
-                    handle: resolved.handle
+                    handle: resolved.handle,
+                    region
                 });
 
                 await settings.save();
@@ -125,7 +143,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     .addFields(
                         { name: "Nama Channel", value: resolved.channelName, inline: true },
                         { name: "Handle", value: resolved.handle, inline: true },
-                        { name: "Channel ID", value: `\`${resolved.channelId}\``, inline: true }
+                        { name: "Channel ID", value: `\`${resolved.channelId}\``, inline: true },
+                        { name: "Region Catalog", value: `\`${region}\``, inline: true }
                     )
                     .setFooter({
                         text: `Total channel dipantau: ${settings.youtubeFeed.youtubeChannels.length}/${YT_MAX_CHANNELS_PER_GUILD}`
@@ -201,7 +220,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 const description = channels
                     .map(
                         (c, i) =>
-                            `${i + 1}. **[${c.channelName}](https://www.youtube.com/channel/${c.channelId})** (\`${c.handle}\`)`
+                            `${i + 1}. **[${c.channelName}](https://www.youtube.com/channel/${c.channelId})** (\`${c.handle}\`) • Region: \`${c.region || "ID"}\``
                     )
                     .join("\n");
 

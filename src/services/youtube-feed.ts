@@ -283,7 +283,148 @@ export class YouTubeFeedService {
     }
 
     /**
-     * Fetch video status metadata (Upcoming, Live, or Regular Video) and scheduled start time.
+     * Web Scrape YouTube channel /videos tab for public & members-only preview videos.
+     * @param channelIdOrHandle YouTube channel ID (UC...) or handle (@...)
+     * @param region Country code for localization & geo-bypass (e.g. ID, JP, US, SG)
+     */
+    async fetchVideosFromWeb(channelIdOrHandle: string, region: string = "ID"): Promise<YouTubeFeedEntry[]> {
+        const entries: YouTubeFeedEntry[] = [];
+        try {
+            const cleanRegion = region === "GLOBAL" ? "US" : region;
+            const hlMap: Record<string, string> = {
+                ID: "id",
+                JP: "ja",
+                US: "en",
+                SG: "en",
+                TW: "zh-TW",
+                HK: "zh-HK",
+                KR: "ko",
+                GLOBAL: "en"
+            };
+            const hl = hlMap[region] || "id";
+
+            const targetUrl = channelIdOrHandle.startsWith("UC")
+                ? `https://www.youtube.com/channel/${channelIdOrHandle}/videos?gl=${cleanRegion}&hl=${hl}`
+                : `https://www.youtube.com/${channelIdOrHandle.startsWith("@") ? channelIdOrHandle : `@${channelIdOrHandle}`}/videos?gl=${cleanRegion}&hl=${hl}`;
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+            let html = "";
+            try {
+                const response = await fetch(targetUrl, {
+                    headers: {
+                        "User-Agent":
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept-Language": `${hl};q=0.9,en-US;q=0.8,en;q=0.7`,
+                        Cookie: `PREF=f6=40000000&gl=${cleanRegion}&hl=${hl};`
+                    },
+                    signal: controller.signal
+                });
+
+                if (!response.ok) return entries;
+                html = await response.text();
+            } finally {
+                clearTimeout(timeoutId);
+            }
+
+            const match =
+                html.match(/var\s+ytInitialData\s*=\s*({.*?});<\/script>/s) ||
+                html.match(/window\[["']ytInitialData["']\]\s*=\s*({.*?});<\/script>/s);
+
+            if (!match || !match[1]) return entries;
+
+            const data = JSON.parse(match[1]);
+            const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs || [];
+
+            let videoTab = tabs.find(
+                (t: any) =>
+                    t?.tabRenderer?.selected ||
+                    t?.tabRenderer?.title === "Video" ||
+                    t?.tabRenderer?.title === "Videos" ||
+                    t?.tabRenderer?.endpoint?.commandMetadata?.webCommandMetadata?.url?.includes("/videos")
+            );
+
+            if (!videoTab) {
+                videoTab = tabs.find((t: any) => t?.tabRenderer?.content?.richGridRenderer?.contents?.length > 0);
+            }
+
+            const contents = videoTab?.tabRenderer?.content?.richGridRenderer?.contents || [];
+
+            for (const item of contents) {
+                const content = item?.richItemRenderer?.content;
+                if (!content) continue;
+
+                let videoId = "";
+                let title = "";
+                let isMembersOnly = false;
+                const published = new Date().toISOString();
+
+                if (content.lockupViewModel) {
+                    const vm = content.lockupViewModel;
+                    videoId = vm.contentId;
+                    title = vm.metadata?.lockupMetadataViewModel?.title?.content || "";
+
+                    const badgeList = vm.metadata?.lockupMetadataViewModel?.badgeViewModels || [];
+                    for (const b of badgeList) {
+                        const label = b?.badgeViewModel?.label || "";
+                        if (
+                            label.includes("Pelanggan") ||
+                            label.includes("Members") ||
+                            label.includes("Member") ||
+                            label.includes("Exclusive") ||
+                            label.includes("メンバー限定") ||
+                            label.includes("會員") ||
+                            label.includes("멤버십")
+                        ) {
+                            isMembersOnly = true;
+                        }
+                    }
+                } else if (content.videoRenderer) {
+                    const vr = content.videoRenderer;
+                    videoId = vr.videoId;
+                    title = vr.title?.runs?.[0]?.text || "";
+
+                    if (vr.badges) {
+                        for (const b of vr.badges) {
+                            const label = b?.metadataBadgeRenderer?.label || "";
+                            const style = b?.metadataBadgeRenderer?.style || "";
+                            if (
+                                style === "BADGE_STYLE_TYPE_MEMBERS_ONLY" ||
+                                label.includes("Pelanggan") ||
+                                label.includes("Members") ||
+                                label.includes("メンバー限定") ||
+                                label.includes("會員") ||
+                                label.includes("멤버십")
+                            ) {
+                                isMembersOnly = true;
+                            }
+                        }
+                    }
+                }
+
+                if (videoId && title) {
+                    entries.push({
+                        videoId,
+                        title,
+                        channelId: channelIdOrHandle,
+                        channelName: "",
+                        published,
+                        updated: published,
+                        thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+                        description: isMembersOnly ? "🟢 Konten khusus pelanggan (Members-only / Early Access)." : "",
+                        link: `https://www.youtube.com/watch?v=${videoId}`
+                    });
+                }
+            }
+        } catch (err) {
+            logger.error(err, `Error web scraping YouTube videos for ${channelIdOrHandle}`);
+        }
+        return entries;
+    }
+
+    /**
+     * Fetch video status metadata (Upcoming, Live, Members-Only, or Regular Video) and scheduled start time.
      * @param videoId Unique YouTube video ID
      */
     async fetchVideoStatus(
@@ -314,6 +455,10 @@ export class YouTubeFeedService {
                 clearTimeout(timeoutId);
             }
 
+            // Check if members only from YouTube player JSON / badges
+            const isMembersOnlyMatch =
+                html.match(/["']isMembersOnly["']\s*:\s*true/i) || html.match(/BADGE_STYLE_TYPE_MEMBERS_ONLY/i);
+
             // Extract scheduled start time from HTML meta or JSON
             let scheduledStartTimeUnix: number | null = null;
             const startDateMatch =
@@ -321,10 +466,15 @@ export class YouTubeFeedService {
                 html.match(/["']startTimestamp["']\s*:\s*["']([^"']+)["']/);
 
             if (startDateMatch?.[1]) {
-                const dateObj = new Date(startDateMatch[1]);
+                const dateStr = startDateMatch[1];
+                const dateObj = new Date(dateStr);
                 if (!isNaN(dateObj.getTime())) {
                     scheduledStartTimeUnix = Math.floor(dateObj.getTime() / 1000);
                 }
+            }
+
+            if (isMembersOnlyMatch) {
+                return { statusType: "members_only", scheduledStartTimeUnix };
             }
 
             // Check if live now

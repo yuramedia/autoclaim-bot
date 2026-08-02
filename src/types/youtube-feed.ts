@@ -28,7 +28,7 @@ export interface YouTubeFeedEntry {
     link: string;
 }
 
-export type YouTubeVideoStatusType = "upcoming" | "live" | "video";
+export type YouTubeVideoStatusType = "upcoming" | "live" | "members_only" | "video";
 
 /** Formatted feed item ready for Discord embed */
 export interface FormattedYouTubeVideo {

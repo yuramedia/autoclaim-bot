@@ -52,6 +52,7 @@ export interface IYouTubeFeedChannel {
     channelId: string;
     channelName: string;
     handle: string;
+    region?: string;
 }
 
 /**
@@ -106,7 +107,8 @@ const AntihackSettingsSchema = new Schema<IAntihackSettings>({
 const YouTubeFeedChannelSchema = new Schema<IYouTubeFeedChannel>({
     channelId: { type: String, required: true },
     channelName: { type: String, required: true },
-    handle: { type: String, required: true }
+    handle: { type: String, required: true },
+    region: { type: String, default: "ID" }
 });
 
 const YouTubeFeedSettingsSchema = new Schema<IYouTubeFeedSettings>({

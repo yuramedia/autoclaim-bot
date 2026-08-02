@@ -129,9 +129,14 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
 
                 const channelIcon = await service.getChannelIcon(ytChannelId);
 
-                for (const raw of rawEntries) {
+                // Fetch video statuses concurrently for high performance
+                const statusResults = await Promise.all(rawEntries.map(raw => service.fetchVideoStatus(raw.videoId)));
+
+                for (let i = 0; i < rawEntries.length; i++) {
+                    const raw = rawEntries[i];
+                    const statusInfo = statusResults[i];
+                    if (!raw || !statusInfo) continue;
                     try {
-                        const statusInfo = await service.fetchVideoStatus(raw.videoId);
                         const formatted = service.formatEntry(raw, statusInfo, channelIcon);
                         const existing = channelCache.find(v => videoEquals(v, formatted));
 

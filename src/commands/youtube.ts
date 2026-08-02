@@ -163,7 +163,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
 
             case "remove": {
-                const query = interaction.options.getString("channel", true).trim().toLowerCase();
+                const input = interaction.options.getString("channel", true).trim();
                 const currentChannels = settings.youtubeFeed?.youtubeChannels || [];
 
                 if (currentChannels.length === 0) {
@@ -173,19 +173,23 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     return;
                 }
 
-                const cleanQuery = query.startsWith("@") ? query : `@${query}`;
+                const resolved = await ytService.resolveChannelId(input);
+                const cleanInput = input.toLowerCase();
 
                 const index = currentChannels.findIndex(
                     c =>
-                        c.channelId.toLowerCase() === query ||
-                        c.handle.toLowerCase() === query ||
-                        c.handle.toLowerCase() === cleanQuery ||
-                        c.channelName.toLowerCase().includes(query)
+                        (resolved && c.channelId.toLowerCase() === resolved.channelId.toLowerCase()) ||
+                        c.channelId.toLowerCase() === cleanInput ||
+                        c.handle.toLowerCase() === cleanInput ||
+                        c.handle.toLowerCase() === `@${cleanInput.replace(/^@/, "")}` ||
+                        c.channelName.toLowerCase().includes(cleanInput) ||
+                        cleanInput.includes(c.channelId.toLowerCase()) ||
+                        cleanInput.includes(c.handle.toLowerCase().replace(/^@/, ""))
                 );
 
                 if (index === -1) {
                     await interaction.editReply({
-                        content: `❌ Channel YouTube \`${query}\` tidak ditemukan dalam daftar pantauan.`
+                        content: `❌ Channel YouTube \`${input}\` tidak ditemukan dalam daftar pantauan.`
                     });
                     return;
                 }

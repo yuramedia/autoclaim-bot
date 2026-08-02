@@ -160,11 +160,15 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
 
                         // New item
                         formatted.lastPostedStatus = formatted.statusType;
-                        if (isFirstCheckForChannel) {
+                        const isUpcomingOrMembers =
+                            formatted.statusType === "upcoming" || formatted.statusType === "members_only";
+
+                        if (isFirstCheckForChannel && !isUpcomingOrMembers) {
                             formatted.wasPosted = true;
                         }
                         channelCache.push(formatted);
-                        if (!isFirstCheckForChannel) {
+
+                        if (!isFirstCheckForChannel || isUpcomingOrMembers) {
                             newlyDiscoveredVideos.push(formatted);
                         }
                     } catch (err) {

@@ -431,7 +431,7 @@ export class YouTubeFeedService {
      */
     async fetchVideoStatus(
         videoId: string
-    ): Promise<{ statusType: YouTubeVideoStatusType; scheduledStartTimeUnix: number | null }> {
+    ): Promise<{ statusType: YouTubeVideoStatusType; scheduledStartTimeUnix: number | null; realTitle?: string }> {
         try {
             const url = `https://www.youtube.com/watch?v=${videoId}`;
             const controller = new AbortController();
@@ -457,6 +457,14 @@ export class YouTubeFeedService {
                 clearTimeout(timeoutId);
             }
 
+            let realTitle: string | undefined;
+            const titleMatch =
+                html.match(/meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+                html.match(/meta\s+name=["']title["']\s+content=["']([^"']+)["']/i);
+            if (titleMatch?.[1]) {
+                realTitle = decode(titleMatch[1].trim());
+            }
+
             // Check if members only from YouTube player JSON / badges
             const isMembersOnlyMatch =
                 html.match(/["']isMembersOnly["']\s*:\s*true/i) || html.match(/BADGE_STYLE_TYPE_MEMBERS_ONLY/i);
@@ -476,13 +484,13 @@ export class YouTubeFeedService {
             }
 
             if (isMembersOnlyMatch) {
-                return { statusType: "members_only", scheduledStartTimeUnix };
+                return { statusType: "members_only", scheduledStartTimeUnix, realTitle };
             }
 
             // Check if live now
             const isLiveNowMatch = html.match(/["']isLiveNow["']\s*:\s*true/i);
             if (isLiveNowMatch) {
-                return { statusType: "live", scheduledStartTimeUnix };
+                return { statusType: "live", scheduledStartTimeUnix, realTitle };
             }
 
             // Check if upcoming
@@ -493,10 +501,10 @@ export class YouTubeFeedService {
             const nowUnix = Math.floor(Date.now() / 1000);
 
             if (isUpcomingMatch || (scheduledStartTimeUnix && scheduledStartTimeUnix > nowUnix)) {
-                return { statusType: "upcoming", scheduledStartTimeUnix };
+                return { statusType: "upcoming", scheduledStartTimeUnix, realTitle };
             }
 
-            return { statusType: "video", scheduledStartTimeUnix };
+            return { statusType: "video", scheduledStartTimeUnix, realTitle };
         } catch {
             return { statusType: "video", scheduledStartTimeUnix: null };
         }
@@ -558,13 +566,17 @@ export class YouTubeFeedService {
      */
     formatEntry(
         entry: YouTubeFeedEntry,
-        statusInfo: { statusType: YouTubeVideoStatusType; scheduledStartTimeUnix: number | null } = {
+        statusInfo: {
+            statusType: YouTubeVideoStatusType;
+            scheduledStartTimeUnix: number | null;
+            realTitle?: string;
+        } = {
             statusType: "video",
             scheduledStartTimeUnix: null
         },
         channelIcon: string | null = null
     ): FormattedYouTubeVideo {
-        const rawTitle = entry.title || "Untitled Video";
+        const rawTitle = statusInfo.realTitle || entry.title || "Untitled Video";
         let title = decode(rawTitle.replace(/<[^>]+>/g, "").trim());
         if (title.length > 256) title = title.substring(0, 250) + "...";
 

@@ -7,13 +7,7 @@ import { Client } from "discord.js";
 import { GuildSettings } from "../database/models/guild-settings";
 import { YouTubeFeedService } from "./youtube-feed";
 import { ramen } from "../core/ramen";
-import {
-    YT_POLL_INTERVAL,
-    YT_MAX_ITEMS,
-    YT_FETCH_CONCURRENCY,
-    YT_CHANNEL_POLL_DELAY,
-    YT_FIRST_RUN_MAX_AGE
-} from "../constants/youtube-feed";
+import { YT_POLL_INTERVAL, YT_MAX_ITEMS, YT_FETCH_CONCURRENCY, YT_CHANNEL_POLL_DELAY } from "../constants/youtube-feed";
 import { logger } from "../core/logger";
 import type { FormattedYouTubeVideo, YouTubeFeedEntry, YouTubeVideoStatusType } from "../types/youtube-feed";
 
@@ -201,7 +195,6 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
 
                 let channelCache = cachedChannelVideos.get(ytChannelId) || [];
                 const isFirstCheckForChannel = !initializedChannels.has(ytChannelId);
-                const nowUnix = Math.floor(Date.now() / 1000);
 
                 const newlyDiscoveredVideos: FormattedYouTubeVideo[] = [];
 
@@ -292,20 +285,8 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
                         formatted.lastPostedStatus = formatted.statusType;
 
                         if (isFirstCheckForChannel) {
-                            // First run: Skip videos older than 24h for silent cache
-                            const videoAgeSeconds = nowUnix - formatted.publishedUnix;
-                            const isOld = videoAgeSeconds > YT_FIRST_RUN_MAX_AGE;
-                            const isTimeSensitive =
-                                formatted.statusType === "upcoming" ||
-                                formatted.statusType === "live" ||
-                                formatted.statusType === "members_only";
-
-                            if (isOld && !isTimeSensitive) {
-                                // Old regular video — cache silently
-                                formatted.wasPosted = true;
-                            }
-                            // Time-sensitive items (upcoming/live/members) are cached with wasPosted = false
-                            // They will be posted in postNewVideos() below
+                            // First run / startup check: silently cache all existing feed items to prevent duplicate posts on restart
+                            formatted.wasPosted = true;
                         }
 
                         channelCache.push(formatted);
@@ -331,20 +312,6 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
                     logger.info(
                         `🎥 Cached ${channelCache.length} YouTube videos for channel ${ytChannelId} (silent init)`
                     );
-
-                    // Post time-sensitive videos discovered on first run (upcoming/live/members)
-                    const timeSensitiveVideos = channelCache.filter(
-                        v =>
-                            !v.wasPosted &&
-                            (v.statusType === "upcoming" || v.statusType === "live" || v.statusType === "members_only")
-                    );
-
-                    if (timeSensitiveVideos.length > 0) {
-                        const targets = channelToTargetsMap.get(ytChannelId) || [];
-                        if (targets.length > 0) {
-                            postNewVideos(timeSensitiveVideos, targets);
-                        }
-                    }
                     continue;
                 }
 

@@ -39,3 +39,7 @@ test-*.ts
 src/test-*.ts
 # ...except the official test runner preload
 !src/test-setup.ts
+
+# graphify output
+graphify-out/
+

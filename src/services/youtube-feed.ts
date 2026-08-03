@@ -543,19 +543,26 @@ export class YouTubeFeedService {
             }
 
             // Check if live now
-            const isLiveNowMatch = html.match(/["']isLiveNow["']\s*:\s*true/i);
+            const isLiveNowMatch =
+                html.match(/["']isLiveNow["']\s*:\s*true/i) ||
+                html.match(/["']status["']\s*:\s*["']LIVE["']/i) ||
+                html.match(/BADGE_STYLE_TYPE_LIVE_NOW/i);
+
             if (isLiveNowMatch) {
                 return { statusType: "live", scheduledStartTimeUnix, realTitle };
             }
 
             // Check if upcoming
-            const isUpcomingMatch =
-                html.match(/["']upcomingEventData["']|["']isUpcoming["']\s*:\s*true/i) ||
-                html.match(/meta\s+itemprop=["']isLiveBroadcast["']\s+content=["']True["']/i);
-
             const nowUnix = Math.floor(Date.now() / 1000);
+            const isUpcomingJson =
+                html.match(/["']upcomingEventData["']/i) || html.match(/["']isUpcoming["']\s*:\s*true/i);
 
-            if (isUpcomingMatch || (scheduledStartTimeUnix && scheduledStartTimeUnix > nowUnix)) {
+            // A video is UPCOMING only if explicitly flagged as upcoming AND start time is in the future
+            if (
+                (isUpcomingJson || (scheduledStartTimeUnix && scheduledStartTimeUnix > nowUnix)) &&
+                scheduledStartTimeUnix &&
+                scheduledStartTimeUnix > nowUnix
+            ) {
                 return { statusType: "upcoming", scheduledStartTimeUnix, realTitle };
             }
 

@@ -259,7 +259,12 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
                             const previousStatus = existing.lastPostedStatus || existing.statusType;
                             const newStatus = statusInfo.statusType;
 
-                            if (previousStatus !== newStatus) {
+                            // Prevent invalid backward status regressions caused by transient HTML parsing (e.g., live -> upcoming, video -> upcoming)
+                            const isBackwardRegression =
+                                (previousStatus === "live" && newStatus === "upcoming") ||
+                                (previousStatus === "video" && (newStatus === "upcoming" || newStatus === "live"));
+
+                            if (previousStatus !== newStatus && !isBackwardRegression) {
                                 // Status changed — update cache entry
                                 existing.statusType = newStatus;
                                 existing.scheduledStartTimeUnix = statusInfo.scheduledStartTimeUnix;

@@ -35,6 +35,29 @@ describe("CrunchyrollService subtitle functions", () => {
         }
     });
 
+    test("downloadSubtitle retries replacing vod-fy-mod. with vod-fy. on 403 Forbidden status", async () => {
+        const requestedUrls: string[] = [];
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = mock(async (url: string | URL | Request) => {
+            const str = url.toString();
+            requestedUrls.push(str);
+            if (str.includes("vod-fy-mod.")) {
+                return new Response("Forbidden", { status: 403 });
+            }
+            return new Response("[Script Info]\nTitle: Fallback Subtitle", { status: 200 });
+        }) as unknown as typeof globalThis.fetch;
+
+        try {
+            const inputUrl = "https://vod-fy-mod.crunchyrollcdn.com/subtitles/test.txt?format=ass";
+            const content = await service.downloadSubtitle(inputUrl);
+
+            expect(content).toBe("[Script Info]\nTitle: Fallback Subtitle");
+            expect(requestedUrls).toContain("https://vod-fy.crunchyrollcdn.com/subtitles/test.txt?format=ass");
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
     test("fetchSubtitles sanitizes returned subtitle URLs in response", async () => {
         config.crunchyroll.email = "test@example.com";
         config.crunchyroll.password = "testpass";
@@ -59,7 +82,7 @@ describe("CrunchyrollService subtitle functions", () => {
                             "en-US": {
                                 locale: "en-US",
                                 url: "https://vod-fy-mod.crunchyrollcdn.com/subtitles/en.ass",
-                                format: "ass"
+                                format: "txt"
                             }
                         }
                     }),
@@ -73,6 +96,7 @@ describe("CrunchyrollService subtitle functions", () => {
             const subtitles = await service.fetchSubtitles("GEXH3WP91");
             expect(subtitles).not.toBeNull();
             expect(subtitles?.["en-US"]?.url).toBe("https://vod-fy.crunchyrollcdn.com/subtitles/en.ass");
+            expect(subtitles?.["en-US"]?.format).toBe("ass");
         } finally {
             globalThis.fetch = originalFetch;
         }

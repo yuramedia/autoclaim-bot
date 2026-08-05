@@ -795,8 +795,13 @@ export class CrunchyrollService {
             if (data.subtitles) {
                 for (const key of Object.keys(data.subtitles)) {
                     const sub = data.subtitles[key];
-                    if (sub?.url) {
-                        sub.url = this.sanitizeSubtitleUrl(sub.url);
+                    if (sub) {
+                        if (sub.url) {
+                            sub.url = this.sanitizeSubtitleUrl(sub.url);
+                        }
+                        if (sub.format === "txt") {
+                            sub.format = "ass";
+                        }
                     }
                 }
             }
@@ -809,9 +814,12 @@ export class CrunchyrollService {
 
     /**
      * Sanitize Crunchyroll subtitle URL by replacing modified CDN hosts with original hosts
-     * (e.g. vod-fy-mod.crunchyrollcdn.com -> vod-fy.crunchyrollcdn.com)
+     * (e.g. vod-fy-mod. -> vod-fy.)
      */
     sanitizeSubtitleUrl(url: string): string {
+        if (url.includes("vod-fy-mod.")) {
+            return url.replace(/vod-fy-mod\./g, "vod-fy.");
+        }
         return url.replace(/vod-([a-zA-Z0-9]+)-mod\.crunchyrollcdn\.com/g, "vod-$1.crunchyrollcdn.com");
     }
 
@@ -821,8 +829,15 @@ export class CrunchyrollService {
      */
     async downloadSubtitle(url: string): Promise<string | null> {
         try {
-            const cleanUrl = this.sanitizeSubtitleUrl(url);
-            const response = await fetch(cleanUrl);
+            let targetUrl = this.sanitizeSubtitleUrl(url);
+            let response = await fetch(targetUrl);
+
+            // If 403 Forbidden or failed and original URL contains vod-fy-mod., retry replacing vod-fy-mod. with vod-fy.
+            if ((!response.ok || response.status === 403) && url.includes("vod-fy-mod.")) {
+                targetUrl = url.replace(/vod-fy-mod\./g, "vod-fy.");
+                response = await fetch(targetUrl);
+            }
+
             if (!response.ok) return null;
             return await response.text();
         } catch (error) {

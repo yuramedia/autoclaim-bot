@@ -351,8 +351,9 @@ async function downloadAndSend(
             return;
         }
 
-        // Build filename: EpisodeID_lang.ass
-        const ext = format === "ass" ? "ass" : format === "vtt" ? "vtt" : "srt";
+        // Build filename: EpisodeID_lang.ass (convert .txt format label to .ass)
+        const normalizedFormat = format === "txt" ? "ass" : format;
+        const ext = normalizedFormat === "vtt" ? "vtt" : normalizedFormat === "srt" ? "srt" : "ass";
         const filename = `${episodeId}_${lang}.${ext}`;
 
         // Create attachment from buffer (no temp file needed)
@@ -365,7 +366,7 @@ async function downloadAndSend(
             .setDescription(
                 `**${episodeTitle}**\n\n` +
                     `🌐 Bahasa: **${LANG_MAP[lang] || lang}** (\`${lang}\`)\n` +
-                    `📄 Format: **${format.toUpperCase()}**\n` +
+                    `📄 Format: **${normalizedFormat.toUpperCase()}**\n` +
                     `📦 File: \`${filename}\``
             )
             .setFooter({ text: "Crunchyroll Subtitle Downloader" })

@@ -792,6 +792,14 @@ export class CrunchyrollService {
             }
 
             const data = (await response.json()) as CrunchyrollPlayResponse;
+            if (data.subtitles) {
+                for (const key of Object.keys(data.subtitles)) {
+                    const sub = data.subtitles[key];
+                    if (sub?.url) {
+                        sub.url = this.sanitizeSubtitleUrl(sub.url);
+                    }
+                }
+            }
             return data.subtitles || null;
         } catch (error) {
             logger.error(error as Error, "Crunchyroll subtitle fetch error");
@@ -800,12 +808,21 @@ export class CrunchyrollService {
     }
 
     /**
+     * Sanitize Crunchyroll subtitle URL by replacing modified CDN hosts with original hosts
+     * (e.g. vod-fy-mod.crunchyrollcdn.com -> vod-fy.crunchyrollcdn.com)
+     */
+    sanitizeSubtitleUrl(url: string): string {
+        return url.replace(/vod-([a-zA-Z0-9]+)-mod\.crunchyrollcdn\.com/g, "vod-$1.crunchyrollcdn.com");
+    }
+
+    /**
      * Download a single subtitle file content
      * Returns the raw subtitle text (.ass format)
      */
     async downloadSubtitle(url: string): Promise<string | null> {
         try {
-            const response = await fetch(url);
+            const cleanUrl = this.sanitizeSubtitleUrl(url);
+            const response = await fetch(cleanUrl);
             if (!response.ok) return null;
             return await response.text();
         } catch (error) {

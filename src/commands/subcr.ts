@@ -32,16 +32,16 @@ interface ParsedUrl {
 }
 
 /** Extract episode or series ID from Crunchyroll URL */
-function parseCrunchyrollUrl(input: string): ParsedUrl | null {
+export function parseCrunchyrollUrl(input: string): ParsedUrl | null {
     // Direct ID format (e.g., GEXH3WP91)
     if (/^[A-Z0-9]{9,}$/.test(input)) return { type: "episode", id: input };
 
-    // URL format: https://www.crunchyroll.com/watch/GEXH3WP91/...
-    let match = input.match(/crunchyroll\.com\/watch\/([A-Z0-9]+)/i);
+    // URL format: https://www.crunchyroll.com/watch/GEXH3WP91/... or https://www.crunchyroll.com/id/watch/GE00377807JAJP/...
+    let match = input.match(/crunchyroll\.com\/(?:[a-z0-9_-]+\/)?watch\/([A-Z0-9]+)/i);
     if (match) return { type: "episode", id: match[1]! };
 
-    // Series URL format: https://www.crunchyroll.com/series/GT00365589/...
-    match = input.match(/crunchyroll\.com\/series\/([A-Z0-9]+)/i);
+    // Series URL format: https://www.crunchyroll.com/series/GT00365589/... or https://www.crunchyroll.com/id/series/GT00365589/...
+    match = input.match(/crunchyroll\.com\/(?:[a-z0-9_-]+\/)?series\/([A-Z0-9]+)/i);
     if (match) return { type: "series", id: match[1]! };
 
     return null;

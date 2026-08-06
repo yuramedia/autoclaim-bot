@@ -9,10 +9,8 @@ import { logger } from "../core/logger";
  */
 export const data = new SlashCommandBuilder()
     .setName("jisho")
-    .setDescription("Cari arti kata/kanji di kamus Jisho (Jepang-Inggris)")
-    .addStringOption(option =>
-        option.setName("kata").setDescription("Kata atau kanji yang ingin dicari").setRequired(true)
-    );
+    .setDescription("Search word/kanji definitions on Jisho Japanese-English dictionary")
+    .addStringOption(option => option.setName("kata").setDescription("Word or kanji to search for").setRequired(true));
 
 /**
  * Executes the jisho command to search Japanese-English dictionary.
@@ -30,7 +28,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         if (!results || results.length === 0) {
             await interaction.editReply({
-                content: `Tidak ditemukan hasil untuk kata **"${keyword}"**.`
+                content: `No results found for word **"${keyword}"**.`
             });
             return;
         }
@@ -39,7 +37,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         const firstResult = results[0];
         if (!firstResult) {
             await interaction.editReply({
-                content: `Tidak ditemukan hasil untuk kata **"${keyword}"**.`
+                content: `No results found for word **"${keyword}"**.`
             });
             return;
         }
@@ -49,7 +47,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     } catch (error) {
         logger.error(error, "Jisho Command Error");
         await interaction.editReply({
-            content: "Terjadi kesalahan saat mencari kata di Jisho."
+            content: "An error occurred while searching for the word on Jisho."
         });
     }
 }
@@ -69,7 +67,7 @@ function createJishoEmbed(result: JishoWord): EmbedBuilder {
 
     // Meanings
     if (result.meanings.length > 0) {
-        description += "**Makna/Arti**\n";
+        description += "**Meanings**\n";
         result.meanings.forEach((meaning, index) => {
             const num = index + 1;
             const parts = meaning.parts.length > 0 ? `*${meaning.parts.join(", ")}* ` : "";
@@ -81,7 +79,7 @@ function createJishoEmbed(result: JishoWord): EmbedBuilder {
                 description += `  Info: ${meaning.info.join("; ")}\n`;
             }
             if (meaning.seeAlso.length > 0) {
-                description += `  Lihat juga: ${meaning.seeAlso.join(", ")}\n`;
+                description += `  See also: ${meaning.seeAlso.join(", ")}\n`;
             }
         });
         description += "\n";
@@ -93,7 +91,7 @@ function createJishoEmbed(result: JishoWord): EmbedBuilder {
         const formsToShow = result.otherForms.slice(0, 5);
         const formsText = formsToShow.map(f => `${f.word}${f.reading ? ` (${f.reading})` : ""}`).join("; ");
 
-        description += `**Bentuk lain**: ${formsText}`;
+        description += `**Other forms**: ${formsText}`;
         if (result.otherForms.length > 5) {
             description += `, ... (+${result.otherForms.length - 5})`;
         }
@@ -109,7 +107,7 @@ function createJishoEmbed(result: JishoWord): EmbedBuilder {
         footerParts.push("Common Word");
     }
 
-    footerParts.push("Menggunakan Jisho dan data JMDict");
+    footerParts.push("Powered by Jisho and JMDict data");
 
     embed.setDescription(description);
     embed.setFooter({ text: footerParts.join(" | ") });

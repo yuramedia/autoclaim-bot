@@ -8,8 +8,8 @@ import { logger } from "../core/logger";
  */
 export const data = new SlashCommandBuilder()
     .setName("kbbi")
-    .setDescription("Cari definisi kata di Kamus Besar Bahasa Indonesia (KBBI)")
-    .addStringOption(option => option.setName("kata").setDescription("Kata yang ingin dicari").setRequired(true));
+    .setDescription("Search word definitions in KBBI (Great Dictionary of the Indonesian Language)")
+    .addStringOption(option => option.setName("kata").setDescription("Word to search for").setRequired(true));
 
 /**
  * Executes the kbbi command to search Indonesian definitions in KBBI.
@@ -27,7 +27,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         if (!result) {
             await interaction.editReply({
-                content: `Kata **"${word}"** tidak ditemukan di KBBI.`
+                content: `Word **"${word}"** was not found in KBBI.`
             });
             return;
         }
@@ -52,7 +52,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         if (result.definitions.length > 0) {
             description += result.definitions.map((def, index) => `${index + 1}. ${def}`).join("\n");
         } else {
-            description += "Tidak ada definisi ditemukan.";
+            description += "No definition found.";
         }
 
         if (result.synonyms && result.synonyms.length > 0) {
@@ -63,7 +63,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 let synonymText = shownSynonyms.join(", ");
                 if (group.words.length > maxSynonyms) {
                     const remainingCount = group.words.length - maxSynonyms;
-                    const linkText = `dan ${remainingCount} lainnya`;
+                    const linkText = `and ${remainingCount} others`;
                     if (result.thesaurusUrl) {
                         synonymText += ` [${linkText}](${result.thesaurusUrl})`;
                     } else {
@@ -79,6 +79,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         logger.error(error, "KBBI Command Error");
-        await interaction.editReply({ content: "Terjadi kesalahan saat mencari kata di KBBI." });
+        await interaction.editReply({ content: "An error occurred while searching for the word in KBBI." });
     }
 }

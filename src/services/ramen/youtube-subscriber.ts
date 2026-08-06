@@ -38,19 +38,19 @@ function buildVideoEmbed(video: FormattedYouTubeVideo): EmbedBuilder {
     let footerText = "YouTube Feed";
 
     if (video.statusType === "upcoming") {
-        statusPrefix = "⏳ [AKAN SEGERA TAYANG] ";
+        statusPrefix = "⏳ [UPCOMING PREMIERE] ";
         embedColor = 0xffa500; // Orange
         footerText = "YouTube Feed • Scheduled Premiere / Stream";
     } else if (video.statusType === "live") {
-        statusPrefix = "🔴 [SEKARANG TAYANG] ";
+        statusPrefix = "🔴 [LIVE NOW] ";
         embedColor = 0xff0000; // Red
         footerText = "YouTube Feed • Live Now";
     } else if (video.statusType === "members_only") {
-        statusPrefix = "🟢 [KHUSUS PELANGGAN] ";
+        statusPrefix = "🟢 [MEMBERS ONLY] ";
         embedColor = 0x2ecc71; // Green
         footerText = "YouTube Feed • Members-Only Content";
     } else {
-        statusPrefix = "🎬 [VIDEO BARU] ";
+        statusPrefix = "🎬 [NEW VIDEO] ";
         footerText = "YouTube Feed • New Upload";
     }
 
@@ -71,13 +71,13 @@ function buildVideoEmbed(video: FormattedYouTubeVideo): EmbedBuilder {
 
     if (video.statusType === "upcoming" && video.scheduledStartTimeUnix) {
         embed.addFields({
-            name: "📅 Jadwal Tayang",
+            name: "📅 Scheduled Premiere",
             value: `<t:${video.scheduledStartTimeUnix}:F> (<t:${video.scheduledStartTimeUnix}:R>)`,
             inline: false
         });
     } else if (video.statusType === "live" && video.scheduledStartTimeUnix) {
         embed.addFields({
-            name: "🕒 Waktu Mulai Tayang",
+            name: "🕒 Live Stream Start Time",
             value: `<t:${video.scheduledStartTimeUnix}:F> (<t:${video.scheduledStartTimeUnix}:R>)`,
             inline: false
         });

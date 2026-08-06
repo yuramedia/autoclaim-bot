@@ -18,22 +18,22 @@ import { logger } from "../core/logger";
  */
 export const data = new SlashCommandBuilder()
     .setName("crunchyroll-feed")
-    .setDescription("Konfigurasi notifikasi episode baru Crunchyroll")
+    .setDescription("Configure Crunchyroll new episode notifications")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand(sub =>
         sub
             .setName("enable")
-            .setDescription("Aktifkan notifikasi episode baru")
+            .setDescription("Enable new episode notifications")
             .addChannelOption(opt =>
                 opt
                     .setName("channel")
-                    .setDescription("Channel untuk mengirim notifikasi")
+                    .setDescription("Channel to send notifications")
                     .setRequired(true)
                     .addChannelTypes(ChannelType.GuildText)
             )
     )
-    .addSubcommand(sub => sub.setName("disable").setDescription("Nonaktifkan notifikasi episode baru"))
-    .addSubcommand(sub => sub.setName("status").setDescription("Lihat status konfigurasi saat ini"));
+    .addSubcommand(sub => sub.setName("disable").setDescription("Disable new episode notifications"))
+    .addSubcommand(sub => sub.setName("status").setDescription("View current configuration status"));
 
 /**
  * Executes the crunchyroll-feed command to enable, disable, or check status of Crunchyroll feed notifications.
@@ -45,7 +45,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     try {
         if (!interaction.guildId) {
             await interaction.reply({
-                content: "❌ Perintah ini hanya bisa digunakan di server.",
+                content: "❌ This command can only be used in a server.",
                 ephemeral: true
             });
             return;
@@ -70,9 +70,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0xf47521)
-                            .setTitle("✅ Crunchyroll Feed Aktif")
-                            .setDescription(`Notifikasi episode baru akan dikirim ke <#${channel.id}>`)
-                            .setFooter({ text: "Episode baru akan muncul dalam beberapa menit setelah rilis" })
+                            .setTitle("✅ Crunchyroll Feed Enabled")
+                            .setDescription(`New episode notifications will be sent to <#${channel.id}>`)
+                            .setFooter({ text: "New episodes will appear within a few minutes after release" })
                     ]
                 });
                 break;
@@ -86,7 +86,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 await settings.save();
 
                 await interaction.editReply({
-                    content: "✅ Notifikasi Crunchyroll telah dinonaktifkan."
+                    content: "✅ Crunchyroll notifications have been disabled."
                 });
                 break;
             }
@@ -95,11 +95,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 const feed = settings.crunchyrollFeed;
                 const embed = new EmbedBuilder()
                     .setColor(0xf47521)
-                    .setTitle("📺 Status Crunchyroll Feed")
+                    .setTitle("📺 Crunchyroll Feed Status")
                     .addFields(
                         {
                             name: "Status",
-                            value: feed?.enabled ? "✅ Aktif" : "❌ Nonaktif",
+                            value: feed?.enabled ? "✅ Enabled" : "❌ Disabled",
                             inline: true
                         },
                         {
@@ -118,11 +118,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
-                    content: "❌ Terjadi kesalahan saat memproses perintah Crunchyroll feed."
+                    content: "❌ An error occurred while processing the Crunchyroll feed command."
                 });
             } else {
                 await interaction.reply({
-                    content: "❌ Terjadi kesalahan saat memproses perintah Crunchyroll feed.",
+                    content: "❌ An error occurred while processing the Crunchyroll feed command.",
                     ephemeral: true
                 });
             }

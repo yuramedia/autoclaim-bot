@@ -12,11 +12,11 @@ import { logger } from "../core/logger";
  */
 export const data = new SlashCommandBuilder()
     .setName("bestrelease")
-    .setDescription("Cari rilis subtitle Indonesia terbaik untuk anime")
-    .addStringOption(opt => opt.setName("anime").setDescription("Nama anime yang ingin dicari").setRequired(true));
+    .setDescription("Search for best subtitle releases for anime")
+    .addStringOption(opt => opt.setName("anime").setDescription("Anime title to search for").setRequired(true));
 
 /**
- * Executes the bestrelease command to search for Indonesian subtitle releases.
+ * Executes the bestrelease command to search for subtitle releases.
  *
  * @param interaction The command interaction from Discord.
  * @returns A promise that resolves when the command is executed.
@@ -47,7 +47,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         if (results.length === 0) {
             await interaction.editReply({
-                content: `❌ Tidak ditemukan anime dengan kata kunci: **${query}**`
+                content: `❌ No anime found matching keyword: **${query}**`
             });
             return;
         }
@@ -56,12 +56,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         const displayResults = results.slice(0, 5);
 
         const embed = new EmbedBuilder()
-            .setTitle("🎬 Best Release Indonesia")
-            .setDescription(`Hasil pencarian untuk: **${query}**`)
+            .setTitle("🎬 Best Anime Releases")
+            .setDescription(`Search results for: **${query}**`)
             .setColor(0x3498db)
             .setTimestamp()
             .setFooter({
-                text: `Menampilkan ${displayResults.length} dari ${results.length} hasil • Data dari best-release.kazeuta.com`
+                text: `Showing ${displayResults.length} of ${results.length} results • Data from best-release.kazeuta.com`
             });
 
         for (const anime of displayResults) {
@@ -83,10 +83,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     .join("\n");
 
                 if (releases.length > 3) {
-                    releaseInfo += `\n*... dan ${releases.length - 3} rilis lainnya*`;
+                    releaseInfo += `\n*... and ${releases.length - 3} more releases*`;
                 }
             } else {
-                releaseInfo = "*Belum ada rilis*";
+                releaseInfo = "*No releases yet*";
             }
 
             // Notes if any
@@ -108,7 +108,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     } catch (error) {
         logger.error(error, "Best release error");
         await interaction.editReply({
-            content: "❌ Terjadi kesalahan saat mencari data. Silakan coba lagi nanti."
+            content: "❌ An error occurred while searching for data. Please try again later."
         });
     }
 }

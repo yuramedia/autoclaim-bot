@@ -21,22 +21,22 @@ import { logger } from "../core/logger";
  */
 export const data = new SlashCommandBuilder()
     .setName("youtube")
-    .setDescription("Konfigurasi notifikasi feed channel YouTube")
+    .setDescription("Configure YouTube channel feed notifications")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand(sub =>
         sub
             .setName("add")
-            .setDescription("Tambah channel YouTube untuk dipantau")
+            .setDescription("Add a YouTube channel to monitor")
             .addStringOption(opt =>
                 opt
                     .setName("channel")
-                    .setDescription("URL channel YouTube, handle (@username), atau ID channel")
+                    .setDescription("YouTube channel URL, handle (@username), or channel ID")
                     .setRequired(true)
             )
             .addStringOption(opt =>
                 opt
                     .setName("region")
-                    .setDescription("Region / negara katalog YouTube (default: Indonesia ID)")
+                    .setDescription("YouTube catalog region / country (default: Indonesia ID)")
                     .setRequired(false)
                     .addChoices(
                         { name: "Indonesia 🇮🇩 (ID)", value: "ID" },
@@ -53,29 +53,29 @@ export const data = new SlashCommandBuilder()
     .addSubcommand(sub =>
         sub
             .setName("remove")
-            .setDescription("Hapus channel YouTube dari daftar pantauan")
+            .setDescription("Remove a YouTube channel from the watch list")
             .addStringOption(opt =>
                 opt
                     .setName("channel")
-                    .setDescription("Handle (@username), ID channel, atau nama channel yang akan dihapus")
+                    .setDescription("Handle (@username), channel ID, or channel name to remove")
                     .setRequired(true)
             )
     )
-    .addSubcommand(sub => sub.setName("list").setDescription("Lihat daftar channel YouTube yang sedang dipantau"))
+    .addSubcommand(sub => sub.setName("list").setDescription("View the list of currently monitored YouTube channels"))
     .addSubcommand(sub =>
         sub
             .setName("enable")
-            .setDescription("Aktifkan notifikasi feed YouTube ke channel tertentu")
+            .setDescription("Enable YouTube feed notifications to a specific channel")
             .addChannelOption(opt =>
                 opt
                     .setName("channel")
-                    .setDescription("Channel Discord untuk menerima notifikasi")
+                    .setDescription("Discord channel to receive notifications")
                     .addChannelTypes(ChannelType.GuildText)
                     .setRequired(true)
             )
     )
-    .addSubcommand(sub => sub.setName("disable").setDescription("Nonaktifkan notifikasi feed YouTube"))
-    .addSubcommand(sub => sub.setName("status").setDescription("Lihat status konfigurasi feed YouTube saat ini"));
+    .addSubcommand(sub => sub.setName("disable").setDescription("Disable YouTube feed notifications"))
+    .addSubcommand(sub => sub.setName("status").setDescription("View current YouTube feed configuration status"));
 
 /**
  * Executes the /youtube command.
@@ -85,7 +85,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const guildId = interaction.guildId;
     if (!guildId) {
         await interaction.reply({
-            content: "❌ Perintah ini hanya bisa digunakan di server.",
+            content: "❌ This command can only be used in a server.",
             ephemeral: true
         });
         return;
@@ -106,7 +106,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                 if (currentChannels.length >= YT_MAX_CHANNELS_PER_GUILD) {
                     await interaction.editReply({
-                        content: `❌ Batas maksimum ${YT_MAX_CHANNELS_PER_GUILD} channel YouTube per server telah tercapai.`
+                        content: `❌ Maximum limit of ${YT_MAX_CHANNELS_PER_GUILD} YouTube channels per server reached.`
                     });
                     return;
                 }
@@ -114,7 +114,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 const resolved = await ytService.resolveChannelId(input);
                 if (!resolved) {
                     await interaction.editReply({
-                        content: `❌ Gagal menemukan channel YouTube untuk \`${input}\`. Pastikan URL, handle, atau ID channel valid.`
+                        content: `❌ Failed to find YouTube channel for \`${input}\`. Ensure the URL, handle, or channel ID is valid.`
                     });
                     return;
                 }
@@ -122,7 +122,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 const exists = currentChannels.some(c => c.channelId === resolved.channelId);
                 if (exists) {
                     await interaction.editReply({
-                        content: `⚠️ Channel YouTube **${resolved.channelName}** (\`${resolved.handle}\`) sudah ada dalam daftar pantauan.`
+                        content: `⚠️ YouTube channel **${resolved.channelName}** (\`${resolved.handle}\`) is already on the watch list.`
                     });
                     return;
                 }
@@ -138,24 +138,26 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                 const embed = new EmbedBuilder()
                     .setColor(YT_COLOR)
-                    .setTitle("✅ Channel YouTube Ditambahkan")
+                    .setTitle("✅ YouTube Channel Added")
                     .setThumbnail(resolved.channelIcon || YT_ICON)
                     .addFields(
-                        { name: "Nama Channel", value: resolved.channelName, inline: true },
+                        { name: "Channel Name", value: resolved.channelName, inline: true },
                         { name: "Handle", value: resolved.handle, inline: true },
                         { name: "Channel ID", value: `\`${resolved.channelId}\``, inline: true },
                         { name: "Region Catalog", value: `\`${region}\``, inline: true }
                     )
                     .setFooter({
-                        text: `Total channel dipantau: ${settings.youtubeFeed.youtubeChannels.length}/${YT_MAX_CHANNELS_PER_GUILD}`
+                        text: `Total monitored channels: ${settings.youtubeFeed.youtubeChannels.length}/${YT_MAX_CHANNELS_PER_GUILD}`
                     });
 
                 if (!settings.youtubeFeed.enabled || !settings.youtubeFeed.channelId) {
                     embed.setDescription(
-                        "⚠️ **Catatan:** Notifikasi feed belum diaktifkan. Gunakan `/youtube enable` untuk memilih channel Discord."
+                        "⚠️ **Note:** Feed notifications are not enabled yet. Use `/youtube enable` to select a Discord channel."
                     );
                 } else {
-                    embed.setDescription(`Notifikasi video baru akan dikirim ke <#${settings.youtubeFeed.channelId}>`);
+                    embed.setDescription(
+                        `New video notifications will be sent to <#${settings.youtubeFeed.channelId}>`
+                    );
                 }
 
                 await interaction.editReply({ embeds: [embed] });
@@ -168,7 +170,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                 if (currentChannels.length === 0) {
                     await interaction.editReply({
-                        content: "❌ Belum ada channel YouTube yang ditambahkan di server ini."
+                        content: "❌ No YouTube channels have been added to this server yet."
                     });
                     return;
                 }
@@ -189,7 +191,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                 if (index === -1) {
                     await interaction.editReply({
-                        content: `❌ Channel YouTube \`${input}\` tidak ditemukan dalam daftar pantauan.`
+                        content: `❌ YouTube channel \`${input}\` was not found on the watch list.`
                     });
                     return;
                 }
@@ -199,13 +201,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                 if (!removed) {
                     await interaction.editReply({
-                        content: "❌ Gagal menghapus channel YouTube."
+                        content: "❌ Failed to remove YouTube channel."
                     });
                     return;
                 }
 
                 await interaction.editReply({
-                    content: `✅ Berhasil menghapus **${removed.channelName}** (\`${removed.handle}\`) dari daftar pantauan YouTube.`
+                    content: `✅ Successfully removed **${removed.channelName}** (\`${removed.handle}\`) from the YouTube watch list.`
                 });
                 break;
             }
@@ -216,7 +218,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 if (channels.length === 0) {
                     await interaction.editReply({
                         content:
-                            "ℹ️ Belum ada channel YouTube yang dipantau di server ini. Gunakan `/youtube add` untuk menambahkan."
+                            "ℹ️ No YouTube channels are currently monitored in this server. Use `/youtube add` to add one."
                     });
                     return;
                 }
@@ -230,10 +232,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                 const embed = new EmbedBuilder()
                     .setColor(YT_COLOR)
-                    .setTitle("🎥 Daftar Channel YouTube Dipantau")
+                    .setTitle("🎥 Monitored YouTube Channels")
                     .setThumbnail(YT_ICON)
                     .setDescription(description)
-                    .setFooter({ text: `Total: ${channels.length}/${YT_MAX_CHANNELS_PER_GUILD} channel` });
+                    .setFooter({ text: `Total: ${channels.length}/${YT_MAX_CHANNELS_PER_GUILD} channels` });
 
                 await interaction.editReply({ embeds: [embed] });
                 break;
@@ -249,16 +251,18 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                 const embed = new EmbedBuilder()
                     .setColor(YT_COLOR)
-                    .setTitle("✅ YouTube Feed Aktif")
-                    .setDescription(`Notifikasi video baru dari channel YouTube akan dikirim ke <#${targetChannel.id}>`)
+                    .setTitle("✅ YouTube Feed Enabled")
+                    .setDescription(
+                        `New video notifications from YouTube channels will be sent to <#${targetChannel.id}>`
+                    )
                     .addFields({
-                        name: "Channel Dipantau",
+                        name: "Monitored Channels",
                         value:
                             channelsCount > 0
-                                ? `${channelsCount} channel (Gunakan \`/youtube list\` untuk melihat)`
-                                : "⚠️ Belum ada channel dipantau. Gunakan `/youtube add` untuk menambahkan."
+                                ? `${channelsCount} channels (Use \`/youtube list\` to view)`
+                                : "⚠️ No channels monitored yet. Use `/youtube add` to add one."
                     })
-                    .setFooter({ text: "Feed akan diperbarui secara berkala (setiap 1 menit)" });
+                    .setFooter({ text: "Feed will be updated periodically (every 1 minute)" });
 
                 await interaction.editReply({ embeds: [embed] });
                 break;
@@ -269,7 +273,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 await settings.save();
 
                 await interaction.editReply({
-                    content: "✅ Notifikasi feed YouTube telah dinonaktifkan."
+                    content: "✅ YouTube feed notifications have been disabled."
                 });
                 break;
             }
@@ -280,21 +284,21 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                 const embed = new EmbedBuilder()
                     .setColor(feed?.enabled ? YT_COLOR : 0x808080)
-                    .setTitle("🎥 Status YouTube Feed")
+                    .setTitle("🎥 YouTube Feed Status")
                     .setThumbnail(YT_ICON)
                     .addFields(
                         {
                             name: "Status",
-                            value: feed?.enabled ? "✅ Aktif" : "❌ Nonaktif",
+                            value: feed?.enabled ? "✅ Enabled" : "❌ Disabled",
                             inline: true
                         },
                         {
-                            name: "Channel Discord",
+                            name: "Discord Channel",
                             value: feed?.channelId ? `<#${feed.channelId}>` : "-",
                             inline: true
                         },
                         {
-                            name: "Jumlah Channel Dipantau",
+                            name: "Monitored Channels Count",
                             value: `${channelList.length}/${YT_MAX_CHANNELS_PER_GUILD}`,
                             inline: true
                         }
@@ -305,9 +309,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                         .slice(0, 5)
                         .map(c => `• **${c.channelName}** (\`${c.handle}\`)`)
                         .join("\n");
-                    const extra = channelList.length > 5 ? `\n*...dan ${channelList.length - 5} channel lainnya*` : "";
+                    const extra = channelList.length > 5 ? `\n*...and ${channelList.length - 5} more channels*` : "";
                     embed.addFields({
-                        name: "Daftar Channel",
+                        name: "Channel List",
                         value: sample + extra
                     });
                 }
@@ -320,11 +324,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         logger.error(error, "YouTube feed command failed");
         if (interaction.deferred || interaction.replied) {
             await interaction.editReply({
-                content: "❌ Terjadi kesalahan saat memproses perintah YouTube feed."
+                content: "❌ An error occurred while processing the YouTube feed command."
             });
         } else {
             await interaction.reply({
-                content: "❌ Terjadi kesalahan saat memproses perintah YouTube feed.",
+                content: "❌ An error occurred while processing the YouTube feed command.",
                 ephemeral: true
             });
         }

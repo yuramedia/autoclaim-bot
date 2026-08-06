@@ -128,10 +128,10 @@ function buildEmbed(
     const embed = new EmbedBuilder()
         .setColor(CRUNCHYROLL_COLOR)
         .setTitle(`📺 Crunchyroll — ${seasonLabel}`)
-        .setDescription(`Menampilkan **${series.length}** anime untuk season ini.`)
+        .setDescription(`Showing **${series.length}** anime for this season.`)
         .setTimestamp()
         .setFooter({
-            text: `Halaman ${page + 1}/${totalPages} • Data dari Crunchyroll`
+            text: `Page ${page + 1}/${totalPages} • Data from Crunchyroll`
         });
 
     for (const item of pageItems) {
@@ -142,7 +142,7 @@ function buildEmbed(
 
         embed.addFields({
             name: item.title,
-            value: `${isSimulcast} • ${episodeCount}\n[Lihat di Crunchyroll](${url})`,
+            value: `${isSimulcast} • ${episodeCount}\n[View on Crunchyroll](${url})`,
             inline: false
         });
     }
@@ -191,11 +191,11 @@ function buildButtons(page: number, totalPages: number): ActionRowBuilder<Button
  */
 export const data = new SlashCommandBuilder()
     .setName("crrelease")
-    .setDescription("Lihat daftar anime rilis per season di Crunchyroll")
+    .setDescription("View seasonal anime releases on Crunchyroll")
     .addStringOption(opt =>
         opt
             .setName("season")
-            .setDescription("Pilih season (contoh: Spring 2026)")
+            .setDescription("Select season (e.g., Spring 2026)")
             .setRequired(true)
             .setAutocomplete(true)
     );
@@ -242,7 +242,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     // Validate format
     if (!/^(winter|spring|summer|fall)-\d{4}$/.test(seasonTag)) {
         await interaction.editReply({
-            content: "❌ Format season tidak valid. Gunakan autocomplete untuk memilih season."
+            content: "❌ Invalid season format. Use autocomplete to select a season."
         });
         return;
     }
@@ -252,7 +252,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         if (series.length === 0) {
             await interaction.editReply({
-                content: `❌ Tidak ada anime di season **${seasonTag}** atau season ini belum tersedia di Crunchyroll.`
+                content: `❌ No anime found in season **${seasonTag}** or this season is not available yet on Crunchyroll.`
             });
             return;
         }
@@ -315,7 +315,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     } catch (error) {
         logger.error(error, "Crrelease command error");
         await interaction.editReply({
-            content: "❌ Terjadi kesalahan saat mengambil data. Coba lagi nanti."
+            content: "❌ An error occurred while fetching data. Please try again later."
         });
     }
 }

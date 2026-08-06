@@ -58,15 +58,15 @@ export const data = new SlashCommandBuilder()
     .addSubcommandGroup(group =>
         group
             .setName("lineup")
-            .setDescription("Konfigurasi lineup Crunchyroll")
+            .setDescription("Configure Crunchyroll lineup announcements")
             .addSubcommand(sub =>
                 sub
                     .setName("announcement")
-                    .setDescription("Konfigurasi notifikasi pengumuman lineup seasonal")
+                    .setDescription("Configure seasonal lineup announcement notifications")
                     .addStringOption(opt =>
                         opt
                             .setName("action")
-                            .setDescription("Pilih aksi: enable, disable, atau status")
+                            .setDescription("Select action: enable, disable, or status")
                             .setRequired(true)
                             .addChoices(
                                 { name: "enable", value: "enable" },
@@ -77,7 +77,7 @@ export const data = new SlashCommandBuilder()
                     .addChannelOption(opt =>
                         opt
                             .setName("channel")
-                            .setDescription("Channel untuk mengirim notifikasi lineup (wajib untuk enable)")
+                            .setDescription("Channel to send lineup notifications (required for enable)")
                             .addChannelTypes(ChannelType.GuildText)
                     )
             )
@@ -87,7 +87,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     try {
         if (!interaction.guildId) {
             await interaction.reply({
-                content: "❌ Perintah ini hanya bisa digunakan di server.",
+                content: "❌ This command can only be used in a server.",
                 ephemeral: true
             });
             return;
@@ -107,7 +107,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     const channel = interaction.options.getChannel("channel");
                     if (!channel) {
                         await interaction.editReply({
-                            content: "❌ Anda harus menentukan channel untuk mengaktifkan notifikasi lineup."
+                            content: "❌ You must specify a channel to enable lineup notifications."
                         });
                         return;
                     }
@@ -137,11 +137,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                         embeds: [
                             new EmbedBuilder()
                                 .setColor(CRUNCHYROLL_COLOR)
-                                .setTitle("✅ Crunchyroll Lineup Announcement Aktif")
+                                .setTitle("✅ Crunchyroll Lineup Announcements Enabled")
                                 .setDescription(
-                                    `Notifikasi pengumuman lineup seasonal telah aktif di <#${channel.id}>.`
+                                    `Seasonal lineup announcement notifications are now active in <#${channel.id}>.`
                                 )
-                                .setFooter({ text: "Preview pengumuman lineup terbaru telah dikirim." })
+                                .setFooter({ text: "Latest lineup announcement preview has been sent." })
                         ]
                     });
                     break;
@@ -155,7 +155,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     await settings.save();
 
                     await interaction.editReply({
-                        content: "✅ Notifikasi pengumuman lineup Crunchyroll telah dinonaktifkan."
+                        content: "✅ Crunchyroll lineup announcement notifications have been disabled."
                     });
                     break;
                 }
@@ -164,11 +164,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     const lineup = settings.crunchyrollLineup;
                     const embed = new EmbedBuilder()
                         .setColor(CRUNCHYROLL_COLOR)
-                        .setTitle("📺 Status Crunchyroll Lineup Announcement")
+                        .setTitle("📺 Crunchyroll Lineup Announcement Status")
                         .addFields(
                             {
                                 name: "Status",
-                                value: lineup?.enabled ? "✅ Aktif" : "❌ Nonaktif",
+                                value: lineup?.enabled ? "✅ Enabled" : "❌ Disabled",
                                 inline: true
                             },
                             {
@@ -187,7 +187,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         logger.error(error, "Crunchyroll command execution failed");
         try {
             await interaction.editReply({
-                content: "❌ Terjadi kesalahan saat memproses perintah Crunchyroll."
+                content: "❌ An error occurred while processing the Crunchyroll command."
             });
         } catch (e) {
             logger.error(e, "Failed to send error reply");

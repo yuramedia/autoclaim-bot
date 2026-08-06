@@ -106,7 +106,7 @@ function buildEpisodeEmbed(episode: FormattedEpisode, isEdited: boolean): EmbedB
 
     // Footer
     embed.setFooter({
-        text: isEdited ? "📝 Edited · Hidup CR!" : "Hidup CR!"
+        text: isEdited ? "📝 Edited · Long live CR!" : "Long live CR!"
     });
 
     return embed;

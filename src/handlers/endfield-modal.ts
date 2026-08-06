@@ -73,8 +73,8 @@ export async function handleEndfieldModal(interaction: ModalSubmitInteraction): 
             content:
                 `✅ **Endfield token saved!**\n\n` +
                 `**Account**: ${nickname}\n\n` +
-                `UID dan server akan otomatis terdeteksi saat claim.\n` +
-                `⚠️ Gunakan \`/claim endfield\` untuk test apakah token berfungsi.`
+                `UID and server will be automatically detected during claim.\n` +
+                `⚠️ Use \`/claim endfield\` to test if your token works.`
         });
     } catch (error: unknown) {
         logger.error(error, "[handleEndfieldModal] Failed to process Endfield modal submission");

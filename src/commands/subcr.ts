@@ -52,22 +52,18 @@ export function parseCrunchyrollUrl(input: string): ParsedUrl | null {
  */
 export const data = new SlashCommandBuilder()
     .setName("subcr")
-    .setDescription("Download subtitle dari episode Crunchyroll")
-    .addStringOption(opt => opt.setName("url").setDescription("URL atau ID episode Crunchyroll").setRequired(false))
+    .setDescription("Download subtitles from Crunchyroll episodes")
+    .addStringOption(opt => opt.setName("url").setDescription("Crunchyroll episode URL or ID").setRequired(false))
     .addStringOption(opt =>
-        opt
-            .setName("anime")
-            .setDescription("Judul anime (romaji atau English)")
-            .setRequired(false)
-            .setAutocomplete(true)
+        opt.setName("anime").setDescription("Anime title (Romaji or English)").setRequired(false).setAutocomplete(true)
     )
     .addIntegerOption(opt =>
-        opt.setName("episode").setDescription("Pilih Nomor episode").setRequired(false).setMinValue(1)
+        opt.setName("episode").setDescription("Select episode number").setRequired(false).setMinValue(1)
     )
     .addStringOption(opt =>
         opt
             .setName("lang")
-            .setDescription("Pilih subtitle")
+            .setDescription("Select subtitle language")
             .setRequired(false)
             .addChoices(
                 ...Array.from(
@@ -119,7 +115,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     // Validate: must provide either URL or anime title
     if (!urlInput && !animeInput) {
         await interaction.reply({
-            content: "❌ Harus mengisi salah satu: `url` (link/ID episode) atau `anime` (judul anime).",
+            content: "❌ Must provide either `url` (episode URL/ID) or `anime` (anime title).",
             ephemeral: true
         });
         return;
@@ -138,7 +134,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             if (!parsed) {
                 await interaction.editReply({
                     content:
-                        "❌ URL/ID tidak valid. Contoh: `https://www.crunchyroll.com/watch/GEXH3WP91/...` atau `https://www.crunchyroll.com/series/GT00365589`"
+                        "❌ Invalid URL/ID. Example: `https://www.crunchyroll.com/watch/GEXH3WP91/...` or `https://www.crunchyroll.com/series/GT00365589`"
                 });
                 return;
             }
@@ -148,8 +144,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 if (episodes.length === 0) {
                     await interaction.editReply({
                         content: episodeInput
-                            ? `❌ Tidak ditemukan episode **${episodeInput}** untuk series tersebut.`
-                            : `❌ Tidak ditemukan episode untuk series tersebut.`
+                            ? `❌ Episode **${episodeInput}** not found for this series.`
+                            : `❌ No episodes found for this series.`
                     });
                     return;
                 }
@@ -163,8 +159,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             if (episodes.length === 0) {
                 await interaction.editReply({
                     content: episodeInput
-                        ? `❌ Tidak ditemukan episode **${episodeInput}** untuk anime "**${animeInput}**".`
-                        : `❌ Tidak ditemukan episode untuk anime "**${animeInput}**".`
+                        ? `❌ Episode **${episodeInput}** not found for anime "**${animeInput}**".`
+                        : `❌ No episodes found for anime "**${animeInput}**".`
                 });
                 return;
             }
@@ -189,12 +185,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
                     new StringSelectMenuBuilder()
                         .setCustomId("select_episode")
-                        .setPlaceholder("Pilih Episode...")
+                        .setPlaceholder("Select Episode...")
                         .addOptions(options)
                 );
 
                 const reply = await interaction.editReply({
-                    content: `Terdapat beberapa episode untuk anime **${baseTitle}**. Silakan pilih di bawah ini:`,
+                    content: `Multiple episodes found for anime **${baseTitle}**. Please select below:`,
                     components: [row]
                 });
 
@@ -213,12 +209,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     }
 
                     await confirmation.update({
-                        content: `⏳ Memproses subtitle untuk **${episodeTitle}**...`,
+                        content: `⏳ Processing subtitles for **${episodeTitle}**...`,
                         components: []
                     });
                 } catch {
                     await interaction.editReply({
-                        content: "❌ Waktu habis untuk memilih episode. Silakan ulangi command.",
+                        content: "❌ Selection timed out. Please run the command again.",
                         components: []
                     });
                     return;
@@ -235,7 +231,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         }
 
         if (!episodeId) {
-            await interaction.editReply({ content: "❌ Gagal menentukan episode ID." });
+            await interaction.editReply({ content: "❌ Failed to determine episode ID." });
             return;
         }
 
@@ -243,8 +239,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         const subtitles = await service.fetchSubtitles(episodeId);
         if (!subtitles || Object.keys(subtitles).length === 0) {
             await interaction.editReply({
-                content:
-                    "❌ Tidak ada subtitle yang tersedia untuk episode ini. Pastikan akun Crunchyroll sudah dikonfigurasi."
+                content: "❌ No subtitles available for this episode. Ensure your Crunchyroll account is configured."
             });
             return;
         }
@@ -257,7 +252,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     .map(code => `\`${LANG_MAP[code] || code}\``)
                     .join(", ");
                 await interaction.editReply({
-                    content: `❌ Subtitle **${LANG_MAP[langInput] || langInput}** tidak tersedia.\nSubtitle yang ada: ${available}`
+                    content: `❌ Subtitle **${LANG_MAP[langInput] || langInput}** is not available.\nAvailable subtitles: ${available}`
                 });
                 return;
             }
@@ -276,20 +271,20 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         const selectMenu = new StringSelectMenuBuilder()
             .setCustomId(`subcr_lang_${episodeId}`)
-            .setPlaceholder("Pilih bahasa subtitle...")
+            .setPlaceholder("Select subtitle language...")
             .addOptions(options);
 
         const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
         const embed = new EmbedBuilder()
             .setColor(CRUNCHYROLL_COLOR)
-            .setTitle("📝 Pilih Bahasa Subtitle")
+            .setTitle("📝 Select Subtitle Language")
             .setDescription(
                 `**${episodeTitle}**\n\n` +
-                    `Tersedia **${subEntries.length}** bahasa subtitle.\n` +
-                    `Pilih bahasa yang ingin didownload:`
+                    `Available in **${subEntries.length}** subtitle languages.\n` +
+                    `Select the language you want to download:`
             )
-            .setFooter({ text: "Pilihan berlaku selama 60 detik" });
+            .setFooter({ text: "Selection valid for 60 seconds" });
 
         const reply = await interaction.editReply({
             embeds: [embed],
@@ -316,7 +311,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 components: [],
                 embeds: [
                     embed
-                        .setDescription("⏰ Waktu habis. Gunakan `/subcr` lagi untuk mendownload subtitle.")
+                        .setDescription("⏰ Time expired. Use `/subcr` again to download subtitles.")
                         .setColor(0x808080)
                 ]
             });
@@ -324,7 +319,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     } catch (error) {
         logger.error(error, "Subcr command error");
         await interaction.editReply({
-            content: "❌ Terjadi kesalahan saat mengambil subtitle. Coba lagi nanti."
+            content: "❌ An error occurred while fetching subtitles. Please try again later."
         });
     }
 }
@@ -345,7 +340,7 @@ async function downloadAndSend(
         const content = await service.downloadSubtitle(url);
         if (!content) {
             await interaction.editReply({
-                content: "❌ Gagal mendownload file subtitle.",
+                content: "❌ Failed to download subtitle file.",
                 components: []
             });
             return;
@@ -365,7 +360,7 @@ async function downloadAndSend(
             .setTitle("✅ Subtitle Downloaded")
             .setDescription(
                 `**${episodeTitle}**\n\n` +
-                    `🌐 Bahasa: **${LANG_MAP[lang] || lang}** (\`${lang}\`)\n` +
+                    `🌐 Language: **${LANG_MAP[lang] || lang}** (\`${lang}\`)\n` +
                     `📄 Format: **${normalizedFormat.toUpperCase()}**\n` +
                     `📦 File: \`${filename}\``
             )
@@ -380,7 +375,7 @@ async function downloadAndSend(
     } catch (error) {
         logger.error(error, "downloadAndSend failed");
         await interaction.editReply({
-            content: "❌ Gagal mendownload dan mengirim file subtitle.",
+            content: "❌ Failed to download and send subtitle file.",
             components: []
         });
     }

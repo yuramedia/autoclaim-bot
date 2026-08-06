@@ -23,108 +23,108 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         const embed = new EmbedBuilder()
             .setTitle("📖 Auto-Claim Bot Help")
             .setColor(0x5865f2)
-            .setDescription("Bot ini membantu kamu claim daily reward otomatis untuk Hoyolab dan Arknights: Endfield.")
+            .setDescription("This bot helps you automatically claim daily rewards for Hoyolab and Arknights: Endfield.")
             .addFields(
                 {
                     name: "🔧 Setup Commands",
                     value: [
-                        "`/setup-hoyolab` - Setup token Hoyolab",
-                        "`/setup-endfield` - Setup token SKPORT/Endfield"
+                        "`/setup-hoyolab` - Setup Hoyolab token",
+                        "`/setup-endfield` - Setup SKPORT/Endfield token"
                     ].join("\n"),
                     inline: false
                 },
                 {
                     name: "🎮 Claim Commands",
                     value: [
-                        "`/claim` - Claim manual semua reward",
-                        "`/claim hoyolab` - Claim Hoyolab saja",
-                        "`/claim endfield` - Claim Endfield saja",
-                        "`/redeem <game> <code>` - Redeem code game"
+                        "`/claim` - Manually claim all rewards",
+                        "`/claim hoyolab` - Claim Hoyolab rewards only",
+                        "`/claim endfield` - Claim Endfield rewards only",
+                        "`/redeem <game> <code>` - Redeem game code"
                     ].join("\n"),
                     inline: false
                 },
                 {
                     name: "📈 Embed Fixer & Media Downloader",
                     value: [
-                        "`/embed <url>` - Generate fixed embed atau download media secara manual",
-                        "`/embed-settings` - Toggle auto-fix platform di server (Twitter, TikTok, Instagram, Nyaa, NekoBT, Tsukihime, dll.)",
-                        "💡 *Tip: Kirim link sosial media di chat untuk auto-fix embed & direct video upload.*"
+                        "`/embed <url>` - Generate fixed embed or download media manually",
+                        "`/embed-settings` - Toggle auto-fix platforms for the server (Twitter, TikTok, Instagram, Nyaa, NekoBT, Tsukihime, etc.)",
+                        "💡 *Tip: Send social media links in chat for auto-fix embeds & direct video uploads.*"
                     ].join("\n"),
                     inline: false
                 },
                 {
                     name: "📺 Anime Feed & Subtitles",
                     value: [
-                        "`/crrelease` - Lihat jadwal rilis anime per season di Crunchyroll",
-                        "`/crunchyroll-feed` - Setup auto-feed episode Crunchyroll baru di channel",
-                        "`/subcr` - Cari dan download subtitle (.ass) dari Crunchyroll",
-                        "`/u2-feed` - Setup auto-feed BDMV U2 RSS di channel",
-                        "`/bestrelease` - Rekomendasi sub group terbaik untuk seasonal anime"
+                        "`/crrelease` - View seasonal anime release schedule on Crunchyroll",
+                        "`/crunchyroll-feed` - Setup auto-feed for new Crunchyroll episodes in a channel",
+                        "`/subcr` - Search and download subtitles (.ass) from Crunchyroll",
+                        "`/u2-feed` - Setup auto-feed for U2 BDMV RSS in a channel",
+                        "`/bestrelease` - Recommended sub groups for seasonal anime"
                     ].join("\n"),
                     inline: false
                 },
                 {
                     name: "🔍 Dictionaries & Utilities",
                     value: [
-                        "`/jisho <kata>` - Cari kata di kamus Jepang-Inggris Jisho",
-                        "`/kbbi <kata>` - Cari definisi kata di Kamus Besar Bahasa Indonesia"
+                        "`/jisho <word>` - Search Japanese-English dictionary on Jisho",
+                        "`/kbbi <word>` - Search Indonesian definitions in KBBI dictionary"
                     ].join("\n"),
                     inline: false
                 },
                 {
                     name: "📊 Info Commands",
                     value: [
-                        "`/status` - Lihat status token & riwayat claim",
-                        "`/statistic` - Lihat statistik claim keseluruhan",
-                        "`/ping` - Cek latency bot"
+                        "`/status` - View token status & claim history",
+                        "`/statistic` - View overall bot statistics",
+                        "`/ping` - Check bot latency"
                     ].join("\n"),
                     inline: false
                 },
                 {
                     name: "⚙️ Settings Commands",
                     value: [
-                        "`/settings notify true/false` - Toggle notifikasi DM",
-                        "`/remove all/hoyolab/endfield` - Hapus token"
+                        "`/settings notify true/false` - Toggle DM notifications",
+                        "`/remove all/hoyolab/endfield` - Remove saved tokens"
                     ].join("\n"),
                     inline: false
                 },
                 {
-                    name: "📝 Cara Mendapatkan Token",
+                    name: "📝 How to Get Tokens",
                     value: "━━━━━━━━━━━━━━━━━━━━━",
                     inline: false
                 },
                 {
                     name: "🌟 Hoyolab Token",
                     value: [
-                        "1. Buka https://www.hoyolab.com dan login",
-                        "2. Tekan F12 → **Application** → **Cookies**",
-                        "3. Klik `.hoyolab.com`",
-                        "4. Copy nilai dari cookie berikut:",
+                        "1. Open https://www.hoyolab.com and log in",
+                        "2. Press F12 → **Application** → **Cookies**",
+                        "3. Click `.hoyolab.com`",
+                        "4. Copy values from the following cookies:",
                         "",
                         "**Required cookies:**",
-                        "• `ltoken_v2` - Token autentikasi utama",
-                        "• `ltuid_v2` - User ID Hoyolab",
+                        "• `ltoken_v2` - Primary authentication token",
+                        "• `ltuid_v2` - Hoyolab User ID",
                         "",
-                        "**Optional (untuk /redeem):**",
-                        "• `cookie_token_v2` - Token untuk redeem code",
+                        "**Optional (for /redeem):**",
+                        "• `cookie_token_v2` - Token for redeeming code",
                         "",
                         "Format: `ltoken_v2=xxx; ltuid_v2=xxx; cookie_token_v2=xxx`",
                         "",
-                        "⚠️ *Cookie HttpOnly, harus copy manual dari tab Application*"
+                        "⚠️ *HttpOnly cookie, must be copied manually from the Application tab*"
                     ].join("\n"),
                     inline: false
                 },
                 {
-                    name: "🎮 Endfield Token (1 token saja)",
+                    name: "🎮 Endfield Token (1 token only)",
                     value: [
-                        "1. Login ke https://game.skport.com/endfield/sign-in",
-                        "2. Buka tab baru: https://web-api.skport.com/cookie_store/account_token",
-                        "3. Copy bagian `code` dari JSON yang muncul",
-                        "4. Paste di `/setup-endfield`",
+                        "1. Log in to https://game.skport.com/endfield/sign-in",
+                        "2. Open new tab: https://web-api.skport.com/cookie_store/account_token",
+                        "3. Copy the `code` portion from the JSON response",
+                        "4. Paste into `/setup-endfield`",
                         "",
-                        "✅ UID dan server otomatis terdeteksi",
-                        "✅ Support multi-region (Asia + Americas)",
-                        "✅ Token bertahan berminggu-minggu"
+                        "✅ UID and server automatically detected",
+                        "✅ Supports multi-region (Asia + Americas)",
+                        "✅ Token lasts for weeks"
                     ].join("\n"),
                     inline: false
                 },
@@ -133,7 +133,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     value: (() => {
                         const { hour, minute } = config.scheduler;
                         const t = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")} UTC+8`;
-                        return `Daily rewards akan di-claim otomatis setiap **${t}**.`;
+                        return `Daily rewards will be claimed automatically every day at **${t}**.`;
                     })(),
                     inline: false
                 }

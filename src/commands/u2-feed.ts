@@ -21,28 +21,28 @@ import { logger } from "../core/logger";
  */
 export const data = new SlashCommandBuilder()
     .setName("u2-feed")
-    .setDescription("Konfigurasi notifikasi feed torrent U2 BDMV")
+    .setDescription("Configure U2 BDMV torrent feed notifications")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand(sub =>
         sub
             .setName("enable")
-            .setDescription("Aktifkan notifikasi feed U2 BDMV")
+            .setDescription("Enable U2 BDMV feed notifications")
             .addChannelOption(option =>
                 option
                     .setName("channel")
-                    .setDescription("Channel untuk mengirim notifikasi")
+                    .setDescription("Channel to send notifications")
                     .addChannelTypes(ChannelType.GuildText)
                     .setRequired(true)
             )
             .addStringOption(option =>
                 option
                     .setName("filter")
-                    .setDescription(`Filter regex untuk judul (default: ${U2_DEFAULT_FILTER})`)
+                    .setDescription(`Regex filter for titles (default: ${U2_DEFAULT_FILTER})`)
                     .setRequired(false)
             )
     )
-    .addSubcommand(sub => sub.setName("disable").setDescription("Nonaktifkan notifikasi feed U2 BDMV"))
-    .addSubcommand(sub => sub.setName("status").setDescription("Lihat status konfigurasi feed U2 saat ini"));
+    .addSubcommand(sub => sub.setName("disable").setDescription("Disable U2 BDMV feed notifications"))
+    .addSubcommand(sub => sub.setName("status").setDescription("View current U2 feed configuration status"));
 
 /**
  * Executes the u2-feed command to configure feed notifications.
@@ -54,7 +54,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const guildId = interaction.guildId;
     if (!guildId) {
         await interaction.reply({
-            content: "❌ Perintah ini hanya bisa digunakan di server.",
+            content: "❌ This command can only be used in a server.",
             ephemeral: true
         });
         return;
@@ -76,7 +76,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     void new RegExp(filter, "i");
                 } catch {
                     await interaction.editReply({
-                        content: `❌ Filter regex tidak valid: \`${filter}\``
+                        content: `❌ Invalid regex filter: \`${filter}\``
                     });
                     return;
                 }
@@ -92,10 +92,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     embeds: [
                         new EmbedBuilder()
                             .setColor(0x00ff00)
-                            .setTitle("✅ U2 BDMV Feed Aktif")
-                            .setDescription(`Notifikasi feed akan dikirim ke <#${channel.id}>`)
+                            .setTitle("✅ U2 BDMV Feed Enabled")
+                            .setDescription(`Feed notifications will be sent to <#${channel.id}>`)
                             .addFields({ name: "Filter Regex", value: `\`${filter}\`` })
-                            .setFooter({ text: "Feed akan diperbarui secara berkala" })
+                            .setFooter({ text: "Feed will be updated periodically" })
                     ]
                 });
                 break;
@@ -110,7 +110,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 await settings.save();
 
                 await interaction.editReply({
-                    content: "✅ Notifikasi U2 BDMV feed telah dinonaktifkan."
+                    content: "✅ U2 BDMV feed notifications have been disabled."
                 });
                 break;
             }
@@ -119,11 +119,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 const feed = settings.u2Feed;
                 const embed = new EmbedBuilder()
                     .setColor(feed?.enabled ? 0x00ff00 : 0xff0000)
-                    .setTitle("📦 Status U2 Feed")
+                    .setTitle("📦 U2 Feed Status")
                     .addFields(
                         {
                             name: "Status",
-                            value: feed?.enabled ? "✅ Aktif" : "❌ Nonaktif",
+                            value: feed?.enabled ? "✅ Enabled" : "❌ Disabled",
                             inline: true
                         },
                         {
@@ -146,11 +146,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         logger.error(error, "U2 feed command failed");
         if (interaction.deferred || interaction.replied) {
             await interaction.editReply({
-                content: "❌ Terjadi kesalahan saat memproses perintah."
+                content: "❌ An error occurred while processing the command."
             });
         } else {
             await interaction.reply({
-                content: "❌ Terjadi kesalahan saat memproses perintah.",
+                content: "❌ An error occurred while processing the command.",
                 ephemeral: true
             });
         }

@@ -32,7 +32,8 @@ export const config = {
     },
     crunchyroll: {
         email: process.env.CR_EMAIL || "",
-        password: process.env.CR_PASSWORD || ""
+        password: process.env.CR_PASSWORD || "",
+        refreshToken: process.env.CR_REFRESH_TOKEN || ""
     },
     u2: {
         rssUrl: process.env.U2_RSS_URL || ""

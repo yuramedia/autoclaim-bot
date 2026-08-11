@@ -7,7 +7,7 @@ import { logger } from "../core/logger";
 export const LANG_MAP: Record<string, string> = {
     "en-US": "English",
     "ja-JP": "Japanese",
-    "id-ID": "Indonesian",
+    "id-ID": "Bahasa Indonesia",
     "ms-MY": "Malay",
     "ca-ES": "Catalan",
     "de-DE": "German",

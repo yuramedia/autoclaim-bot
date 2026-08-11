@@ -20,10 +20,70 @@ import { logger } from "../core/logger";
 
 const service = new CrunchyrollService();
 
-/** Reverse lookup: language name → locale code */
+/** Aliases mapping common user inputs / language names to Crunchyroll locale codes */
+const LANG_ALIASES: Record<string, string> = {
+    id: "id-ID",
+    indonesia: "id-ID",
+    indonesian: "id-ID",
+    "bahasa indonesia": "id-ID",
+    en: "en-US",
+    english: "en-US",
+    ms: "ms-MY",
+    melayu: "ms-MY",
+    "bahasa melayu": "ms-MY",
+    malay: "ms-MY",
+    ja: "ja-JP",
+    japanese: "ja-JP",
+    es: "es-419",
+    spanish: "es-419",
+    "spanish (la)": "es-419",
+    "spanish (es)": "es-ES",
+    pt: "pt-BR",
+    portuguese: "pt-BR",
+    "portuguese (br)": "pt-BR",
+    fr: "fr-FR",
+    french: "fr-FR",
+    de: "de-DE",
+    german: "de-DE",
+    it: "it-IT",
+    italian: "it-IT",
+    ru: "ru-RU",
+    russian: "ru-RU",
+    ar: "ar-SA",
+    arabic: "ar-SA",
+    hi: "hi-IN",
+    hindi: "hi-IN",
+    ko: "ko-KR",
+    korean: "ko-KR",
+    th: "th-TH",
+    thai: "th-TH",
+    vi: "vi-VN",
+    vietnamese: "vi-VN",
+    zh: "zh-CN",
+    cantonese: "zh-HK",
+    mandarin: "zh-CN"
+};
+
+/** Reverse lookup: language input (code, name, alias) → locale code */
 function langNameToCode(name: string): string | null {
-    const entry = Object.entries(LANG_MAP).find(([, v]) => v.toLowerCase() === name.toLowerCase());
-    return entry?.[0] || null;
+    const clean = name.trim().toLowerCase();
+
+    // 1. Direct match on LANG_MAP keys (e.g. "id-ID" or "id-id")
+    const mapKey = Object.keys(LANG_MAP).find(k => k.toLowerCase() === clean);
+    if (mapKey) return mapKey;
+
+    // 2. Direct match on alias map
+    if (LANG_ALIASES[clean]) return LANG_ALIASES[clean];
+
+    // 3. Match on LANG_MAP values (case-insensitive)
+    const mapVal = Object.entries(LANG_MAP).find(([, v]) => v.toLowerCase() === clean);
+    if (mapVal) return mapVal[0];
+
+    // 4. Prefix match on locale code keys (e.g. "id" -> "id-ID")
+    const prefixMatch = Object.keys(LANG_MAP).find(k => k.toLowerCase().startsWith(`${clean}-`));
+    if (prefixMatch) return prefixMatch;
+
+    return null;
 }
 
 interface ParsedUrl {
@@ -70,7 +130,7 @@ export const data = new SlashCommandBuilder()
                     new Map(
                         Object.entries(LANG_MAP)
                             .filter(([code]) => code !== "ja-JP")
-                            .map(([, name]) => [name, { name, value: name }])
+                            .map(([code, name]) => [code, { name: `${name} (${code})`, value: code }])
                     ).values()
                 ).slice(0, 25)
             )
@@ -249,10 +309,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             const sub = subtitles[langInput];
             if (!sub) {
                 const available = Object.keys(subtitles)
-                    .map(code => `\`${LANG_MAP[code] || code}\``)
+                    .map(code => `\`${LANG_MAP[code] || code}\` (\`${code}\`)`)
                     .join(", ");
                 await interaction.editReply({
-                    content: `❌ Subtitle **${LANG_MAP[langInput] || langInput}** is not available.\nAvailable subtitles: ${available}`
+                    content: `❌ Subtitle **${LANG_MAP[langInput] || langInput}** (\`${langInput}\`) is not available.\nAvailable subtitles: ${available}`
                 });
                 return;
             }

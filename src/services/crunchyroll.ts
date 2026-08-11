@@ -652,8 +652,9 @@ export class CrunchyrollService {
             const seriesResults = data.data?.find(d => d.type === "series");
             if (!seriesResults?.items?.length) return [];
 
-            // Get the first matching series
-            const series = seriesResults.items[0]!;
+            // Prefer exact title match if available, otherwise use first result
+            const exactMatch = seriesResults.items.find(s => s.title.toLowerCase() === query.trim().toLowerCase());
+            const series = exactMatch || seriesResults.items[0]!;
 
             // Fetch episodes using the new method
             return await this.fetchEpisodesBySeriesId(series.id, episodeNumber);
@@ -669,7 +670,7 @@ export class CrunchyrollService {
     async searchSeriesAutocomplete(query: string): Promise<{ name: string; value: string }[]> {
         if (!query || query.length < 2) return [];
 
-        const auth = await this.getAccountAuth();
+        const auth = (await this.getAccountAuth()) || (await this.getAuth());
         if (!auth) return [];
 
         try {
@@ -697,8 +698,6 @@ export class CrunchyrollService {
 
             return seriesResults.items.map(s => ({
                 name: s.title.substring(0, 100),
-                // value is string option max 100 characters.
-                // We will use the exact title, because the existing `searchEpisode(animeInput)` searches by string anyway!
                 value: s.title.substring(0, 100)
             }));
         } catch (error) {
@@ -708,10 +707,10 @@ export class CrunchyrollService {
     }
 
     /**
-     * Fetch episodes for a series ID
+     * Fetch episodes for a series ID across all relevant seasons
      */
     async fetchEpisodesBySeriesId(seriesId: string, episodeNumber?: number): Promise<CrunchyrollEpisode[]> {
-        const auth = await this.getAccountAuth();
+        const auth = (await this.getAccountAuth()) || (await this.getAuth());
         if (!auth) return [];
 
         try {
@@ -731,29 +730,38 @@ export class CrunchyrollService {
 
             if (!seasonsData.data?.length) return [];
 
-            // Find the Japanese audio season (original)
-            const jpSeason = seasonsData.data.find(s => s.audio_locale === "ja-JP") || seasonsData.data[0]!;
+            // Prefer Japanese audio seasons (original), or fallback to all seasons
+            const jpSeasons = seasonsData.data.filter(s => s.audio_locale === "ja-JP");
+            const targetSeasons = jpSeasons.length > 0 ? jpSeasons : seasonsData.data;
 
-            // Fetch episodes for this season
-            const episodesRes = await fetch(
-                `${this.API_BASE}/content/v2/cms/seasons/${jpSeason.id}/episodes?locale=en-US`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${auth.access_token}`,
-                        "User-Agent": this.userAgent
+            // Fetch episodes for all target seasons in parallel
+            const episodeArrays = await Promise.all(
+                targetSeasons.map(async season => {
+                    try {
+                        const episodesRes = await fetch(
+                            `${this.API_BASE}/content/v2/cms/seasons/${season.id}/episodes?locale=en-US`,
+                            {
+                                headers: {
+                                    Authorization: `Bearer ${auth.access_token}`,
+                                    "User-Agent": this.userAgent
+                                }
+                            }
+                        );
+                        if (!episodesRes.ok) return [];
+                        const episodesData = (await episodesRes.json()) as { data: CrunchyrollEpisode[] };
+                        return episodesData.data || [];
+                    } catch {
+                        return [];
                     }
-                }
+                })
             );
 
-            if (!episodesRes.ok) return [];
-
-            const episodesData = (await episodesRes.json()) as { data: CrunchyrollEpisode[] };
-
-            if (!episodesData.data?.length) return [];
+            const allEpisodes = episodeArrays.flat();
+            if (allEpisodes.length === 0) return [];
 
             // Filter by episode number if provided
             if (episodeNumber !== undefined) {
-                return episodesData.data.filter(
+                return allEpisodes.filter(
                     ep =>
                         ep.episode_number === episodeNumber ||
                         ep.episode === String(episodeNumber) ||
@@ -762,7 +770,7 @@ export class CrunchyrollService {
                 );
             }
 
-            return episodesData.data;
+            return allEpisodes;
         } catch (error) {
             logger.error(error as Error, "Crunchyroll series episodes fetch error");
             return [];
@@ -770,11 +778,11 @@ export class CrunchyrollService {
     }
 
     /**
-     * Fetch subtitles for an episode using premium account auth
+     * Fetch subtitles for an episode using premium account auth with fallback to client auth
      * Returns subtitle map from cr-play-service
      */
     async fetchSubtitles(episodeId: string): Promise<Record<string, CrunchyrollSubtitle> | null> {
-        const auth = await this.getAccountAuth();
+        const auth = (await this.getAccountAuth()) || (await this.getAuth());
         if (!auth) return null;
 
         try {

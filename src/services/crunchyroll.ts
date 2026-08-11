@@ -41,9 +41,9 @@ export class CrunchyrollService {
     /**
      * Get auth token (cached)
      */
-    async getAuth(): Promise<CrunchyrollAuth | null> {
-        // Return cached token if valid
-        if (cachedAuth && Date.now() < authExpiresAt) {
+    async getAuth(forceRefresh = false): Promise<CrunchyrollAuth | null> {
+        // Return cached token if valid and not forcing refresh
+        if (!forceRefresh && cachedAuth && Date.now() < authExpiresAt) {
             return cachedAuth;
         }
 
@@ -559,9 +559,9 @@ export class CrunchyrollService {
      * Get auth token using Crunchyroll account credentials (premium access)
      * Required for accessing streams/subtitles
      */
-    async getAccountAuth(): Promise<CrunchyrollAuth | null> {
-        // Return cached token if valid
-        if (cachedAccountAuth && Date.now() < accountAuthExpiresAt) {
+    async getAccountAuth(forceRefresh = false): Promise<CrunchyrollAuth | null> {
+        // Return cached token if valid and not forcing refresh
+        if (!forceRefresh && cachedAccountAuth && Date.now() < accountAuthExpiresAt) {
             return cachedAccountAuth;
         }
 
@@ -787,12 +787,31 @@ export class CrunchyrollService {
 
         try {
             const url = `https://cr-play-service.prd.crunchyrollsvc.com/v1/${episodeId}/tv/android_tv/play`;
-            const response = await fetch(url, {
+            let response = await fetch(url, {
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
                     "User-Agent": this.userAgent
                 }
             });
+
+            // If 401/403, invalidate token cache and retry ONCE with fresh token
+            if (response.status === 401 || response.status === 403) {
+                logger.warn(`Crunchyroll play service returned ${response.status}, refreshing token...`);
+                cachedAccountAuth = null;
+                accountAuthExpiresAt = 0;
+                cachedAuth = null;
+                authExpiresAt = 0;
+
+                const freshAuth = (await this.getAccountAuth(true)) || (await this.getAuth(true));
+                if (freshAuth) {
+                    response = await fetch(url, {
+                        headers: {
+                            Authorization: `Bearer ${freshAuth.access_token}`,
+                            "User-Agent": this.userAgent
+                        }
+                    });
+                }
+            }
 
             if (!response.ok) {
                 logger.error(`Crunchyroll play service failed: ${response.status}`);

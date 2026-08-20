@@ -6,11 +6,12 @@
 /** Crunchyroll brand color (orange) */
 export const CRUNCHYROLL_COLOR = 0xf47521;
 
-/** Crunchyroll basic auth token (Android Mobile client) */
-export const CRUNCHYROLL_BASIC_AUTH = "aHR0Y3I2ajJmaDhnM3VwaHVhNTA6SHpEUXNHZWdEdUJZNmlsVlZaa0tGWDRrZ2pNNC1vQXQ=";
+/** Crunchyroll basic auth token */
+export const CRUNCHYROLL_BASIC_AUTH = "cmpzMGx0eDBkYndrbGl3eGR6ZGY6NFY3cmYyMS1VRlhlWi01WEFkMFhfUVB3cjFndV9pMXM=";
 
-/** Crunchyroll Android mobile User-Agent */
-export const CRUNCHYROLL_USER_AGENT = "Crunchyroll/3.113.2 Android/17 okhttp/5.3.2";
+/** Crunchyroll android TV User-Agent */
+export const CRUNCHYROLL_USER_AGENT =
+    "Crunchyroll/ANDROIDTV/3.65.0_22347 (Android 12; en-US; SHIELD Android TV Build/SR1A.211012.001)";
 
 /** Poll interval for checking new episodes (2 minutes) */
 export const CRUNCHYROLL_POLL_INTERVAL = 2 * 60 * 1000;

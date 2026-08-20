@@ -27,12 +27,9 @@ let authExpiresAt = 0;
 let cachedAccountAuth: CrunchyrollAuth | null = null;
 let accountAuthExpiresAt = 0;
 
-// Active refresh token in memory
-let activeRefreshToken: string | null = null;
-
 /**
  * Service for interacting with Crunchyroll APIs (Discovery, Search, Subtitles, etc.).
- * Supports both anonymous auth and account-based premium auth via Mobile API headers.
+ * Supports both anonymous auth and account-based premium auth.
  */
 export class CrunchyrollService {
     private readonly subtitleCollator = new Intl.Collator("en", { sensitivity: "base" });
@@ -40,8 +37,6 @@ export class CrunchyrollService {
     private readonly API_BASE = "https://beta-api.crunchyroll.com";
     private basicAuth = CRUNCHYROLL_BASIC_AUTH;
     private userAgent = CRUNCHYROLL_USER_AGENT;
-
-    private static readonly deviceId = crypto.randomUUID();
 
     /**
      * Get auth token (cached)
@@ -52,18 +47,19 @@ export class CrunchyrollService {
             return cachedAuth;
         }
 
+        // Using manual credentials
+
         try {
             const body = new URLSearchParams();
             body.append("grant_type", "client_id");
-            body.append("device_id", CrunchyrollService.deviceId);
+            body.append("device_id", crypto.randomUUID());
 
             const response = await fetch(`${this.API_BASE}/auth/v1/token`, {
                 method: "POST",
                 headers: {
                     Authorization: `Basic ${this.basicAuth}`,
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": this.userAgent,
-                    "ETP-Anonymous-ID": CrunchyrollService.deviceId
+                    "User-Agent": this.userAgent
                 },
                 body: body.toString()
             });
@@ -571,46 +567,33 @@ export class CrunchyrollService {
 
         const email = config.crunchyroll.email;
         const password = config.crunchyroll.password;
-        const refreshTokenToUse = activeRefreshToken || config.crunchyroll.refreshToken;
 
-        if (!refreshTokenToUse && (!email || !password)) {
-            logger.error("Neither CR_REFRESH_TOKEN nor CR_EMAIL/CR_PASSWORD are configured");
+        if (!email || !password) {
+            logger.error("CR_EMAIL or CR_PASSWORD not configured");
             return null;
         }
 
         try {
             const body = new URLSearchParams();
+            body.append("grant_type", "password");
+            body.append("username", email);
+            body.append("password", password);
             body.append("scope", "offline_access");
-            body.append("device_id", CrunchyrollService.deviceId);
-            body.append("device_name", "sdk_gphone16k_x86_64");
-            body.append("device_type", "Google sdk_gphone16k_x86_64");
-
-            if (refreshTokenToUse) {
-                body.append("grant_type", "refresh_token");
-                body.append("refresh_token", refreshTokenToUse);
-            } else {
-                body.append("grant_type", "password");
-                body.append("username", email);
-                body.append("password", password);
-            }
+            body.append("device_id", crypto.randomUUID());
+            body.append("device_type", "Android TV");
 
             const response = await fetch(`${this.API_BASE}/auth/v1/token`, {
                 method: "POST",
                 headers: {
                     Authorization: `Basic ${this.basicAuth}`,
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": this.userAgent,
-                    "ETP-Anonymous-ID": CrunchyrollService.deviceId
+                    "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+                    "User-Agent": this.userAgent
                 },
                 body: body.toString()
             });
 
             if (!response.ok) {
                 logger.error(`Crunchyroll account auth failed: ${response.status}`);
-                // If refresh token failed, clear activeRefreshToken so password auth can be attempted next
-                if (refreshTokenToUse) {
-                    activeRefreshToken = null;
-                }
                 return null;
             }
 
@@ -618,10 +601,6 @@ export class CrunchyrollService {
             if (!auth.access_token) {
                 logger.error("Crunchyroll account auth: no access token");
                 return null;
-            }
-
-            if (auth.refresh_token) {
-                activeRefreshToken = auth.refresh_token;
             }
 
             // Cache with 30s buffer
@@ -798,73 +777,64 @@ export class CrunchyrollService {
 
     /**
      * Fetch subtitles for an episode using premium account auth with fallback to client auth
-     * Tries multiple platform endpoints (android_tv, web/firefox, console/ps4) if needed
      * Returns subtitle map from cr-play-service
      */
     async fetchSubtitles(episodeId: string): Promise<Record<string, CrunchyrollSubtitle> | null> {
-        let auth = (await this.getAccountAuth()) || (await this.getAuth());
+        const auth = (await this.getAccountAuth()) || (await this.getAuth());
         if (!auth) return null;
 
-        const platforms = ["tv/android_tv", "web/firefox", "console/ps4"];
-
-        for (const platform of platforms) {
-            try {
-                const url = `https://cr-play-service.prd.crunchyrollsvc.com/v1/${episodeId}/${platform}/play`;
-                let response = await fetch(url, {
-                    headers: {
-                        Authorization: `Bearer ${auth.access_token}`,
-                        "User-Agent": this.userAgent
-                    }
-                });
-
-                // If 401/403, invalidate token cache and retry ONCE with fresh token
-                if (response.status === 401 || response.status === 403) {
-                    logger.warn(
-                        `Crunchyroll play service (${platform}) returned ${response.status}, refreshing token...`
-                    );
-                    cachedAccountAuth = null;
-                    accountAuthExpiresAt = 0;
-                    cachedAuth = null;
-                    authExpiresAt = 0;
-
-                    const freshAuth = (await this.getAccountAuth(true)) || (await this.getAuth(true));
-                    if (freshAuth) {
-                        auth = freshAuth;
-                        response = await fetch(url, {
-                            headers: {
-                                Authorization: `Bearer ${auth.access_token}`,
-                                "User-Agent": this.userAgent
-                            }
-                        });
-                    }
+        try {
+            const url = `https://cr-play-service.prd.crunchyrollsvc.com/v1/${episodeId}/tv/android_tv/play`;
+            let response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${auth.access_token}`,
+                    "User-Agent": this.userAgent
                 }
+            });
 
-                if (!response.ok) {
-                    logger.error(`Crunchyroll play service (${platform}) failed: ${response.status}`);
-                    continue;
+            // If 401/403, invalidate token cache and retry ONCE with fresh token
+            if (response.status === 401 || response.status === 403) {
+                logger.warn(`Crunchyroll play service returned ${response.status}, refreshing token...`);
+                cachedAccountAuth = null;
+                accountAuthExpiresAt = 0;
+                cachedAuth = null;
+                authExpiresAt = 0;
+
+                const freshAuth = (await this.getAccountAuth(true)) || (await this.getAuth(true));
+                if (freshAuth) {
+                    response = await fetch(url, {
+                        headers: {
+                            Authorization: `Bearer ${freshAuth.access_token}`,
+                            "User-Agent": this.userAgent
+                        }
+                    });
                 }
+            }
 
-                const data = (await response.json()) as CrunchyrollPlayResponse;
-                if (data.subtitles && Object.keys(data.subtitles).length > 0) {
-                    for (const key of Object.keys(data.subtitles)) {
-                        const sub = data.subtitles[key];
-                        if (sub) {
-                            if (sub.url) {
-                                sub.url = this.sanitizeSubtitleUrl(sub.url);
-                            }
-                            if (sub.format === "txt") {
-                                sub.format = "ass";
-                            }
+            if (!response.ok) {
+                logger.error(`Crunchyroll play service failed: ${response.status}`);
+                return null;
+            }
+
+            const data = (await response.json()) as CrunchyrollPlayResponse;
+            if (data.subtitles) {
+                for (const key of Object.keys(data.subtitles)) {
+                    const sub = data.subtitles[key];
+                    if (sub) {
+                        if (sub.url) {
+                            sub.url = this.sanitizeSubtitleUrl(sub.url);
+                        }
+                        if (sub.format === "txt") {
+                            sub.format = "ass";
                         }
                     }
-                    return data.subtitles;
                 }
-            } catch (error) {
-                logger.error(error as Error, `Crunchyroll subtitle fetch error for ${platform}`);
             }
+            return data.subtitles || null;
+        } catch (error) {
+            logger.error(error as Error, "Crunchyroll subtitle fetch error");
+            return null;
         }
-
-        return null;
     }
 
     /**

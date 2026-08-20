@@ -49,7 +49,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         if (user.hoyolab?.token) {
             const enabledGames = user.hoyolab.games
                 ? Object.entries(user.hoyolab.games)
-                      .filter(([_, enabled]) => enabled)
+                      .filter(([, enabled]) => enabled)
                       .map(([key]) => GAME_DISPLAY_NAMES[key as keyof typeof GAME_DISPLAY_NAMES] || key)
                       .join(", ") || "None"
                 : "None";

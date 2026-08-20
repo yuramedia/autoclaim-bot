@@ -132,7 +132,7 @@ describe("handleInteractionError", () => {
 
 describe("withErrorHandler", () => {
     test("calls the wrapped handler with the original interaction", async () => {
-        const handler = mock(async (_: unknown) => undefined);
+        const handler = mock(async () => undefined);
         const interaction = makeMockInteraction() as any;
         const wrapped = withErrorHandler(handler as any);
         await wrapped(interaction);
@@ -140,14 +140,14 @@ describe("withErrorHandler", () => {
     });
 
     test("returns the handler's resolved value (void)", async () => {
-        const handler = mock(async (_: unknown) => undefined);
+        const handler = mock(async () => undefined);
         const interaction = makeMockInteraction() as any;
         const wrapped = withErrorHandler(handler as any);
         await expect(wrapped(interaction)).resolves.toBeUndefined();
     });
 
     test("catches a thrown error and sends an error response to the interaction", async () => {
-        const handler = mock(async (_: unknown) => {
+        const handler = mock(async () => {
             throw new Error("handler blew up");
         });
         const interaction = makeMockInteraction();
@@ -163,7 +163,7 @@ describe("withErrorHandler", () => {
     });
 
     test("uses the custom error message if provided", async () => {
-        const handler = mock(async (_: unknown) => {
+        const handler = mock(async () => {
             throw new Error("oops");
         });
         const interaction = makeMockInteraction();

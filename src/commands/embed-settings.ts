@@ -88,7 +88,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 await updateEmbedFixSettings(interaction.guildId, { autoUpload: enabled });
                 await interaction.editReply({
                     content: enabled
-                        ? "✅ Auto upload has been **enabled**. Media under 10MB will be downloaded and uploaded to Discord."
+                        ? "✅ Auto upload has been **enabled**. Media under 20MB will be downloaded and uploaded to Discord."
                         : "❌ Auto upload has been **disabled**. Only embed fix links will be shown."
                 });
                 break;

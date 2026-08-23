@@ -4,6 +4,7 @@
  * Supports authenticated login for subtitle downloads
  */
 
+import crypto from "crypto";
 import type {
     CrunchyrollAuth,
     CrunchyrollEpisodes,
@@ -39,6 +40,24 @@ export class CrunchyrollService {
     private userAgent = CRUNCHYROLL_USER_AGENT;
 
     /**
+     * Deterministic device ID derived from config seed.
+     * Prevents Crunchyroll from treating each login as a new device (causing security email spam).
+     */
+    private static get deviceId(): string {
+        const seed =
+            config.crunchyroll.email || config.security.tokenEncryptionKey || "autoclaim-bot-crunchyroll-device";
+        const hash = crypto.createHash("sha256").update(`cr-device-id:${seed}`).digest("hex");
+        const timeLow = hash.substring(0, 8);
+        const timeMid = hash.substring(8, 12);
+        const timeHiAndVersion = `4${hash.substring(13, 16)}`;
+        const clockSeq =
+            ((parseInt(hash.substring(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, "0") +
+            hash.substring(18, 20);
+        const node = hash.substring(20, 32);
+        return `${timeLow}-${timeMid}-${timeHiAndVersion}-${clockSeq}-${node}`;
+    }
+
+    /**
      * Get auth token (cached)
      */
     async getAuth(forceRefresh = false): Promise<CrunchyrollAuth | null> {
@@ -52,7 +71,7 @@ export class CrunchyrollService {
         try {
             const body = new URLSearchParams();
             body.append("grant_type", "client_id");
-            body.append("device_id", crypto.randomUUID());
+            body.append("device_id", CrunchyrollService.deviceId);
 
             const response = await fetch(`${this.API_BASE}/auth/v1/token`, {
                 method: "POST",
@@ -579,7 +598,7 @@ export class CrunchyrollService {
             body.append("username", email);
             body.append("password", password);
             body.append("scope", "offline_access");
-            body.append("device_id", crypto.randomUUID());
+            body.append("device_id", CrunchyrollService.deviceId);
             body.append("device_type", "Android TV");
 
             const response = await fetch(`${this.API_BASE}/auth/v1/token`, {

@@ -16,10 +16,22 @@ export async function connectDatabase(): Promise<void> {
     }
 }
 
+/**
+ * Closes the MongoDB connection gracefully, flushing in-flight writes.
+ */
+export async function disconnectDatabase(): Promise<void> {
+    await mongoose.disconnect();
+    logger.info("👋 Disconnected from MongoDB");
+}
+
 mongoose.connection.on("error", error => {
     logger.error(error, "MongoDB connection error");
 });
 
 mongoose.connection.on("disconnected", () => {
-    logger.warn("MongoDB disconnected");
+    logger.warn("MongoDB disconnected — mongoose will attempt to reconnect automatically");
+});
+
+mongoose.connection.on("reconnected", () => {
+    logger.info("✅ MongoDB reconnected");
 });

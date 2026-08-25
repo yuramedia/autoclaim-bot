@@ -6,6 +6,7 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
 import type { AnimeRelease, AnimeEntry } from "../types/bestrelease";
 import { logger } from "../core/logger";
+import { fetchWithTimeout } from "../utils/http";
 
 /**
  * Slash command data for the bestrelease command.
@@ -27,7 +28,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const query = interaction.options.getString("anime", true).toLowerCase();
 
     try {
-        const response = await fetch("https://best-release.kazeuta.com/__data.json");
+        const response = await fetchWithTimeout("https://best-release.kazeuta.com/__data.json", { timeoutMs: 15000 });
         if (!response.ok) {
             throw new Error(`API Error: ${response.status}`);
         }

@@ -119,7 +119,7 @@ const YouTubeFeedSettingsSchema = new Schema<IYouTubeFeedSettings>({
 
 const GuildSettingsSchema = new Schema<IGuildSettings>(
     {
-        guildId: { type: String, required: true, unique: true, index: true },
+        guildId: { type: String, required: true, unique: true },
         embedFix: { type: EmbedFixSettingsSchema, default: () => ({}) },
         crunchyrollFeed: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) },
         crunchyrollLineup: { type: CrunchyrollFeedSettingsSchema, default: () => ({}) },
@@ -137,16 +137,52 @@ const GuildSettingsSchema = new Schema<IGuildSettings>(
  */
 export const GuildSettings = mongoose.model<IGuildSettings>("GuildSettings", GuildSettingsSchema);
 
+// ── Read cache ──────────────────────────────────────────────────────────────
+// The per-guild settings document is read on every guild message (embed fix +
+// antihack). A short-TTL cache collapses that hot path to one DB read per TTL
+// window per guild; all mutating helpers invalidate explicitly.
+
+/** Cache entry with expiry tracking. */
+interface GuildSettingsCacheEntry {
+    doc: IGuildSettings;
+    expiresAt: number;
+}
+
+const guildSettingsCache = new Map<string, GuildSettingsCacheEntry>();
+const GUILD_SETTINGS_CACHE_TTL_MS = 30_000;
+
 /**
- * Get guild settings, creating default if not exists
+ * Remove a guild's cached settings so the next read hits the database.
+ * @param guildId - The guild whose cache entry should be dropped.
+ */
+export function invalidateGuildSettingsCache(guildId: string): void {
+    guildSettingsCache.delete(guildId);
+}
+
+/**
+ * Get guild settings, creating default if not exists.
+ * Concurrent first-touch creates are tolerated: on a duplicate-key race the
+ * winner's document is re-read instead of throwing E11000.
+ *
+ * @param guildId - The Discord guild ID.
+ * @returns The guild settings document.
  */
 export async function getGuildSettings(guildId: string): Promise<IGuildSettings> {
     try {
         let settings = await GuildSettings.findOne({ guildId });
         if (!settings) {
-            settings = await GuildSettings.create({ guildId });
+            try {
+                settings = await GuildSettings.create({ guildId });
+            } catch (createError) {
+                // Lost a concurrent create race — re-read the winning document
+                if ((createError as { code?: number }).code === 11000) {
+                    settings = await GuildSettings.findOne({ guildId });
+                } else {
+                    throw createError;
+                }
+            }
         }
-        return settings;
+        return settings!;
     } catch (error: unknown) {
         logger.error(error, `[getGuildSettings] Failed to fetch settings for guild ${guildId}`);
         throw error;
@@ -154,23 +190,50 @@ export async function getGuildSettings(guildId: string): Promise<IGuildSettings>
 }
 
 /**
- * Update guild embed fix settings
+ * Get guild settings through a 30s read-through cache.
+ * Only safe for read-only usage — any caller that mutates the returned
+ * document must call {@link invalidateGuildSettingsCache} afterwards.
+ *
+ * @param guildId - The Discord guild ID.
+ * @returns The guild settings document (possibly shared between calls).
+ */
+export async function getCachedGuildSettings(guildId: string): Promise<IGuildSettings> {
+    const now = Date.now();
+    const cached = guildSettingsCache.get(guildId);
+    if (cached && now < cached.expiresAt) {
+        return cached.doc;
+    }
+
+    // Prune expired entries opportunistically to keep the map bounded
+    if (guildSettingsCache.size > 1000) {
+        for (const [key, entry] of guildSettingsCache) {
+            if (now >= entry.expiresAt) guildSettingsCache.delete(key);
+        }
+    }
+
+    const doc = await getGuildSettings(guildId);
+    guildSettingsCache.set(guildId, { doc, expiresAt: Date.now() + GUILD_SETTINGS_CACHE_TTL_MS });
+    return doc;
+}
+
+/**
+ * Update guild embed fix settings atomically via dot-path $set.
  */
 export async function updateEmbedFixSettings(
     guildId: string,
     updates: Partial<IEmbedFixSettings>
 ): Promise<IGuildSettings> {
     try {
-        const settings = await getGuildSettings(guildId);
+        const $set: Record<string, unknown> = {};
+        if (updates.enabled !== undefined) $set["embedFix.enabled"] = updates.enabled;
+        if (updates.autoUpload !== undefined) $set["embedFix.autoUpload"] = updates.autoUpload;
+        if (updates.richEmbeds !== undefined) $set["embedFix.richEmbeds"] = updates.richEmbeds;
+        if (updates.disabledPlatforms !== undefined) $set["embedFix.disabledPlatforms"] = updates.disabledPlatforms;
+        if (updates.deleteReaction !== undefined) $set["embedFix.deleteReaction"] = updates.deleteReaction;
 
-        if (updates.enabled !== undefined) settings.embedFix.enabled = updates.enabled;
-        if (updates.autoUpload !== undefined) settings.embedFix.autoUpload = updates.autoUpload;
-        if (updates.richEmbeds !== undefined) settings.embedFix.richEmbeds = updates.richEmbeds;
-        if (updates.disabledPlatforms !== undefined) settings.embedFix.disabledPlatforms = updates.disabledPlatforms;
-        if (updates.deleteReaction !== undefined) settings.embedFix.deleteReaction = updates.deleteReaction;
-
-        await settings.save();
-        return settings;
+        const settings = await GuildSettings.findOneAndUpdate({ guildId }, { $set }, { new: true, upsert: true });
+        invalidateGuildSettingsCache(guildId);
+        return settings!;
     } catch (error: unknown) {
         logger.error(error, `[updateEmbedFixSettings] Failed to update settings for guild ${guildId}`);
         throw error;
@@ -178,7 +241,8 @@ export async function updateEmbedFixSettings(
 }
 
 /**
- * Update guild antihack settings
+ * Update guild antihack settings atomically via dot-path $set.
+ *
  * @param guildId - The guild ID to update settings for
  * @param updates - Partial antihack settings to apply
  * @returns The updated guild settings document
@@ -188,14 +252,14 @@ export async function updateAntihackSettings(
     updates: Partial<IAntihackSettings>
 ): Promise<IGuildSettings> {
     try {
-        const settings = await getGuildSettings(guildId);
+        const $set: Record<string, unknown> = {};
+        if (updates.enabled !== undefined) $set["antihack.enabled"] = updates.enabled;
+        if (updates.channelIds !== undefined) $set["antihack.channelIds"] = updates.channelIds;
+        if (updates.logChannelId !== undefined) $set["antihack.logChannelId"] = updates.logChannelId;
 
-        if (updates.enabled !== undefined) settings.antihack.enabled = updates.enabled;
-        if (updates.channelIds !== undefined) settings.antihack.channelIds = updates.channelIds;
-        if (updates.logChannelId !== undefined) settings.antihack.logChannelId = updates.logChannelId;
-
-        await settings.save();
-        return settings;
+        const settings = await GuildSettings.findOneAndUpdate({ guildId }, { $set }, { new: true, upsert: true });
+        invalidateGuildSettingsCache(guildId);
+        return settings!;
     } catch (error: unknown) {
         logger.error(error, `[updateAntihackSettings] Failed to update settings for guild ${guildId}`);
         throw error;

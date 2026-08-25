@@ -19,14 +19,23 @@ import type {
 import { LANG_MAP, CR_RELEASE_ITEMS_PER_PAGE, CRUNCHYROLL_BASIC_AUTH, CRUNCHYROLL_USER_AGENT } from "../constants";
 import { config } from "../config";
 import { logger } from "../core/logger";
+import { fetchWithTimeout } from "../utils/http";
+import { parseXml, xmlNodeArray, xmlAttr, type XmlNode } from "../utils/xml";
 
 // Cache for anonymous auth token
 let cachedAuth: CrunchyrollAuth | null = null;
 let authExpiresAt = 0;
 
+// In-flight anonymous auth request — deduplicated so concurrent callers on token
+// expiry share a single password/client_id grant instead of stampeding the API.
+let anonymousAuthPromise: Promise<CrunchyrollAuth | null> | null = null;
+
 // Cache for account auth token (premium)
 let cachedAccountAuth: CrunchyrollAuth | null = null;
 let accountAuthExpiresAt = 0;
+
+// In-flight account auth request — same stampede protection as above.
+let accountAuthPromise: Promise<CrunchyrollAuth | null> | null = null;
 
 /**
  * Service for interacting with Crunchyroll APIs (Discovery, Search, Subtitles, etc.).
@@ -58,7 +67,7 @@ export class CrunchyrollService {
     }
 
     /**
-     * Get auth token (cached)
+     * Get auth token (cached). Concurrent callers share a single in-flight request.
      */
     async getAuth(forceRefresh = false): Promise<CrunchyrollAuth | null> {
         // Return cached token if valid and not forcing refresh
@@ -66,14 +75,25 @@ export class CrunchyrollService {
             return cachedAuth;
         }
 
-        // Using manual credentials
+        if (!anonymousAuthPromise) {
+            anonymousAuthPromise = this.requestAnonymousAuth().finally(() => {
+                anonymousAuthPromise = null;
+            });
+        }
+        return anonymousAuthPromise;
+    }
 
+    /**
+     * Perform the anonymous client_id grant and populate the cache.
+     */
+    private async requestAnonymousAuth(): Promise<CrunchyrollAuth | null> {
         try {
             const body = new URLSearchParams();
             body.append("grant_type", "client_id");
             body.append("device_id", CrunchyrollService.deviceId);
 
-            const response = await fetch(`${this.API_BASE}/auth/v1/token`, {
+            const response = await fetchWithTimeout(`${this.API_BASE}/auth/v1/token`, {
+                timeoutMs: 10000,
                 method: "POST",
                 headers: {
                     Authorization: `Basic ${this.basicAuth}`,
@@ -126,7 +146,8 @@ export class CrunchyrollService {
                 params.append("locale", lang);
             }
 
-            const response = await fetch(`${this.API_BASE}/content/v2/discover/browse?${params}`, {
+            const response = await fetchWithTimeout(`${this.API_BASE}/content/v2/discover/browse?${params}`, {
+                timeoutMs: 15000,
                 method: "GET",
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
@@ -170,7 +191,8 @@ export class CrunchyrollService {
      */
     async fetchLatestEpisodesFromRss(): Promise<string[]> {
         try {
-            const response = await fetch("https://www.crunchyroll.com/rss/anime", {
+            const response = await fetchWithTimeout("https://www.crunchyroll.com/rss/anime", {
+                timeoutMs: 10000,
                 headers: {
                     "User-Agent": CRUNCHYROLL_USER_AGENT
                 }
@@ -221,12 +243,16 @@ export class CrunchyrollService {
             const results = await Promise.all(
                 episodeIds.map(async id => {
                     try {
-                        const res = await fetch(`${this.API_BASE}/content/v2/cms/objects/${id}?locale=en-US`, {
-                            headers: {
-                                Authorization: `Bearer ${auth.access_token}`,
-                                "User-Agent": this.userAgent
+                        const res = await fetchWithTimeout(
+                            `${this.API_BASE}/content/v2/cms/objects/${id}?locale=en-US`,
+                            {
+                                timeoutMs: 10000,
+                                headers: {
+                                    Authorization: `Bearer ${auth.access_token}`,
+                                    "User-Agent": this.userAgent
+                                }
                             }
-                        });
+                        );
                         if (!res.ok) return null;
                         const data = (await res.json()) as { data: CrunchyrollEpisode[] };
                         return data.data?.[0] || null;
@@ -407,7 +433,8 @@ export class CrunchyrollService {
         }
 
         try {
-            const response = await fetch("https://www.crunchyroll.com/rss/anime", {
+            const response = await fetchWithTimeout("https://www.crunchyroll.com/rss/anime", {
+                timeoutMs: 10000,
                 headers: {
                     "User-Agent": CRUNCHYROLL_USER_AGENT
                 }
@@ -500,7 +527,8 @@ export class CrunchyrollService {
         if (!auth) return undefined;
 
         try {
-            const response = await fetch(`${this.API_BASE}/content/v2/cms/objects/${seriesId}`, {
+            const response = await fetchWithTimeout(`${this.API_BASE}/content/v2/cms/objects/${seriesId}`, {
+                timeoutMs: 10000,
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
                     "User-Agent": this.userAgent
@@ -575,8 +603,9 @@ export class CrunchyrollService {
     }
 
     /**
-     * Get auth token using Crunchyroll account credentials (premium access)
+     * Get auth token using Crunchyroll account credentials (premium access).
      * Supports grant_type=refresh_token (preferred) and grant_type=password fallback.
+     * Concurrent callers share a single in-flight request.
      */
     async getAccountAuth(forceRefresh = false): Promise<CrunchyrollAuth | null> {
         // Return cached token if valid and not forcing refresh
@@ -584,6 +613,18 @@ export class CrunchyrollService {
             return cachedAccountAuth;
         }
 
+        if (!accountAuthPromise) {
+            accountAuthPromise = this.requestAccountAuth().finally(() => {
+                accountAuthPromise = null;
+            });
+        }
+        return accountAuthPromise;
+    }
+
+    /**
+     * Perform the password grant and populate the cache.
+     */
+    private async requestAccountAuth(): Promise<CrunchyrollAuth | null> {
         const email = config.crunchyroll.email;
         const password = config.crunchyroll.password;
 
@@ -601,7 +642,8 @@ export class CrunchyrollService {
             body.append("device_id", CrunchyrollService.deviceId);
             body.append("device_type", "Android TV");
 
-            const response = await fetch(`${this.API_BASE}/auth/v1/token`, {
+            const response = await fetchWithTimeout(`${this.API_BASE}/auth/v1/token`, {
+                timeoutMs: 10000,
                 method: "POST",
                 headers: {
                     Authorization: `Basic ${this.basicAuth}`,
@@ -649,7 +691,8 @@ export class CrunchyrollService {
                 locale: "en-US"
             });
 
-            const response = await fetch(`${this.API_BASE}/content/v2/discover/search?${params}`, {
+            const response = await fetchWithTimeout(`${this.API_BASE}/content/v2/discover/search?${params}`, {
+                timeoutMs: 15000,
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
                     "User-Agent": this.userAgent
@@ -697,7 +740,8 @@ export class CrunchyrollService {
                 type: "series"
             });
 
-            const response = await fetch(`${this.API_BASE}/content/v2/discover/search?${params}`, {
+            const response = await fetchWithTimeout(`${this.API_BASE}/content/v2/discover/search?${params}`, {
+                timeoutMs: 5000,
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
                     "User-Agent": this.userAgent
@@ -732,12 +776,16 @@ export class CrunchyrollService {
 
         try {
             // Fetch seasons for this series
-            const seasonsRes = await fetch(`${this.API_BASE}/content/v2/cms/series/${seriesId}/seasons?locale=en-US`, {
-                headers: {
-                    Authorization: `Bearer ${auth.access_token}`,
-                    "User-Agent": this.userAgent
+            const seasonsRes = await fetchWithTimeout(
+                `${this.API_BASE}/content/v2/cms/series/${seriesId}/seasons?locale=en-US`,
+                {
+                    timeoutMs: 15000,
+                    headers: {
+                        Authorization: `Bearer ${auth.access_token}`,
+                        "User-Agent": this.userAgent
+                    }
                 }
-            });
+            );
 
             if (!seasonsRes.ok) return [];
 
@@ -755,9 +803,10 @@ export class CrunchyrollService {
             const episodeArrays = await Promise.all(
                 targetSeasons.map(async season => {
                     try {
-                        const episodesRes = await fetch(
+                        const episodesRes = await fetchWithTimeout(
                             `${this.API_BASE}/content/v2/cms/seasons/${season.id}/episodes?locale=en-US`,
                             {
+                                timeoutMs: 15000,
                                 headers: {
                                     Authorization: `Bearer ${auth.access_token}`,
                                     "User-Agent": this.userAgent
@@ -804,7 +853,8 @@ export class CrunchyrollService {
 
         try {
             const url = `https://cr-play-service.prd.crunchyrollsvc.com/v1/${episodeId}/tv/android_tv/play`;
-            let response = await fetch(url, {
+            let response = await fetchWithTimeout(url, {
+                timeoutMs: 20000,
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
                     "User-Agent": this.userAgent
@@ -821,7 +871,8 @@ export class CrunchyrollService {
 
                 const freshAuth = (await this.getAccountAuth(true)) || (await this.getAuth(true));
                 if (freshAuth) {
-                    response = await fetch(url, {
+                    response = await fetchWithTimeout(url, {
+                        timeoutMs: 20000,
                         headers: {
                             Authorization: `Bearer ${freshAuth.access_token}`,
                             "User-Agent": this.userAgent
@@ -874,12 +925,12 @@ export class CrunchyrollService {
     async downloadSubtitle(url: string): Promise<string | null> {
         try {
             let targetUrl = this.sanitizeSubtitleUrl(url);
-            let response = await fetch(targetUrl);
+            let response = await fetchWithTimeout(targetUrl, { timeoutMs: 15000 });
 
             // If 403 Forbidden or failed and original URL contains vod-fy-mod., retry replacing vod-fy-mod. with vod-fy.
             if ((!response.ok || response.status === 403) && url.includes("vod-fy-mod.")) {
                 targetUrl = url.replace(/vod-fy-mod\./g, "vod-fy.");
-                response = await fetch(targetUrl);
+                response = await fetchWithTimeout(targetUrl, { timeoutMs: 15000 });
             }
 
             if (!response.ok) return null;
@@ -913,7 +964,8 @@ export class CrunchyrollService {
                     locale
                 });
 
-                const response = await fetch(`${this.API_BASE}/content/v2/discover/browse?${params}`, {
+                const response = await fetchWithTimeout(`${this.API_BASE}/content/v2/discover/browse?${params}`, {
+                    timeoutMs: 15000,
                     headers: {
                         Authorization: `Bearer ${auth.access_token}`,
                         "User-Agent": this.userAgent
@@ -949,7 +1001,8 @@ export class CrunchyrollService {
      */
     async fetchLineupAnnouncements(onlySeasonal = true): Promise<LineupAnnouncement[]> {
         try {
-            const response = await fetch("https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss", {
+            const response = await fetchWithTimeout("https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss", {
+                timeoutMs: 10000,
                 headers: {
                     "User-Agent": this.userAgent
                 }
@@ -961,14 +1014,8 @@ export class CrunchyrollService {
             }
 
             const xml = await response.text();
-            const { XMLParser } = await import("fast-xml-parser");
-            const parser = new XMLParser({
-                ignoreAttributes: false,
-                attributeNamePrefix: "@_",
-                isArray: (name: string) => name === "item"
-            });
-            const result = parser.parse(xml);
-            const items = result?.rss?.channel?.item || [];
+            const channel = (parseXml(xml).rss as XmlNode | undefined)?.channel as XmlNode | undefined;
+            const items = xmlNodeArray(channel?.item);
 
             const announcements: LineupAnnouncement[] = [];
 
@@ -990,7 +1037,7 @@ export class CrunchyrollService {
                         : typeof item["dc:creator"] === "string"
                           ? item["dc:creator"]
                           : null) || null;
-                const thumbnail = item["media:thumbnail"]?.["@_url"] || null;
+                const thumbnail = xmlAttr(item["media:thumbnail"] as XmlNode | undefined, "url");
                 const pubDate = String(item.pubDate || new Date().toUTCString());
 
                 announcements.push({

@@ -67,7 +67,7 @@ const EndfieldSchema = new Schema<IEndfieldData>({
 
 const UserSchema = new Schema<IUser>(
     {
-        discordId: { type: String, required: true, unique: true, index: true },
+        discordId: { type: String, required: true, unique: true },
         username: { type: String, required: true },
         hoyolab: { type: HoyolabSchema },
         endfield: { type: EndfieldSchema },

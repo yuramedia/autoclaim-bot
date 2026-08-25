@@ -9,8 +9,9 @@ import { formatUtc8DateTime } from "./time";
 /**
  * Start the presence updater that shows server time
  * @param client - Discord client instance
+ * @returns Interval handle so callers can clear it on shutdown.
  */
-export function startPresenceUpdater(client: Client): void {
+export function startPresenceUpdater(client: Client): ReturnType<typeof setInterval> {
     const update = () => {
         // Get time in HH:MM format (UTC+8)
         const timeStr = formatUtc8DateTime().substring(11, 16);
@@ -18,5 +19,5 @@ export function startPresenceUpdater(client: Client): void {
     };
 
     update();
-    setInterval(update, 60 * 1000); // Update every minute
+    return setInterval(update, 60 * 1000); // Update every minute
 }

@@ -3,7 +3,7 @@
  * Check bot latency and uptime
  */
 
-import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
 import { formatUptime } from "../utils/time";
 import { logger } from "../core/logger";
 
@@ -55,7 +55,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ content: "❌ Failed to measure latency." });
             } else {
-                await interaction.reply({ content: "❌ Failed to measure latency.", ephemeral: true });
+                await interaction.reply({ content: "❌ Failed to measure latency.", flags: MessageFlags.Ephemeral });
             }
         } catch (e) {
             logger.error(e, "Failed to send error response");

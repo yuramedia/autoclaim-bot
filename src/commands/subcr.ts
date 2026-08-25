@@ -11,7 +11,8 @@ import {
     ActionRowBuilder,
     StringSelectMenuBuilder,
     ComponentType,
-    AttachmentBuilder
+    AttachmentBuilder,
+    MessageFlags
 } from "discord.js";
 import { CrunchyrollService } from "../services/crunchyroll";
 import type { CrunchyrollEpisode } from "../types/crunchyroll";
@@ -176,7 +177,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     if (!urlInput && !animeInput) {
         await interaction.reply({
             content: "❌ Must provide either `url` (episode URL/ID) or `anime` (anime title).",
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }

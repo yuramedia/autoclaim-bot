@@ -9,7 +9,8 @@ import {
     PermissionFlagsBits,
     ChannelType,
     TextChannel,
-    EmbedBuilder
+    EmbedBuilder,
+    MessageFlags
 } from "discord.js";
 import { getGuildSettings } from "../database/models/guild-settings";
 import type { IU2FeedSettings } from "../types/u2-feed";
@@ -55,13 +56,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     if (!guildId) {
         await interaction.reply({
             content: "❌ This command can only be used in a server.",
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
 
     try {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const settings = await getGuildSettings(guildId);
         const subcommand = interaction.options.getSubcommand();
@@ -151,7 +152,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         } else {
             await interaction.reply({
                 content: "❌ An error occurred while processing the command.",
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
     }

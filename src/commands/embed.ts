@@ -20,7 +20,8 @@ import {
     ActionRowBuilder,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
-    ButtonBuilder
+    ButtonBuilder,
+    MessageFlags
 } from "discord.js";
 import { findPlatform, applyFix, extractPostId } from "../services/embed-fix";
 import { logger } from "../core/logger";
@@ -100,7 +101,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     if (!/^https?:\/\//i.test(url)) {
         await interaction.reply({
             content: "❌ Please provide a valid URL starting with `http://` or `https://`.",
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }

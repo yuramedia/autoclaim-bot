@@ -7,6 +7,7 @@
 
 import crypto from "crypto";
 import { logger } from "../core/logger";
+import { fetchWithTimeout } from "../utils/http";
 import type { EndfieldClaimResult, EndfieldRoleResult, EndfieldServiceOptions, EndfieldValidation } from "../types";
 import {
     ENDFIELD,
@@ -60,7 +61,8 @@ function computeSignV2(path: string, body: string, timestamp: string, signToken:
 async function getOAuthCode(accountToken: string): Promise<string | null> {
     try {
         const payload = { token: accountToken, appCode: ENDFIELD_APP_CODE, type: 0 };
-        const response = await fetch(ENDFIELD_GRANT_URL, {
+        const response = await fetchWithTimeout(ENDFIELD_GRANT_URL, {
+            timeoutMs: 15000,
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
@@ -93,7 +95,8 @@ interface CredResponse {
 async function getCredAndSalt(oauthCode: string): Promise<CredResponse | null> {
     try {
         const payload = { kind: 1, code: oauthCode };
-        const response = await fetch(ENDFIELD_GENERATE_CRED_URL, {
+        const response = await fetchWithTimeout(ENDFIELD_GENERATE_CRED_URL, {
+            timeoutMs: 15000,
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
@@ -140,7 +143,8 @@ async function getPlayerBindings(cred: string, signToken: string): Promise<strin
             Origin: "https://game.skport.com",
             Referer: "https://game.skport.com/"
         };
-        const response = await fetch(ENDFIELD_BINDING_URL, {
+        const response = await fetchWithTimeout(ENDFIELD_BINDING_URL, {
+            timeoutMs: 15000,
             method: "GET",
             headers
         });
@@ -213,7 +217,8 @@ async function sendAttendanceRequest(
             Origin: "https://game.skport.com",
             Referer: "https://game.skport.com/"
         };
-        const response = await fetch(ENDFIELD_ATTENDANCE_URL, {
+        const response = await fetchWithTimeout(ENDFIELD_ATTENDANCE_URL, {
+            timeoutMs: 20000,
             method: "POST",
             headers
         });

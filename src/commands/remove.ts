@@ -36,7 +36,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const service = interaction.options.getString("service", true);
-        const user = await User.findOne({ discordId: interaction.user.id });
+        const user = await User.findOne({ discordId: interaction.user.id }).select({ _id: 1 });
 
         if (!user) {
             await interaction.editReply({
@@ -51,14 +51,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 content: "✅ All your data has been removed."
             });
         } else if (service === "hoyolab") {
-            user.hoyolab = undefined;
-            await user.save();
+            // Atomic $unset — avoids racing concurrent scheduler updateOne()
+            // writes that a full-document save() could resurrect.
+            await User.updateOne({ discordId: interaction.user.id }, { $unset: { hoyolab: "" } });
             await interaction.editReply({
                 content: "✅ Your Hoyolab token has been removed."
             });
         } else if (service === "endfield") {
-            user.endfield = undefined;
-            await user.save();
+            await User.updateOne({ discordId: interaction.user.id }, { $unset: { endfield: "" } });
             await interaction.editReply({
                 content: "✅ Your Endfield token has been removed."
             });

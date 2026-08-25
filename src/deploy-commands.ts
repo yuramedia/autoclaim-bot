@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { REST, Routes } from "discord.js";
 import { config } from "./config";
 import { logger } from "./core/logger";
@@ -32,4 +31,5 @@ async function deploy(): Promise<void> {
     }
 }
 
-deploy();
+// Top-level await ensures the process stays alive until registration settles
+await deploy();

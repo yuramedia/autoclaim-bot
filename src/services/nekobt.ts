@@ -2,6 +2,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "disc
 import { fetchAnilistCoverByTitle, fetchAnimeImages } from "./amenzb";
 import { fetchTsukihimeImagesByBtih } from "./tsukihime";
 import { logger } from "../core/logger";
+import { fetchWithTimeout } from "../utils/http";
 
 /**
  * Represents the response structure from NekoBT torrent API
@@ -57,7 +58,8 @@ export function extractNekoBTId(url: string): string | null {
  */
 export async function fetchNekoBTTorrent(id: string): Promise<NekoBTTorrentResponse | null> {
     try {
-        const res = await fetch(`${NEKOBT_API_URL}/torrents/${id}`, {
+        const res = await fetchWithTimeout(`${NEKOBT_API_URL}/torrents/${id}`, {
+            timeoutMs: 10000,
             headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0",
                 Accept: "application/json"

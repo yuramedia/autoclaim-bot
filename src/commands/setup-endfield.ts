@@ -11,7 +11,8 @@ import {
     TextInputBuilder,
     TextInputStyle,
     ActionRowBuilder,
-    type ModalActionRowComponentBuilder
+    type ModalActionRowComponentBuilder,
+    MessageFlags
 } from "discord.js";
 import { logger } from "../core/logger";
 
@@ -59,7 +60,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         try {
             await interaction.reply({
                 content: "❌ Failed to open setup modal.",
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         } catch (e) {
             logger.error(e, "Failed to send error reply");

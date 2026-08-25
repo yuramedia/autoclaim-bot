@@ -53,7 +53,8 @@ export async function searchJisho(keyword: string): Promise<JishoWord[]> {
     try {
         const response = await axios.get<JishoAPIResponse>(JISHO_API_URL, {
             params: { keyword },
-            headers: { "User-Agent": JISHO_USER_AGENT }
+            headers: { "User-Agent": JISHO_USER_AGENT },
+            timeout: 10000
         });
 
         if (response.status !== 200) {

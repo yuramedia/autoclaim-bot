@@ -8,6 +8,7 @@ import axios, { type AxiosInstance } from "axios";
 import type { ClaimResult, GameAccount, TokenValidation, RedeemResult } from "../types";
 import { HOYOLAB_GAMES, HOYOLAB_HEADERS, HOYOLAB_REDEEM_URLS, HOYOLAB_DS_SALT } from "../constants";
 import { logger } from "../core/logger";
+import { withRetry } from "../utils/http";
 
 // Re-export types for backwards compatibility
 export type { ClaimResult, GameAccount };
@@ -69,7 +70,8 @@ export class HoyolabService {
                 Object.assign(headers, game.extraHeaders);
             }
 
-            const response = await this.client.post(url, null, { headers });
+            // Retry transient network failures with exponential backoff
+            const response = await withRetry(() => this.client.post(url, null, { headers }), { retries: 2 });
             const data = response.data;
 
             if (data.retcode === 0 || data.message === "OK") {
@@ -115,31 +117,38 @@ export class HoyolabService {
     }
 
     /**
-     * Claim daily rewards for all enabled games
+     * Claim daily rewards for all enabled games.
+     * Per-game failures are isolated: one game erroring never discards the
+     * results of games already claimed.
+     *
      * @param enabledGames - Record of game keys to enabled status
-     * @returns Array of claim results for each game
+     * @returns Array of claim results for each attempted game
      */
     async claimAll(enabledGames: Record<string, boolean>): Promise<ClaimResult[]> {
-        try {
-            const results: ClaimResult[] = [];
+        const results: ClaimResult[] = [];
 
-            for (const [gameKey, enabled] of Object.entries(enabledGames)) {
-                if (!enabled) continue;
+        for (const [gameKey, enabled] of Object.entries(enabledGames)) {
+            if (!enabled) continue;
 
-                // Add delay between requests to avoid rate limiting
-                if (results.length > 0) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-
-                const result = await this.claimGame(gameKey);
-                results.push(result);
+            // Add delay between requests to avoid rate limiting
+            if (results.length > 0) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
 
-            return results;
-        } catch (error) {
-            logger.error({ msg: "Error in claimAll", err: error });
-            return [];
+            try {
+                const result = await this.claimGame(gameKey);
+                results.push(result);
+            } catch (error) {
+                logger.error({ msg: `Error claiming ${gameKey}`, err: error });
+                results.push({
+                    success: false,
+                    game: HOYOLAB_GAMES[gameKey]?.name ?? gameKey,
+                    message: "Request failed"
+                });
+            }
         }
+
+        return results;
     }
 
     /**

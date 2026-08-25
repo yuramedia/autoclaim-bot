@@ -12,10 +12,7 @@ import {
     StringSelectMenuOptionBuilder
 } from "discord.js";
 import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fix";
-import { downloadMedia, downloadDirect } from "../services/media-downloader";
-import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
-import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
-import { getGuildSettings, type IGuildSettings } from "../database/models/guild-settings";
+import { getCachedGuildSettings, type IGuildSettings } from "../database/models/guild-settings";
 import { getMaxDownloadSize } from "../constants/media-downloader";
 import { checkAntihack } from "./antihack";
 import { logger } from "../core/logger";
@@ -87,18 +84,19 @@ export async function handleMessage(message: Message): Promise<void> {
         // Skip webhook messages
         if (message.webhookId) return;
 
+        // Get guild settings once (cached, single DB read per TTL window)
+        // and share it with the antihack check to avoid a duplicate query.
+        const settings = await getCachedGuildSettings(message.guild.id);
+
         // Antihack: check if this is a trap channel message
         // If triggered (user banned), stop all further processing
-        const antihackTriggered = await checkAntihack(message);
+        const antihackTriggered = await checkAntihack(message, settings);
         if (antihackTriggered) return;
 
         // Skip if already processed
         if (processedMessages.has(message.id)) return;
         processedMessages.add(message.id);
         setTimeout(() => processedMessages.delete(message.id), CACHE_TTL);
-
-        // Get guild settings
-        const settings = await getGuildSettings(message.guild.id);
 
         // Skip if embed fix is disabled
         if (!settings.embedFix.enabled) return;
@@ -169,6 +167,8 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
             // postId format: "nyaa:1273100" or "sukebei:4181966#com-15"
             const match = processed.postId.match(/^(nyaa|sukebei):(\d+)(?:(#com-\d+))?$/);
             if (match) {
+                const { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } =
+                    await import("../services/nyaa");
                 const provider = match[1] as "nyaa" | "sukebei";
                 const viewId = match[2]!;
                 const commentIdKey = match[3];
@@ -234,6 +234,7 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
         }
         // Try to fetch rich post info for other platforms
         else if (settings.embedFix.richEmbeds) {
+            const { fetchPostInfo, buildRichEmbed } = await import("../services/embed-builder");
             const postInfo = await fetchPostInfo(processed.fixedUrl, processed.platform, processed.postId);
 
             if (postInfo) {
@@ -246,14 +247,20 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
 
                     if (processed.platform.id === PlatformId.FACEBOOK) {
                         // Facebook video URLs from our scraper are direct mp4 links
-                        downloadResult = await downloadDirect(postInfo.video, "facebook_video.mp4", maxSizeLimit);
+                        const directDownloader = await import("../services/media-downloader");
+                        downloadResult = await directDownloader.downloadDirect(
+                            postInfo.video,
+                            "facebook_video.mp4",
+                            maxSizeLimit
+                        );
 
                         // If direct download fails (e.g. maxContentLength exceeded), fallback to VKrDownloader
                         // which might offer lower resolutions via the select menu
                         if (!downloadResult.success) {
-                            downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
+                            downloadResult = await directDownloader.downloadMedia(processed.originalUrl, maxSizeLimit);
                         }
                     } else {
+                        const { downloadMedia } = await import("../services/media-downloader");
                         downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
                     }
 
@@ -278,6 +285,7 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
         if (embeds.length === 0) {
             // For platforms with download support, try to download media
             if (settings.embedFix.autoUpload && canDownload) {
+                const { downloadMedia } = await import("../services/media-downloader");
                 const downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
 
                 if (downloadResult.success && downloadResult.buffer) {

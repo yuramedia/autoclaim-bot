@@ -5,9 +5,9 @@
 
 import he from "he";
 const { decode } = he;
-import { XMLParser } from "fast-xml-parser";
 import { YT_FEED_BASE_URL, YT_ICON_CACHE_TTL } from "../constants/youtube-feed";
 import { logger } from "../core/logger";
+import { parseXml, xmlNodeArray, xmlText, xmlAttr, type XmlNode } from "../utils/xml";
 import type { YouTubeFeedEntry, FormattedYouTubeVideo, YouTubeVideoStatusType } from "../types/youtube-feed";
 
 /** Cached channel icon entry with TTL tracking */
@@ -30,15 +30,6 @@ const REGION_HL_MAP: Record<string, string> = {
 
 export class YouTubeFeedService {
     private channelIconCache: Map<string, CachedIcon> = new Map();
-
-    /**
-     * Shared XML parser instance — reused across all feed parses to avoid reinstantiation.
-     */
-    private xmlParser = new XMLParser({
-        ignoreAttributes: false,
-        attributeNamePrefix: "@_",
-        isArray: (name: string) => name === "entry" || name === "link" || name === "media:thumbnail"
-    });
 
     /**
      * Fetch a URL with an abort timeout and standardized headers.
@@ -277,59 +268,32 @@ export class YouTubeFeedService {
     }
 
     /**
-     * Parse YouTube Atom XML into array of YouTubeFeedEntry objects using fast-xml-parser.
+     * Parse YouTube Atom XML into array of YouTubeFeedEntry objects using Bun.XML.
      * @param xml Raw Atom XML text
      */
     private parseAtomFeed(xml: string): YouTubeFeedEntry[] {
         const entries: YouTubeFeedEntry[] = [];
         try {
-            const result = this.xmlParser.parse(xml);
-            const rawEntries = result?.feed?.entry || [];
+            const feed = parseXml(xml).feed as XmlNode | undefined;
+            const rawEntries = xmlNodeArray(feed?.entry);
 
             for (const entry of rawEntries) {
                 try {
                     const videoId = String(entry["yt:videoId"] || entry.id || "").replace(/^yt:video:/, "");
-                    const title =
-                        typeof entry.title === "object"
-                            ? String(entry.title?.["#text"] || "")
-                            : String(entry.title || "");
+                    const title = xmlText(entry.title);
                     const channelId = String(entry["yt:channelId"] || "");
-                    const channelName =
-                        typeof entry.author?.name === "object"
-                            ? String(entry.author?.name?.["#text"] || "")
-                            : String(entry.author?.name || "");
+                    const channelName = xmlText((entry.author as XmlNode | undefined)?.name);
                     const published = String(entry.published || "");
                     const updated = String(entry.updated || "");
 
-                    const mediaGroup = entry["media:group"];
-                    let thumbnail: string | null = null;
+                    const mediaGroup = entry["media:group"] as XmlNode | undefined;
+                    const thumbnails = xmlNodeArray(mediaGroup?.["media:thumbnail"]);
+                    const thumbnail =
+                        xmlAttr(thumbnails[0], "url") || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+                    const description = xmlText(mediaGroup?.["media:description"]);
 
-                    if (Array.isArray(mediaGroup?.["media:thumbnail"]) && mediaGroup["media:thumbnail"].length > 0) {
-                        thumbnail = mediaGroup["media:thumbnail"][0]?.["@_url"] || null;
-                    } else if (mediaGroup?.["media:thumbnail"]?.["@_url"]) {
-                        thumbnail = mediaGroup["media:thumbnail"]["@_url"];
-                    }
-
-                    if (!thumbnail && videoId) {
-                        thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-                    }
-
-                    const description =
-                        typeof mediaGroup?.["media:description"] === "object"
-                            ? String(mediaGroup["media:description"]?.["#text"] || "")
-                            : String(mediaGroup?.["media:description"] || "");
-
-                    let link = "";
-                    if (Array.isArray(entry.link)) {
-                        const altLink = entry.link.find(
-                            (l: Record<string, string>) => l["@_rel"] === "alternate" || !l["@_rel"]
-                        );
-                        link = altLink?.["@_href"] || "";
-                    }
-
-                    if (!link && videoId) {
-                        link = `https://www.youtube.com/watch?v=${videoId}`;
-                    }
+                    const altLink = xmlNodeArray(entry.link).find(l => l["@rel"] === "alternate" || !l["@rel"]);
+                    const link = xmlAttr(altLink, "href") || "";
 
                     if (videoId && title) {
                         entries.push({
@@ -341,7 +305,7 @@ export class YouTubeFeedService {
                             updated,
                             thumbnail,
                             description,
-                            link
+                            link: link || `https://www.youtube.com/watch?v=${videoId}`
                         });
                     }
                 } catch (entryError) {

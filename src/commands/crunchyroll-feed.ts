@@ -8,7 +8,8 @@ import {
     type ChatInputCommandInteraction,
     PermissionFlagsBits,
     ChannelType,
-    EmbedBuilder
+    EmbedBuilder,
+    MessageFlags
 } from "discord.js";
 import { getGuildSettings, type ICrunchyrollFeedSettings } from "../database/models/guild-settings";
 import { logger } from "../core/logger";
@@ -46,12 +47,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         if (!interaction.guildId) {
             await interaction.reply({
                 content: "❌ This command can only be used in a server.",
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
             return;
         }
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const subcommand = interaction.options.getSubcommand();
         const settings = await getGuildSettings(interaction.guildId);
@@ -123,7 +124,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             } else {
                 await interaction.reply({
                     content: "❌ An error occurred while processing the Crunchyroll feed command.",
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
         } catch (e) {

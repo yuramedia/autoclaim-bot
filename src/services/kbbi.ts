@@ -95,7 +95,8 @@ const extractDefinitions = ($: cheerio.CheerioAPI, selector: string): string[] =
 const searchThesaurus = async (url: string): Promise<{ class: string; words: string[] }[]> => {
     try {
         const response = await axios.get(url, {
-            headers: { "User-Agent": KBBI_USER_AGENT }
+            headers: { "User-Agent": KBBI_USER_AGENT },
+            timeout: 15000
         });
         const $ = cheerio.load(response.data);
         const groupedSynonyms: { class: string; words: string[] }[] = [];
@@ -172,7 +173,8 @@ export const searchKbbi = async (word: string): Promise<KbbiResult | null> => {
         const response = await axios.get(url, {
             headers: {
                 "User-Agent": KBBI_USER_AGENT
-            }
+            },
+            timeout: 15000
         });
 
         const $ = cheerio.load(response.data);

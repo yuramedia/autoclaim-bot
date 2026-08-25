@@ -63,59 +63,70 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         const embed = new EmbedBuilder().setTitle("🎁 Daily Claim Results").setColor(0x00ae86).setTimestamp();
 
+        // Run services in parallel — they hit independent APIs and each
+        // persists its own atomic result update.
+        const [hoyolabField, endfieldField] = await Promise.all([
+            (async (): Promise<{ name: string; value: string } | null> => {
+                if ((service !== "all" && service !== "hoyolab") || !user.hoyolab?.token) return null;
+                try {
+                    const hoyolabDecrypt = decryptTokenCompat(user.hoyolab.token);
+                    const hoyolabService = new HoyolabService(hoyolabDecrypt.value);
+                    const results = await hoyolabService.claimAll(user.hoyolab.games);
+
+                    // Atomic update — avoids race with scheduler overwriting the same document
+                    const hoyolabResultText = results.map(r => `${r.game}: ${r.success ? "✅" : "❌"}`).join(", ");
+                    const hoyolabUpdate: Record<string, unknown> = {
+                        "hoyolab.lastClaim": new Date(),
+                        "hoyolab.lastClaimResult": hoyolabResultText
+                    };
+                    // Re-encrypt token in v1 format if it came from legacy/plaintext
+                    if (hoyolabDecrypt.needsReEncryption) {
+                        hoyolabUpdate["hoyolab.token"] = encryptToken(hoyolabDecrypt.value);
+                    }
+                    await User.updateOne({ discordId: interaction.user.id }, { $set: hoyolabUpdate });
+
+                    return { name: "🌟 Hoyolab", value: formatHoyolabResults(results) };
+                } catch (error) {
+                    logger.error(error, "[Claim] Hoyolab claim failed");
+                    throw error;
+                }
+            })(),
+            (async (): Promise<{ name: string; value: string } | null> => {
+                if ((service !== "all" && service !== "endfield") || !user.endfield?.accountToken) return null;
+                try {
+                    const endfieldDecrypt = decryptTokenCompat(user.endfield.accountToken);
+                    const endfieldService = new EndfieldService({
+                        accountToken: endfieldDecrypt.value
+                    });
+                    const result = await endfieldService.claim();
+
+                    // Atomic update — avoids race with scheduler overwriting the same document
+                    const endfieldResultText = result.success ? "✅ Success" : `❌ ${result.message}`;
+                    const endfieldUpdate: Record<string, unknown> = {
+                        "endfield.lastClaim": new Date(),
+                        "endfield.lastClaimResult": endfieldResultText
+                    };
+                    // Re-encrypt token in v1 format if it came from legacy/plaintext
+                    if (endfieldDecrypt.needsReEncryption) {
+                        endfieldUpdate["endfield.accountToken"] = encryptToken(endfieldDecrypt.value);
+                    }
+                    await User.updateOne({ discordId: interaction.user.id }, { $set: endfieldUpdate });
+
+                    return { name: "🎮 Endfield", value: formatEndfieldResult(result) };
+                } catch (error) {
+                    logger.error(error, "[Claim] Endfield claim failed");
+                    throw error;
+                }
+            })()
+        ]);
+
         let hasResults = false;
-
-        // Claim Hoyolab
-        if ((service === "all" || service === "hoyolab") && user.hoyolab?.token) {
-            const hoyolabDecrypt = decryptTokenCompat(user.hoyolab.token);
-            const hoyolabService = new HoyolabService(hoyolabDecrypt.value);
-            const results = await hoyolabService.claimAll(user.hoyolab.games);
-
-            embed.addFields({
-                name: "🌟 Hoyolab",
-                value: formatHoyolabResults(results),
-                inline: false
-            });
-
-            // Atomic update — avoids race with scheduler overwriting the same document
-            const hoyolabResultText = results.map(r => `${r.game}: ${r.success ? "✅" : "❌"}`).join(", ");
-            const hoyolabUpdate: Record<string, unknown> = {
-                "hoyolab.lastClaim": new Date(),
-                "hoyolab.lastClaimResult": hoyolabResultText
-            };
-            // Re-encrypt token in v1 format if it came from legacy/plaintext
-            if (hoyolabDecrypt.needsReEncryption) {
-                hoyolabUpdate["hoyolab.token"] = encryptToken(hoyolabDecrypt.value);
-            }
-            await User.updateOne({ discordId: interaction.user.id }, { $set: hoyolabUpdate });
+        if (hoyolabField) {
+            embed.addFields({ ...hoyolabField, inline: false });
             hasResults = true;
         }
-
-        // Claim Endfield
-        if ((service === "all" || service === "endfield") && user.endfield?.accountToken) {
-            const endfieldDecrypt = decryptTokenCompat(user.endfield.accountToken);
-            const endfieldService = new EndfieldService({
-                accountToken: endfieldDecrypt.value
-            });
-            const result = await endfieldService.claim();
-
-            embed.addFields({
-                name: "🎮 Endfield",
-                value: formatEndfieldResult(result),
-                inline: false
-            });
-
-            // Atomic update — avoids race with scheduler overwriting the same document
-            const endfieldResultText = result.success ? "✅ Success" : `❌ ${result.message}`;
-            const endfieldUpdate: Record<string, unknown> = {
-                "endfield.lastClaim": new Date(),
-                "endfield.lastClaimResult": endfieldResultText
-            };
-            // Re-encrypt token in v1 format if it came from legacy/plaintext
-            if (endfieldDecrypt.needsReEncryption) {
-                endfieldUpdate["endfield.accountToken"] = encryptToken(endfieldDecrypt.value);
-            }
-            await User.updateOne({ discordId: interaction.user.id }, { $set: endfieldUpdate });
+        if (endfieldField) {
+            embed.addFields({ ...endfieldField, inline: false });
             hasResults = true;
         }
 

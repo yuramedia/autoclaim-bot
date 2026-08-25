@@ -18,6 +18,43 @@ import { decryptTokenCompat, encryptToken } from "../utils/token-crypto";
 const BATCH_SIZE = 5; // Process 5 users concurrently
 const DELAY_BETWEEN_BATCHES = 2000; // 2 seconds between batches
 
+/** Base filter: users with at least one active credential */
+const USERS_WITH_TOKENS_FILTER: Record<string, unknown> = {
+    $or: [{ "hoyolab.token": { $exists: true, $ne: "" } }, { "endfield.accountToken": { $exists: true, $ne: "" } }]
+};
+
+/** Projection — only fields read during claim processing (keeps cursor light) */
+const CLAIM_PROJECTION = {
+    discordId: 1,
+    "settings.notifyOnClaim": 1,
+    "hoyolab.token": 1,
+    "hoyolab.games": 1,
+    "endfield.accountToken": 1
+};
+
+/** Token-error substrings used to force-notify users regardless of preferences */
+const TOKEN_ERROR_PATTERNS = [
+    "expired",
+    "invalid token",
+    "ACCOUNT_TOKEN",
+    "cookie_token",
+    "Please log in",
+    "decryption failed",
+    "not in encrypted format",
+    "encryption key"
+] as const;
+
+/** Formatter reused for Singapore-time calculations (created once, not per call). */
+const SG_TIME_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Singapore",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+});
+
 /**
  * Start the daily claim scheduler
  * @param client - Discord client instance
@@ -52,15 +89,17 @@ export function startScheduler(client: Client): void {
 }
 
 /**
- * Run daily claims for all users.
+ * Run daily claims for all users (or a filtered subset).
  * Reads users with active tokens and processes them in batches.
  * Only runs on Shard 0 in a sharded deployment to prevent duplicate claims.
  * @param client - Discord client instance for shard guard check.
+ * @param userFilter - Optional Mongo filter restricting which users to process
+ *   (used by missed-claim recovery to re-run only affected users).
  * @returns A promise that resolves when all daily claims are processed.
  */
 let schedulerRunning = false;
 
-export async function runDailyClaims(client: Client): Promise<void> {
+export async function runDailyClaims(client: Client, userFilter?: Record<string, unknown>): Promise<void> {
     // Prevent overlapping runs (cron + missedClaims recovery)
     if (schedulerRunning) {
         logger.info("⏳ Skipping daily claims — previous run still in progress");
@@ -74,13 +113,10 @@ export async function runDailyClaims(client: Client): Promise<void> {
 
     schedulerRunning = true;
     try {
-        // Use cursor for memory efficiency
-        const cursor = User.find({
-            $or: [
-                { "hoyolab.token": { $exists: true, $ne: "" } },
-                { "endfield.accountToken": { $exists: true, $ne: "" } }
-            ]
-        }).cursor();
+        // Use cursor + projection for memory efficiency
+        const cursor = User.find(userFilter ?? USERS_WITH_TOKENS_FILTER)
+            .select(CLAIM_PROJECTION)
+            .cursor();
 
         let batch: Promise<void>[] = [];
         let count = 0;
@@ -204,16 +240,6 @@ async function processUserClaim(user: IUser): Promise<void> {
         // Detect token errors — notify regardless of notifyOnClaim preference.
         // Uses structured Endfield tokenExpired flag + Hoyolab string patterns.
         // Includes decrypt failure strings so users get notified even if decryptToken throws.
-        const TOKEN_ERROR_PATTERNS = [
-            "expired",
-            "invalid token",
-            "ACCOUNT_TOKEN",
-            "cookie_token",
-            "Please log in",
-            "decryption failed",
-            "not in encrypted format",
-            "encryption key"
-        ];
         const hasTokenError =
             hasTokenExpired ||
             results.some(r => TOKEN_ERROR_PATTERNS.some(p => r.toLowerCase().includes(p.toLowerCase())));
@@ -239,15 +265,7 @@ async function processUserClaim(user: IUser): Promise<void> {
  */
 function getSingaporeTime(): { year: number; month: number; day: number; hour: number; minute: number } {
     const now = new Date();
-    const parts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Singapore",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false
-    }).formatToParts(now);
+    const parts = SG_TIME_FORMATTER.formatToParts(now);
 
     const get = (type: string): number => parseInt(parts.find(p => p.type === type)?.value || "0", 10);
 
@@ -294,7 +312,7 @@ export async function checkMissedClaims(client: Client): Promise<void> {
         );
 
         // Find users who have tokens but haven't claimed today
-        const missedCount = await User.countDocuments({
+        const missedFilter = {
             $or: [
                 {
                     "hoyolab.token": { $exists: true, $ne: "" },
@@ -311,11 +329,14 @@ export async function checkMissedClaims(client: Client): Promise<void> {
                     ]
                 }
             ]
-        });
+        };
+
+        const missedCount = await User.countDocuments(missedFilter);
 
         if (missedCount > 0) {
             logger.info(`⚠️ Found ${missedCount} user(s) with missed claims. Running recovery...`);
-            await runDailyClaims(client);
+            // Recovery re-processes ONLY the missed users, not the whole population
+            await runDailyClaims(client, missedFilter);
         } else {
             logger.info("✅ No missed claims detected. All users are up to date.");
         }

@@ -3,7 +3,7 @@
  * Redeem gift codes for HoYoverse game accounts
  */
 
-import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
 import { User } from "../database/models/user";
 import { HoyolabService, type GameAccount } from "../services/hoyolab";
 import { getCodes } from "../services/code-source";
@@ -56,9 +56,13 @@ async function redeemForUser(
         for (const account of accounts) {
             const gameName = getGameDisplayName(gameKey);
             const accInfo = `${gameName} [${account.region_name} - ${account.nickname}]`;
+            let isFirstAttempt = true;
             for (const code of codes) {
-                // Rate limit delay (5 seconds to avoid -1048 and cooldown errors)
-                await new Promise(r => setTimeout(r, 5000));
+                // Rate-limit between consecutive attempts only (avoids -1048 and cooldown errors)
+                if (!isFirstAttempt) {
+                    await new Promise(r => setTimeout(r, REDEEM_RATE_LIMIT_DELAY_MS));
+                }
+                isFirstAttempt = false;
                 try {
                     const result = await hoyolab.redeemCode(gameKey, account, code);
                     const icon = result.success ? "✅" : "❌";
@@ -78,6 +82,9 @@ async function redeemForUser(
     }
 }
 
+/** Rate-limit delay between consecutive redemption attempts (ms). */
+const REDEEM_RATE_LIMIT_DELAY_MS = 5000;
+
 /**
  * Executes the redeem command to perform manual or automatic gift code redemption.
  *
@@ -85,7 +92,7 @@ async function redeemForUser(
  * @returns A promise that resolves when the command finishes.
  */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const user = await User.findOne({ discordId: interaction.user.id });
     if (!user || !user.hoyolab?.token) {
@@ -137,22 +144,23 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             // Hashblen keys: hsr, genshin, zzz
             // Our keys: starRail, genshin, zenlessZoneZero
 
-            // 1. Genshin
+            const gameTasks: Array<{ key: string; codes: string[] }> = [];
             if (sourceCodes.genshin?.length) {
-                const codes = sourceCodes.genshin.map(c => c.code);
-                messages.push(...(await redeemForUser(hoyolab, "genshin", codes)));
+                gameTasks.push({ key: "genshin", codes: sourceCodes.genshin.map(c => c.code) });
             }
-
-            // 2. Star Rail
             if (sourceCodes.hsr?.length) {
-                const codes = sourceCodes.hsr.map(c => c.code);
-                messages.push(...(await redeemForUser(hoyolab, "starRail", codes)));
+                gameTasks.push({ key: "starRail", codes: sourceCodes.hsr.map(c => c.code) });
+            }
+            if (sourceCodes.zzz?.length) {
+                gameTasks.push({ key: "zenlessZoneZero", codes: sourceCodes.zzz.map(c => c.code) });
             }
 
-            // 3. ZZZ
-            if (sourceCodes.zzz?.length) {
-                const codes = sourceCodes.zzz.map(c => c.code);
-                messages.push(...(await redeemForUser(hoyolab, "zenlessZoneZero", codes)));
+            // Games redeem against independent endpoints — run in parallel.
+            const perGameResults = await Promise.all(
+                gameTasks.map(({ key, codes }) => redeemForUser(hoyolab, key, codes))
+            );
+            for (const gameMessages of perGameResults) {
+                messages.push(...gameMessages);
             }
 
             // Split message if too long (Discord limit is 4096 for description, but let's be safe)

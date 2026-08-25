@@ -7,6 +7,16 @@
 import { logger } from "../core/logger";
 import type { AnimeApiResponse, AnimeMetadata } from "../types";
 import { ANIME_API_URL, ANIME_API_USER_AGENT } from "../constants";
+import { fetchWithTimeout } from "../utils/http";
+
+/** Shared request options for animeApi.my.id lookups. */
+const API_OPTIONS = {
+    timeoutMs: 8000,
+    headers: {
+        "User-Agent": ANIME_API_USER_AGENT,
+        Accept: "application/json"
+    }
+} as const;
 
 /**
  * Convert an anime title to a URL-safe slug for platform lookups
@@ -38,20 +48,10 @@ export async function searchAnime(title: string): Promise<AnimeMetadata | null> 
         }
 
         // Try animeplanet slug lookup first, then kaize fallback
-        let response = await fetch(`${ANIME_API_URL}/animeplanet/${slug}`, {
-            headers: {
-                "User-Agent": ANIME_API_USER_AGENT,
-                Accept: "application/json"
-            }
-        });
+        let response = await fetchWithTimeout(`${ANIME_API_URL}/animeplanet/${slug}`, API_OPTIONS);
 
         if (!response.ok) {
-            response = await fetch(`${ANIME_API_URL}/kaize/${slug}`, {
-                headers: {
-                    "User-Agent": ANIME_API_USER_AGENT,
-                    Accept: "application/json"
-                }
-            });
+            response = await fetchWithTimeout(`${ANIME_API_URL}/kaize/${slug}`, API_OPTIONS);
         }
 
         if (response.ok) {
@@ -95,14 +95,7 @@ export async function searchAnime(title: string): Promise<AnimeMetadata | null> 
  */
 export async function fetchAnimeByAnilistId(anilistId: number): Promise<AnimeApiResponse | null> {
     try {
-        const url = `${ANIME_API_URL}/anilist/${anilistId}`;
-
-        const response = await fetch(url, {
-            headers: {
-                "User-Agent": ANIME_API_USER_AGENT,
-                Accept: "application/json"
-            }
-        });
+        const response = await fetchWithTimeout(`${ANIME_API_URL}/anilist/${anilistId}`, API_OPTIONS);
 
         if (!response.ok) {
             return null;
@@ -122,14 +115,7 @@ export async function fetchAnimeByAnilistId(anilistId: number): Promise<AnimeApi
  */
 export async function fetchAnimeByMalId(malId: number): Promise<AnimeApiResponse | null> {
     try {
-        const url = `${ANIME_API_URL}/myanimelist/${malId}`;
-
-        const response = await fetch(url, {
-            headers: {
-                "User-Agent": ANIME_API_USER_AGENT,
-                Accept: "application/json"
-            }
-        });
+        const response = await fetchWithTimeout(`${ANIME_API_URL}/myanimelist/${malId}`, API_OPTIONS);
 
         if (!response.ok) {
             return null;
@@ -149,14 +135,7 @@ export async function fetchAnimeByMalId(malId: number): Promise<AnimeApiResponse
  */
 export async function fetchAnimeByAnidbId(anidbId: number | string): Promise<AnimeApiResponse | null> {
     try {
-        const url = `${ANIME_API_URL}/anidb/${anidbId}`;
-
-        const response = await fetch(url, {
-            headers: {
-                "User-Agent": ANIME_API_USER_AGENT,
-                Accept: "application/json"
-            }
-        });
+        const response = await fetchWithTimeout(`${ANIME_API_URL}/anidb/${anidbId}`, API_OPTIONS);
 
         if (!response.ok) {
             return null;
@@ -184,7 +163,8 @@ export async function getRedirectUrl(
     try {
         const url = `${ANIME_API_URL}/redirect?platform=${fromPlatform}&mediaid=${mediaId}&target=${toPlatform}&israw=true`;
 
-        const response = await fetch(url, {
+        const response = await fetchWithTimeout(url, {
+            timeoutMs: 8000,
             headers: {
                 "User-Agent": ANIME_API_USER_AGENT
             }

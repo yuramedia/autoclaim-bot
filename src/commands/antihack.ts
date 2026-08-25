@@ -9,7 +9,8 @@ import {
     type ChatInputCommandInteraction,
     EmbedBuilder,
     PermissionFlagsBits,
-    ChannelType
+    ChannelType,
+    MessageFlags
 } from "discord.js";
 import { getGuildSettings, updateAntihackSettings } from "../database/models/guild-settings";
 import { ANTIHACK_INFO_EMBED_COLOR } from "../constants";
@@ -72,12 +73,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         if (!interaction.guildId) {
             await interaction.reply({
                 content: "❌ This command can only be used in a server.",
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
             return;
         }
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const subcommand = interaction.options.getSubcommand();
         const settings = await getGuildSettings(interaction.guildId);
@@ -215,7 +216,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             } else {
                 await interaction.reply({
                     content: "❌ An error occurred while updating antihack settings.",
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
         } catch (e) {

@@ -19,9 +19,14 @@ import type { AntihackBanResult, AntihackLogData } from "../types/antihack";
  * avoid redundant DB calls (fixes #21).
  *
  * @param message - The Discord message that triggered the trap
+ * @param prefetchedSettings - Optional settings already fetched by the caller
+ *   (e.g., the embed-fix pipeline) to skip a duplicate DB read.
  * @returns The result of the ban action, or null if not a trap channel
  */
-export async function handleAntihackMessage(message: Message): Promise<AntihackBanResult | null> {
+export async function handleAntihackMessage(
+    message: Message,
+    prefetchedSettings?: IGuildSettings
+): Promise<AntihackBanResult | null> {
     // Skip bots
     if (message.author.bot) return null;
 
@@ -33,10 +38,9 @@ export async function handleAntihackMessage(message: Message): Promise<AntihackB
 
     const guildId = message.guild.id;
 
-    // Fetch settings once and reuse throughout
     let settings: IGuildSettings;
     try {
-        settings = await getGuildSettings(guildId);
+        settings = prefetchedSettings ?? (await getGuildSettings(guildId));
     } catch {
         return null;
     }

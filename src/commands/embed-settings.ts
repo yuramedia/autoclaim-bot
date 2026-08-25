@@ -3,7 +3,13 @@
  * Configure embed fix feature for the guild
  */
 
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits } from "discord.js";
+import {
+    SlashCommandBuilder,
+    ChatInputCommandInteraction,
+    EmbedBuilder,
+    PermissionFlagsBits,
+    MessageFlags
+} from "discord.js";
 import { getGuildSettings, updateEmbedFixSettings } from "../database/models/guild-settings";
 import { PLATFORMS } from "../constants";
 import { PlatformId } from "../types";
@@ -56,12 +62,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         if (!interaction.guildId) {
             await interaction.reply({
                 content: "❌ This command can only be used in a server.",
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
             return;
         }
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const subcommand = interaction.options.getSubcommand();
         const settings = await getGuildSettings(interaction.guildId);
@@ -188,7 +194,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             } else {
                 await interaction.reply({
                     content: "❌ An error occurred while updating embed settings.",
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
         } catch (e) {

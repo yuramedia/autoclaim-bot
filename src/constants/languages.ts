@@ -1,4 +1,5 @@
 import { logger } from "../core/logger";
+import { fetchWithTimeout } from "../utils/http";
 
 /**
  * Language code to display name mapping.
@@ -47,8 +48,12 @@ export async function fetchCrunchyrollLanguages(): Promise<void> {
         const audioUrl = "https://static.crunchyroll.com/config/i18n/v3/audio_languages.json";
 
         const [timedTextRes, audioRes] = (await Promise.all([
-            fetch(timedTextUrl).then(res => (res.ok ? res.json() : null)),
-            fetch(audioUrl).then(res => (res.ok ? res.json() : null))
+            fetchWithTimeout(timedTextUrl, { timeoutMs: 8000 })
+                .then(res => (res.ok ? res.json() : null))
+                .catch(() => null),
+            fetchWithTimeout(audioUrl, { timeoutMs: 8000 })
+                .then(res => (res.ok ? res.json() : null))
+                .catch(() => null)
         ])) as [unknown, unknown];
 
         const merged: Record<string, string> = {};

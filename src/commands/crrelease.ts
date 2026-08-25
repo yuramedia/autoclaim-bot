@@ -113,6 +113,15 @@ async function getValidSeasons(): Promise<{ tag: string; label: string }[]> {
 }
 
 /**
+ * Pre-warm the valid-seasons cache in the background.
+ * Called once at startup so the first user autocomplete does not pay the
+ * multi-probe latency cost while Discord's 3-second window is ticking.
+ */
+export function prewarmSeasonCache(): void {
+    void getValidSeasons().catch(err => logger.error(err, "Season cache prewarm failed"));
+}
+
+/**
  * Build paginated embeds for a list of series
  */
 function buildEmbed(

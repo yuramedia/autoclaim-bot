@@ -10,6 +10,8 @@ const { decode } = he;
 import type { U2FeedItem, FormattedU2Item } from "../types/u2-feed";
 import { U2_IMAGE_PATTERN, U2_ATTACH_IMAGE_PATTERN } from "../constants/u2-feed";
 import { logger } from "../core/logger.js";
+import { fetchWithTimeout } from "../utils/http";
+import { parseXml, xmlNodeArray, xmlText, type XmlNode } from "../utils/xml";
 
 /**
  * Light-escape special characters in URLs before fetching
@@ -49,27 +51,19 @@ export class U2FeedService {
      */
     async fetchFeed(feedUrl: string): Promise<U2FeedItem[]> {
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-            let xml = "";
-            try {
-                const response = await fetch(lightEscapeURL(feedUrl), {
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (compatible; AutoClaimBot/1.0)"
-                    },
-                    signal: controller.signal
-                });
-
-                if (!response.ok) {
-                    logger.error(`U2 RSS fetch failed: ${response.status}`);
-                    return [];
+            const response = await fetchWithTimeout(lightEscapeURL(feedUrl), {
+                timeoutMs: 15000,
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (compatible; AutoClaimBot/1.0)"
                 }
+            });
 
-                xml = await response.text();
-            } finally {
-                clearTimeout(timeoutId);
+            if (!response.ok) {
+                logger.error(`U2 RSS fetch failed: ${response.status}`);
+                return [];
             }
+
+            const xml = await response.text();
             return this.parseItems(xml);
         } catch (error) {
             logger.error(error, "U2 RSS fetch error");
@@ -78,21 +72,15 @@ export class U2FeedService {
     }
 
     /**
-     * Parse RSS XML into U2FeedItem array using fast-xml-parser.
+     * Parse RSS XML into U2FeedItem array using Bun.XML.
      * @param xml - Raw RSS XML string.
      * @returns Array of parsed U2FeedItems.
      */
     private parseItems(xml: string): U2FeedItem[] {
         const items: U2FeedItem[] = [];
         try {
-            const { XMLParser } = require("fast-xml-parser");
-            const parser = new XMLParser({
-                ignoreAttributes: false,
-                attributeNamePrefix: "@_",
-                isArray: (name: string) => name === "item"
-            });
-            const result = parser.parse(xml);
-            const rawItems = result?.rss?.channel?.item || [];
+            const channel = (parseXml(xml).rss as XmlNode | undefined)?.channel as XmlNode | undefined;
+            const rawItems = xmlNodeArray(channel?.item);
 
             for (const item of rawItems) {
                 try {
@@ -101,19 +89,11 @@ export class U2FeedService {
                     const description = String(item.description || "");
                     const author = String(item.author || "");
 
-                    const guidRaw = item.guid;
-                    const guid =
-                        (typeof guidRaw === "object" ? String(guidRaw?.["#text"] || "") : String(guidRaw || "")) || "";
-
+                    const guid = xmlText(item.guid);
                     const pubDate = String(item.pubDate || "");
+                    const category = xmlText(item.category);
 
-                    const categoryRaw = item.category;
-                    const category =
-                        (typeof categoryRaw === "object"
-                            ? String(categoryRaw?.["#text"] || "")
-                            : String(categoryRaw || "")) || "";
-
-                    const lengthAttr = item.enclosure?.["@_length"];
+                    const lengthAttr = (item.enclosure as XmlNode | undefined)?.["@length"];
                     const sizeBytes = lengthAttr ? parseInt(String(lengthAttr), 10) : null;
 
                     items.push({

@@ -9,7 +9,8 @@ import {
     PermissionFlagsBits,
     ChannelType,
     EmbedBuilder,
-    TextChannel
+    TextChannel,
+    MessageFlags
 } from "discord.js";
 import { getGuildSettings } from "../database/models/guild-settings";
 import { CrunchyrollService } from "../services/crunchyroll";
@@ -88,12 +89,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         if (!interaction.guildId) {
             await interaction.reply({
                 content: "❌ This command can only be used in a server.",
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
             return;
         }
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const group = interaction.options.getSubcommandGroup();
         const subcommand = interaction.options.getSubcommand();

@@ -247,7 +247,7 @@ async function processUserClaim(user: IUser): Promise<void> {
         // Publish to RAMEN:
         // - always if there is a token error (user must know even if notifications are off)
         // - conditionally if notifyOnClaim is enabled
-        if (results.length > 0 && (user.settings.notifyOnClaim || hasTokenError)) {
+        if (results.length > 0 && (user.settings?.notifyOnClaim || hasTokenError)) {
             ramen.publish("account:claim_result", {
                 discordId: user.discordId,
                 results,

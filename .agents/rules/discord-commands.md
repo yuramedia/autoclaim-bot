@@ -45,7 +45,7 @@ try {
     const reply = interaction.deferred ? interaction.editReply : interaction.reply;
     await reply.call(interaction, {
         content: "An error occurred!",
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 ```
@@ -61,10 +61,10 @@ await interaction.reply({ embeds: [embed] });
 
 ### Ephemeral Messages
 
-Use ephemeral for sensitive data or error messages:
+Use ephemeral for sensitive data or error messages (`ephemeral: true` is deprecated in discord.js v14):
 
 ```typescript
-await interaction.reply({ content: "Private message", ephemeral: true });
+await interaction.reply({ content: "Private message", flags: MessageFlags.Ephemeral });
 ```
 
 ## Subcommands

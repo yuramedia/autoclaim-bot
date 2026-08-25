@@ -38,8 +38,10 @@ const service = new CrunchyrollService();
 export function startCrunchyrollLineupFeed(client: Client): void {
     logger.info("📺 Starting Crunchyroll lineup feed scheduler...");
 
-    // Initial fetch to populate cache
-    initializeCache();
+    // Initial fetch to populate cache (shard-guarded — only shard 0 polls/publishes)
+    if (!client.shard || client.shard.ids[0] === 0) {
+        void initializeCache();
+    }
 
     // Poll every interval
     setInterval(async () => {

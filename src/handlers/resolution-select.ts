@@ -1,6 +1,5 @@
 import { StringSelectMenuInteraction, AttachmentBuilder, MessageFlags } from "discord.js";
 import { videoSelectionCache } from "./message";
-import { downloadDirect } from "../services/media-downloader";
 import { getMaxDownloadSize } from "../constants/media-downloader";
 import { logger } from "../core/logger";
 
@@ -47,6 +46,8 @@ export async function handleResolutionSelect(interaction: StringSelectMenuIntera
 
         try {
             // Download directly from the format URL provided by VKrDownloader
+            // (lazy-loaded — media-downloader pulls heavy deps only when needed)
+            const { downloadDirect } = await import("../services/media-downloader");
             const result = await downloadDirect(selectedFormatUrl, "video.mp4", maxSizeLimit);
 
             if (result.success && result.buffer) {

@@ -100,7 +100,7 @@ async function shutdown(signal: string): Promise<void> {
     shutdownCooldown();
 
     try {
-        client.destroy();
+        await client.destroy();
     } catch (error) {
         logger.warn(error, "Error while destroying Discord client");
     }

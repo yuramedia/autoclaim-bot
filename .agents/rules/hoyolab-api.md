@@ -27,7 +27,7 @@ Mention `@hoyolab-api` to activate these rules.
 
 For certain endpoints, DS header is required:
 
-- Use salt: `6s25p5ox5y14ber1234567890abcdef`
+- Use salt: `6s25p5ox5y14umn1p61aqyyvbvvl3lrt`
 - Format: `t,r,DS` where DS = MD5 hash
 
 ## Rate Limiting

@@ -12,7 +12,7 @@ import {
     EmbedBuilder,
     MessageFlags
 } from "discord.js";
-import { getGuildSettings } from "../database/models/guild-settings";
+import { getGuildSettings, updateYouTubeFeedSettings } from "../database/models/guild-settings";
 import { YouTubeFeedService } from "../services/youtube-feed";
 import { YT_COLOR, YT_ICON, YT_MAX_CHANNELS_PER_GUILD } from "../constants/youtube-feed";
 import { logger } from "../core/logger";
@@ -128,14 +128,18 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     return;
                 }
 
-                settings.youtubeFeed.youtubeChannels.push({
-                    channelId: resolved.channelId,
-                    channelName: resolved.channelName,
-                    handle: resolved.handle,
-                    region
-                });
-
-                await settings.save();
+                // Atomic array replacement — avoids full-document save() racing other writers
+                const nextChannels = [
+                    ...currentChannels,
+                    {
+                        channelId: resolved.channelId,
+                        channelName: resolved.channelName,
+                        handle: resolved.handle,
+                        region
+                    }
+                ];
+                const updated = await updateYouTubeFeedSettings(guildId, { youtubeChannels: nextChannels });
+                const savedCount = updated.youtubeFeed.youtubeChannels.length;
 
                 const embed = new EmbedBuilder()
                     .setColor(YT_COLOR)
@@ -148,17 +152,15 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                         { name: "Region Catalog", value: `\`${region}\``, inline: true }
                     )
                     .setFooter({
-                        text: `Total monitored channels: ${settings.youtubeFeed.youtubeChannels.length}/${YT_MAX_CHANNELS_PER_GUILD}`
+                        text: `Total monitored channels: ${savedCount}/${YT_MAX_CHANNELS_PER_GUILD}`
                     });
 
-                if (!settings.youtubeFeed.enabled || !settings.youtubeFeed.channelId) {
+                if (!updated.youtubeFeed.enabled || !updated.youtubeFeed.channelId) {
                     embed.setDescription(
                         "⚠️ **Note:** Feed notifications are not enabled yet. Use `/youtube enable` to select a Discord channel."
                     );
                 } else {
-                    embed.setDescription(
-                        `New video notifications will be sent to <#${settings.youtubeFeed.channelId}>`
-                    );
+                    embed.setDescription(`New video notifications will be sent to <#${updated.youtubeFeed.channelId}>`);
                 }
 
                 await interaction.editReply({ embeds: [embed] });
@@ -197,8 +199,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     return;
                 }
 
-                const removed = settings.youtubeFeed.youtubeChannels.splice(index, 1)[0];
-                await settings.save();
+                const removed = currentChannels[index];
+
+                // Atomic array replacement — avoids full-document save() racing other writers
+                const nextChannels = currentChannels.filter((_, i) => i !== index);
+                await updateYouTubeFeedSettings(guildId, { youtubeChannels: nextChannels });
 
                 if (!removed) {
                     await interaction.editReply({
@@ -244,11 +249,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
             case "enable": {
                 const targetChannel = interaction.options.getChannel("channel", true) as TextChannel;
-                const channelsCount = settings.youtubeFeed?.youtubeChannels?.length || 0;
 
-                settings.youtubeFeed.enabled = true;
-                settings.youtubeFeed.channelId = targetChannel.id;
-                await settings.save();
+                const updated = await updateYouTubeFeedSettings(guildId, {
+                    enabled: true,
+                    channelId: targetChannel.id
+                });
+                const channelsCount = updated.youtubeFeed.youtubeChannels.length;
 
                 const embed = new EmbedBuilder()
                     .setColor(YT_COLOR)
@@ -270,8 +276,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
 
             case "disable": {
-                settings.youtubeFeed.enabled = false;
-                await settings.save();
+                await updateYouTubeFeedSettings(guildId, { enabled: false });
 
                 await interaction.editReply({
                     content: "✅ YouTube feed notifications have been disabled."

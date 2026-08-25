@@ -12,8 +12,7 @@ import {
     EmbedBuilder,
     MessageFlags
 } from "discord.js";
-import { getGuildSettings } from "../database/models/guild-settings";
-import type { IU2FeedSettings } from "../types/u2-feed";
+import { getGuildSettings, updateU2FeedSettings } from "../database/models/guild-settings";
 import { U2_DEFAULT_FILTER } from "../constants/u2-feed";
 import { logger } from "../core/logger";
 
@@ -64,7 +63,6 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     try {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const settings = await getGuildSettings(guildId);
         const subcommand = interaction.options.getSubcommand();
 
         switch (subcommand) {
@@ -82,12 +80,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     return;
                 }
 
-                settings.u2Feed = {
+                await updateU2FeedSettings(guildId, {
                     enabled: true,
                     channelId: channel.id,
                     filter
-                } as IU2FeedSettings;
-                await settings.save();
+                });
 
                 await interaction.editReply({
                     embeds: [
@@ -103,12 +100,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
 
             case "disable": {
-                settings.u2Feed = {
+                await updateU2FeedSettings(guildId, {
                     enabled: false,
                     channelId: null,
                     filter: U2_DEFAULT_FILTER
-                } as IU2FeedSettings;
-                await settings.save();
+                });
 
                 await interaction.editReply({
                     content: "✅ U2 BDMV feed notifications have been disabled."
@@ -117,6 +113,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
 
             case "status": {
+                const settings = await getGuildSettings(guildId);
                 const feed = settings.u2Feed;
                 const embed = new EmbedBuilder()
                     .setColor(feed?.enabled ? 0x00ff00 : 0xff0000)

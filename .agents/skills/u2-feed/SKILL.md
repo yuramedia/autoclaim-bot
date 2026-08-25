@@ -38,10 +38,6 @@ For U2, items match on **link OR title** (case-insensitive). This handles U2's b
 
 Each cached item has a `wasPosted` flag. On first run, all items are cached with `wasPosted = true` (silent). Only subsequent new items get posted.
 
-### First-Run 24h Skip
-
-Items older than 24 hours are skipped on the first check to avoid spamming stale content.
-
 ### Cross-Posting
 
 After sending an embed, `message.crosspost()` is called for announcement channels.
@@ -64,8 +60,8 @@ Guilds configure via `/u2-feed enable #channel [filter]`:
 
 ## Scheduler Behavior
 
-- **Poll interval**: 10 minutes
-- **First run**: caches items silently (wasPosted = true), skips items >24h old
+- **Poll interval**: 1 minute
+- **First run**: caches items silently (wasPosted = true), posts nothing
 - **Subsequent runs**: posts new items matching the guild's filter regex
 - **Cache**: in-memory array of `FormattedU2Item`, capped at 50, sorted by pubDate desc
 - **Shard-safe**: only runs on shard 0

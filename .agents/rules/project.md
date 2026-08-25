@@ -49,8 +49,10 @@ This is a Discord bot that provides auto-claim functionality for Hoyolab and End
 ## Scripts
 
 - `bun run dev` - Start development server
-- `bun run build` - Build for production
+- `bun run start` - Start the bot (sharded)
 - `bun run deploy` - Deploy slash commands to Discord
+- `bun run test` - Run the test suite
+- `bun run typecheck` - Type-check with tsc --noEmit
 - `bun run format` - Format all files with Oxfmt
 - `bun run format:check` - Check formatting without writing
 - `bun run lint` - Lint `src/` with Oxlint

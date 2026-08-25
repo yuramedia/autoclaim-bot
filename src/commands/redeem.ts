@@ -85,6 +85,9 @@ async function redeemForUser(
 /** Rate-limit delay between consecutive redemption attempts (ms). */
 const REDEEM_RATE_LIMIT_DELAY_MS = 5000;
 
+/** Stagger between parallel per-game loop starts to avoid an initial burst (ms). */
+const REDEEM_GAME_STAGGER_MS = 1500;
+
 /**
  * Executes the redeem command to perform manual or automatic gift code redemption.
  *
@@ -155,9 +158,15 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 gameTasks.push({ key: "zenlessZoneZero", codes: sourceCodes.zzz.map(c => c.code) });
             }
 
-            // Games redeem against independent endpoints — run in parallel.
+            // Games redeem against independent endpoints — run in parallel,
+            // with staggered starts so they don't burst the account at once.
             const perGameResults = await Promise.all(
-                gameTasks.map(({ key, codes }) => redeemForUser(hoyolab, key, codes))
+                gameTasks.map(async ({ key, codes }, i) => {
+                    if (i > 0) {
+                        await new Promise(r => setTimeout(r, i * REDEEM_GAME_STAGGER_MS));
+                    }
+                    return redeemForUser(hoyolab, key, codes);
+                })
             );
             for (const gameMessages of perGameResults) {
                 messages.push(...gameMessages);

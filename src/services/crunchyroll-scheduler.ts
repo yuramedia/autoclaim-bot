@@ -42,8 +42,10 @@ export function startCrunchyrollFeed(client: Client): void {
 
     const service = new CrunchyrollService();
 
-    // Initial fetch to populate cache
-    initializeCache(service);
+    // Initial fetch to populate cache (shard-guarded — only shard 0 polls/publishes)
+    if (!client.shard || client.shard.ids[0] === 0) {
+        void initializeCache(service);
+    }
 
     // Poll every interval
     setInterval(async () => {

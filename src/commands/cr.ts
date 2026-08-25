@@ -12,7 +12,7 @@ import {
     TextChannel,
     MessageFlags
 } from "discord.js";
-import { getGuildSettings } from "../database/models/guild-settings";
+import { getGuildSettings, updateCrunchyrollFeedSettings } from "../database/models/guild-settings";
 import { CrunchyrollService } from "../services/crunchyroll";
 import { CRUNCHYROLL_COLOR } from "../constants";
 import { logger } from "../core/logger";
@@ -101,7 +101,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         if (group === "lineup" && subcommand === "announcement") {
             const action = interaction.options.getString("action", true);
-            const settings = await getGuildSettings(interaction.guildId);
+            const guildId = interaction.guildId;
 
             switch (action) {
                 case "enable": {
@@ -113,12 +113,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                         return;
                     }
 
-                    // Save settings
-                    settings.crunchyrollLineup = {
+                    // Save settings atomically
+                    await updateCrunchyrollFeedSettings(guildId, "crunchyrollLineup", {
                         enabled: true,
                         channelId: channel.id
-                    };
-                    await settings.save();
+                    });
 
                     // Immediately fetch and send latest lineup announcement as a preview
                     const announcement = await service.fetchLatestLineupAnnouncement(true);
@@ -149,11 +148,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 }
 
                 case "disable": {
-                    settings.crunchyrollLineup = {
+                    await updateCrunchyrollFeedSettings(guildId, "crunchyrollLineup", {
                         enabled: false,
                         channelId: null
-                    };
-                    await settings.save();
+                    });
 
                     await interaction.editReply({
                         content: "✅ Crunchyroll lineup announcement notifications have been disabled."
@@ -162,6 +160,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 }
 
                 case "status": {
+                    const settings = await getGuildSettings(guildId);
                     const lineup = settings.crunchyrollLineup;
                     const embed = new EmbedBuilder()
                         .setColor(CRUNCHYROLL_COLOR)

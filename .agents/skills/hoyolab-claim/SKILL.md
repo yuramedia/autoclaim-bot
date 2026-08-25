@@ -92,7 +92,7 @@ For App API endpoints:
 
 ```typescript
 function generateDS(): string {
-    const salt = "6s25p5ox5y14ber1234567890abcdef";
+    const salt = "6s25p5ox5y14umn1p61aqyyvbvvl3lrt";
     const t = Math.floor(Date.now() / 1000);
     const r = Math.random().toString(36).substring(2, 8);
     const c = crypto.createHash("md5").update(`salt=${salt}&t=${t}&r=${r}`).digest("hex");

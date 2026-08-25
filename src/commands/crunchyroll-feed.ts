@@ -11,7 +11,7 @@ import {
     EmbedBuilder,
     MessageFlags
 } from "discord.js";
-import { getGuildSettings, type ICrunchyrollFeedSettings } from "../database/models/guild-settings";
+import { getGuildSettings, updateCrunchyrollFeedSettings } from "../database/models/guild-settings";
 import { logger } from "../core/logger";
 
 /**
@@ -54,18 +54,17 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+        const guildId = interaction.guildId;
         const subcommand = interaction.options.getSubcommand();
-        const settings = await getGuildSettings(interaction.guildId);
 
         switch (subcommand) {
             case "enable": {
                 const channel = interaction.options.getChannel("channel", true);
 
-                settings.crunchyrollFeed = {
+                await updateCrunchyrollFeedSettings(guildId, "crunchyrollFeed", {
                     enabled: true,
                     channelId: channel.id
-                } as ICrunchyrollFeedSettings;
-                await settings.save();
+                });
 
                 await interaction.editReply({
                     embeds: [
@@ -80,11 +79,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
 
             case "disable": {
-                settings.crunchyrollFeed = {
+                await updateCrunchyrollFeedSettings(guildId, "crunchyrollFeed", {
                     enabled: false,
                     channelId: null
-                } as ICrunchyrollFeedSettings;
-                await settings.save();
+                });
 
                 await interaction.editReply({
                     content: "✅ Crunchyroll notifications have been disabled."
@@ -93,6 +91,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
 
             case "status": {
+                const settings = await getGuildSettings(guildId);
                 const feed = settings.crunchyrollFeed;
                 const embed = new EmbedBuilder()
                     .setColor(0xf47521)

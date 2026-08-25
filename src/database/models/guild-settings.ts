@@ -182,7 +182,10 @@ export async function getGuildSettings(guildId: string): Promise<IGuildSettings>
                 }
             }
         }
-        return settings!;
+        if (!settings) {
+            throw new Error(`GuildSettings for guild ${guildId} disappeared during get-or-create`);
+        }
+        return settings;
     } catch (error: unknown) {
         logger.error(error, `[getGuildSettings] Failed to fetch settings for guild ${guildId}`);
         throw error;
@@ -262,6 +265,87 @@ export async function updateAntihackSettings(
         return settings!;
     } catch (error: unknown) {
         logger.error(error, `[updateAntihackSettings] Failed to update settings for guild ${guildId}`);
+        throw error;
+    }
+}
+
+/**
+ * Update guild U2 feed settings atomically via dot-path $set.
+ *
+ * @param guildId - The guild ID to update settings for
+ * @param updates - Partial U2 feed settings to apply
+ * @returns The updated guild settings document
+ */
+export async function updateU2FeedSettings(
+    guildId: string,
+    updates: Partial<IU2FeedSettings>
+): Promise<IGuildSettings> {
+    try {
+        const $set: Record<string, unknown> = {};
+        if (updates.enabled !== undefined) $set["u2Feed.enabled"] = updates.enabled;
+        if (updates.channelId !== undefined) $set["u2Feed.channelId"] = updates.channelId;
+        if (updates.filter !== undefined) $set["u2Feed.filter"] = updates.filter;
+
+        const settings = await GuildSettings.findOneAndUpdate({ guildId }, { $set }, { new: true, upsert: true });
+        invalidateGuildSettingsCache(guildId);
+        return settings!;
+    } catch (error: unknown) {
+        logger.error(error, `[updateU2FeedSettings] Failed to update settings for guild ${guildId}`);
+        throw error;
+    }
+}
+
+/**
+ * Update a Crunchyroll feed section (episode feed or seasonal lineup) atomically
+ * via dot-path $set.
+ *
+ * @param guildId - The guild ID to update settings for
+ * @param section - Which Crunchyroll feed section to update
+ * @param updates - Partial feed settings to apply
+ * @returns The updated guild settings document
+ */
+export async function updateCrunchyrollFeedSettings(
+    guildId: string,
+    section: "crunchyrollFeed" | "crunchyrollLineup",
+    updates: Partial<ICrunchyrollFeedSettings>
+): Promise<IGuildSettings> {
+    try {
+        const $set: Record<string, unknown> = {};
+        if (updates.enabled !== undefined) $set[`${section}.enabled`] = updates.enabled;
+        if (updates.channelId !== undefined) $set[`${section}.channelId`] = updates.channelId;
+
+        const settings = await GuildSettings.findOneAndUpdate({ guildId }, { $set }, { new: true, upsert: true });
+        invalidateGuildSettingsCache(guildId);
+        return settings!;
+    } catch (error: unknown) {
+        logger.error(error, `[updateCrunchyrollFeedSettings] Failed to update ${section} for guild ${guildId}`);
+        throw error;
+    }
+}
+
+/**
+ * Update guild YouTube feed settings atomically via dot-path $set.
+ * The channel list is written as a single atomic array replacement.
+ *
+ * @param guildId - The guild ID to update settings for
+ * @param updates - Partial YouTube feed settings to apply
+ * @returns The updated guild settings document
+ */
+export async function updateYouTubeFeedSettings(
+    guildId: string,
+    updates: Partial<IYouTubeFeedSettings>
+): Promise<IGuildSettings> {
+    try {
+        const $set: Record<string, unknown> = {};
+        if (updates.enabled !== undefined) $set["youtubeFeed.enabled"] = updates.enabled;
+        if (updates.channelId !== undefined) $set["youtubeFeed.channelId"] = updates.channelId;
+        if (updates.youtubeChannels !== undefined) $set["youtubeFeed.youtubeChannels"] = updates.youtubeChannels;
+
+        const settings = await GuildSettings.findOneAndUpdate({ guildId }, { $set }, { new: true, upsert: true });
+        invalidateGuildSettingsCache(guildId);
+        return settings!;
+    } catch (error: unknown) {
+        logger.error(error, `[updateYouTubeFeedSettings] Failed to update settings for guild ${guildId}`);
         throw error;
     }
 }

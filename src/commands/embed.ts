@@ -25,10 +25,6 @@ import {
 } from "discord.js";
 import { findPlatform, applyFix, extractPostId } from "../services/embed-fix";
 import { logger } from "../core/logger";
-import { fetchPostInfo, buildRichEmbed } from "../services/embed-builder";
-import { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } from "../services/nyaa";
-import { buildNekoBTEmbed } from "../services/nekobt";
-import { downloadMedia, downloadDirect } from "../services/media-downloader";
 import type { DownloadResult } from "../types/media-downloader";
 import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
@@ -136,6 +132,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 if (postId) {
                     const match = postId.match(/^(nyaa|sukebei):(\d+)(?:(#com-\d+))?$/);
                     if (match) {
+                        const { fetchNyaaInfo, buildNyaaEmbed, fetchNyaaComment, buildNyaaCommentEmbed } =
+                            await import("../services/nyaa");
                         const provider = match[1] as "nyaa" | "sukebei";
                         const viewId = match[2]!;
                         const commentIdKey = match[3];
@@ -170,6 +168,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
             // NekoBT torrent embeds
             case PlatformId.NEKOBT: {
+                const { buildNekoBTEmbed } = await import("../services/nekobt");
                 const nekoData = await buildNekoBTEmbed(url);
                 if (nekoData) {
                     embeds.push(...nekoData.embeds);
@@ -203,6 +202,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
             // All other platforms: rich embed + optional media download
             default: {
+                const { fetchPostInfo, buildRichEmbed } = await import("../services/embed-builder");
                 const info = await fetchPostInfo(url, platform, postId);
 
                 if (info) {
@@ -211,6 +211,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     // Try to download & upload video when available
                     if (info.video && canDownload) {
                         let downloadResult;
+                        const { downloadMedia, downloadDirect } = await import("../services/media-downloader");
 
                         if (platform.id === PlatformId.FACEBOOK || platform.id === PlatformId.TIKTOK) {
                             downloadResult = await downloadDirect(info.video, `${platform.id}_video.mp4`, maxSizeLimit);
@@ -232,6 +233,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                 // If no rich embed was produced, try downloading media directly
                 if (embeds.length === 0 && files.length === 0 && canDownload) {
+                    const { downloadMedia } = await import("../services/media-downloader");
                     const downloadResult = await downloadMedia(url, maxSizeLimit);
 
                     if (downloadResult.success && downloadResult.buffer) {

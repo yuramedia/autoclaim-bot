@@ -26,6 +26,3 @@ export const U2_PASSKEY_URL_PATTERN = /https?:\/\/u2\.dmhy\.org\/torrentrss\.php
 
 /** Maximum number of items to cache */
 export const U2_MAX_ITEMS = 50;
-
-/** Max age for items on first run (24 hours in ms) */
-export const U2_FIRST_RUN_MAX_AGE = 24 * 60 * 60 * 1000;

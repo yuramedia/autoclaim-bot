@@ -66,7 +66,7 @@ function sleep(ms: number): Promise<void> {
  * @returns Whether the status is stable
  */
 function isStableStatus(statusType: YouTubeVideoStatusType): boolean {
-    return statusType === "video";
+    return statusType === "video" || statusType === "members_only";
 }
 
 /**
@@ -202,8 +202,8 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
 
                 // Determine which entries actually need a status fetch:
                 // - New entries not in cache -> always fetch
-                // - Cached entries with stable status ("video") -> skip
-                // - Cached entries with unstable status ("upcoming", "live", "members_only") -> re-fetch
+                // - Cached entries with stable status ("video", "members_only") -> skip
+                // - Cached entries with unstable status ("upcoming", "live") -> re-fetch
                 const entriesToFetchStatus: { entry: YouTubeFeedEntry; index: number }[] = [];
                 const skippedStatusResults: Map<
                     number,

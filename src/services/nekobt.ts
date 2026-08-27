@@ -1,45 +1,23 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
-import { fetchAnilistCoverByTitle, fetchAnimeImages } from "./amenzb";
+import { fetchAnilistCoverByTitle } from "./anime-metadata";
 import { fetchTsukihimeImagesByBtih } from "./tsukihime";
 import { logger } from "../core/logger";
 import { fetchWithTimeout } from "../utils/http";
+import type { NekoBTTorrentResponse } from "../types";
+import { NEKOBT_API_URL, NEKOBT_EMBED_COLOR, NEKOBT_TORRENT_REGEX } from "../constants";
 
 /**
- * Represents the response structure from NekoBT torrent API
+ * Normalizes a URL path to ensure it is a valid, absolute URL starting with https://.
+ * @param urlStr - The URL string or relative path to normalize
+ * @returns The normalized absolute URL string or null if empty
  */
-export interface NekoBTTorrentResponse {
-    error: boolean;
-    message?: string;
-    data: {
-        id: string;
-        uploaded_at: number; // Unix milliseconds
-        title: string;
-        auto_title: string;
-        description: string | null;
-        filesize: string;
-        magnet: string;
-        infohash: string;
-        seeders: string;
-        leechers: string;
-        completed: string;
-        screenshots: string[];
-        uploader: {
-            id: string;
-            username: string;
-            display_name: string;
-            pfp_hash: string | null;
-        } | null;
-        groups: Array<{
-            id: string;
-            display_name: string;
-            pfp_hash: string | null;
-        }>;
-        animetosho: unknown[] | string;
-        animetosho_fetch_time: string | null;
-    };
+export function normalizeNekoBTUrl(urlStr: string | null | undefined): string | null {
+    if (!urlStr) return null;
+    if (urlStr.startsWith("http://") || urlStr.startsWith("https://")) return urlStr;
+    if (urlStr.startsWith("//")) return `https:${urlStr}`;
+    if (urlStr.startsWith("/")) return `https://nekobt.to${urlStr}`;
+    return `https://nekobt.to/${urlStr}`;
 }
-
-import { NEKOBT_API_URL, NEKOBT_EMBED_COLOR, NEKOBT_TORRENT_REGEX } from "../constants";
 
 /**
  * Extracts NekoBT torrent ID from a given URL.
@@ -71,7 +49,7 @@ export async function fetchNekoBTTorrent(id: string): Promise<NekoBTTorrentRespo
         }
         const data = (await res.json()) as NekoBTTorrentResponse;
         if (data.error) {
-            logger.error(`[NekoBT] API returned error for ${id}: ${data.message}`);
+            logger.error(`[NekoBT] API returned error for ${id}: ${data.message ?? "Unknown error"}`);
             return null;
         }
         return data;
@@ -97,6 +75,28 @@ export function formatBytes(bytes: number, decimals = 2): string {
 }
 
 /**
+ * Parses and normalizes NekoBT timestamp into milliseconds or Date.
+ * @param uploadedAt - Timestamp in Unix seconds, milliseconds, or ISO string
+ * @returns Normalized Date object or null if invalid
+ */
+export function parseNekoBTTimestamp(uploadedAt: number | string | undefined | null): Date | null {
+    if (!uploadedAt) return null;
+    if (typeof uploadedAt === "number") {
+        const ms = uploadedAt < 1e11 ? uploadedAt * 1000 : uploadedAt;
+        const date = new Date(ms);
+        return isNaN(date.getTime()) ? null : date;
+    }
+    const num = Number(uploadedAt);
+    if (!isNaN(num) && uploadedAt.trim() !== "") {
+        const ms = num < 1e11 ? num * 1000 : num;
+        const date = new Date(ms);
+        return isNaN(date.getTime()) ? null : date;
+    }
+    const date = new Date(uploadedAt);
+    return isNaN(date.getTime()) ? null : date;
+}
+
+/**
  * Builds a rich Discord embed and components from a NekoBT torrent URL.
  * @param url - The NekoBT torrent URL
  * @returns Object containing embeds and components, or null if building fails
@@ -117,7 +117,8 @@ export async function buildNekoBTEmbed(
         let uploaderName = data.uploader?.display_name || data.uploader?.username || "Anonymous";
         let authorUrl = data.uploader?.id ? `https://nekobt.to/users/${data.uploader.id}` : "https://nekobt.to";
         let authorIcon = data.uploader?.pfp_hash
-            ? `https://nekobt.to/cdn/pfp/${data.uploader.pfp_hash}`
+            ? (normalizeNekoBTUrl(`/cdn/pfp/${data.uploader.pfp_hash}`) ??
+              "https://avatars.githubusercontent.com/u/221218851?v=4")
             : "https://avatars.githubusercontent.com/u/221218851?v=4";
 
         if (data.groups && data.groups.length > 0) {
@@ -125,29 +126,44 @@ export async function buildNekoBTEmbed(
             if (group) {
                 uploaderName = group.display_name ?? uploaderName;
                 if (group.id) authorUrl = `https://nekobt.to/groups/${group.id}`;
-                if (group.pfp_hash) authorIcon = `https://nekobt.to/cdn/pfp/${group.pfp_hash}`;
+                if (group.pfp_hash) {
+                    const groupIcon = normalizeNekoBTUrl(`/cdn/pfp/${group.pfp_hash}`);
+                    if (groupIcon) authorIcon = groupIcon;
+                }
             }
         }
 
-        const humanSize = formatBytes(parseInt(data.filesize, 10));
+        const sizeInBytes = typeof data.filesize === "number" ? data.filesize : parseInt(String(data.filesize), 10);
+        const humanSize = formatBytes(isNaN(sizeInBytes) ? 0 : sizeInBytes);
+
+        const seedersStr = data.seeders != null ? String(data.seeders) : "0";
+        const leechersStr = data.leechers != null ? String(data.leechers) : "0";
+
+        const screenshots = (data.screenshots ?? [])
+            .map(s => normalizeNekoBTUrl(s))
+            .filter((s): s is string => s !== null);
 
         const embed = new EmbedBuilder()
-            .setTitle(data.title.substring(0, 256))
+            .setTitle((data.title ?? "NekoBT Torrent").substring(0, 256))
             .setURL(url)
-            .setColor(NEKOBT_EMBED_COLOR) // NekoBT pinkish color
+            .setColor(NEKOBT_EMBED_COLOR)
             .setAuthor({
                 name: uploaderName,
                 iconURL: authorIcon,
                 url: authorUrl
             })
             .addFields(
-                { name: "Seeders", value: data.seeders || "0", inline: true },
-                { name: "Leechers", value: data.leechers || "0", inline: true },
+                { name: "Seeders", value: seedersStr, inline: true },
+                { name: "Leechers", value: leechersStr, inline: true },
                 { name: "File Size", value: humanSize, inline: true },
                 { name: "Uploaded By", value: uploaderName, inline: true },
-                { name: "ℹ️ Info Hash", value: `\`${data.infohash}\``, inline: false }
-            )
-            .setTimestamp(data.uploaded_at);
+                { name: "ℹ️ Info Hash", value: `\`${data.infohash ?? "Unknown"}\``, inline: false }
+            );
+
+        const timestamp = parseNekoBTTimestamp(data.uploaded_at);
+        if (timestamp) {
+            embed.setTimestamp(timestamp);
+        }
 
         // Fetch anime images: try Tsukihime first, then ameNZB fallback
         if (data.infohash && data.infohash !== "Unknown" && data.animetosho !== "skipped") {
@@ -155,37 +171,24 @@ export async function buildNekoBTEmbed(
             const tsukiImages = await fetchTsukihimeImagesByBtih(data.infohash);
 
             if (tsukiImages?.cover) {
-                // Tsukihime provided a cover — use it as thumbnail
+                // Tsukihime cover
                 embed.setThumbnail(tsukiImages.cover);
-
-                // Try ameNZB for screenshots as main image
-                const images = await fetchAnimeImages(data.infohash);
-                if (images.screenshots.length > 0) {
-                    embed.setImage(images.screenshots[0] || null);
-                } else if (data.screenshots && data.screenshots.length > 0) {
-                    embed.setImage(data.screenshots[0] || null);
+                if (tsukiImages.screenshots.length > 0) {
+                    embed.setImage(tsukiImages.screenshots[0] || null);
+                } else if (screenshots.length > 0) {
+                    embed.setImage(screenshots[0] || null);
                 }
             } else {
-                // Tsukihime miss — fall back to ameNZB
-                const images = await fetchAnimeImages(data.infohash);
-
-                if (images.cover) {
-                    embed.setThumbnail(images.cover);
-                } else {
-                    const fallbackCover = await fetchAnilistCoverByTitle(data.title);
-                    if (fallbackCover) {
-                        embed.setThumbnail(fallbackCover);
-                    } else if (data.screenshots && data.screenshots.length > 0) {
-                        embed.setThumbnail(data.screenshots[0] || null);
-                    } else if (images.screenshots.length > 1) {
-                        embed.setThumbnail(images.screenshots[1] || null);
-                    }
+                // Tsukihime miss — fall back to AniList cover & NekoBT screenshots
+                const fallbackCover = await fetchAnilistCoverByTitle(data.title);
+                if (fallbackCover) {
+                    embed.setThumbnail(fallbackCover);
+                } else if (screenshots.length > 0) {
+                    embed.setThumbnail(screenshots[0] || null);
                 }
 
-                if (images.screenshots.length > 0) {
-                    embed.setImage(images.screenshots[0] || null);
-                } else if (data.screenshots && data.screenshots.length > 1) {
-                    embed.setImage(data.screenshots[1] || null);
+                if (screenshots.length > 0) {
+                    embed.setImage(screenshots[0] || null);
                 }
             }
         } else {
@@ -193,8 +196,8 @@ export async function buildNekoBTEmbed(
             const fallbackCover = await fetchAnilistCoverByTitle(data.title);
             if (fallbackCover) {
                 embed.setThumbnail(fallbackCover);
-            } else if (data.screenshots && data.screenshots.length > 0) {
-                embed.setThumbnail(data.screenshots[0] || null);
+            } else if (screenshots.length > 0) {
+                embed.setThumbnail(screenshots[0] || null);
             }
         }
 

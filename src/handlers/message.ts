@@ -207,8 +207,9 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
                 }
             }
         }
-        // Custom flow for AmeNZB
+        // Custom flow for AmeNZB (Deprecated)
         else if (processed.platform.id === PlatformId.AMENZB && processed.postId) {
+            logger.warn(`[AmeNZB] Received link for deprecated platform AmeNZB: ${processed.originalUrl}`);
             const { buildAmeNZBEmbed } = await import("../services/amenzb");
             const amenzbEmbed = await buildAmeNZBEmbed(processed.postId, processed.originalUrl);
             if (amenzbEmbed) {

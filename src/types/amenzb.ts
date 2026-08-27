@@ -1,5 +1,5 @@
 /**
- * ameNZB Types
+ * @deprecated ameNZB service and types are deprecated.
  * Type definitions for ameNZB Newznab-compatible Search API
  */
 

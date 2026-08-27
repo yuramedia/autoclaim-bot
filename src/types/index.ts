@@ -55,7 +55,15 @@ export type { NyaaTorrentInfo } from "./nyaa";
 export type { AmeNZBImages, AmeNZBNewznabItem } from "./amenzb";
 
 // Tsukihime types
-export type { TsukihimeTorrent, TsukihimeAnime, TsukihimeImages } from "./tsukihime";
+export type {
+    TsukihimeTorrent,
+    TsukihimeAnime,
+    TsukihimeImages,
+    TsukihimeGroup,
+    TsukihimeTracker,
+    TsukihimeFile,
+    TsukihimeAttachment
+} from "./tsukihime";
 
 // Antihack types
 export type { AntihackBanResult, AntihackLogData } from "./antihack";
@@ -67,3 +75,6 @@ export type {
     IYouTubeFeedSettings,
     IYouTubeFeedChannel
 } from "./youtube-feed";
+
+// NekoBT types
+export type { NekoBTTorrentResponse, NekoBTTorrentData, NekoBTUploader, NekoBTGroup } from "./nekobt";

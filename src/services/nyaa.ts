@@ -9,7 +9,7 @@ import type { NyaaTorrentInfo, NyaaComment, NyaaApiResponse } from "../types/nya
 import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
 import { BROWSER_USER_AGENT } from "../constants/anime";
-import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./amenzb";
+import { fetchAnilistCoverByTitle } from "./anime-metadata";
 import { fetchTsukihimeImagesByNyaa, fetchTsukihimeImagesBySukebei } from "./tsukihime";
 import { logger } from "../core/logger";
 
@@ -196,35 +196,9 @@ export async function buildNyaaCommentEmbed(
     if (tsukihimeCover) {
         // Tsukihime provided a cover — use it as thumbnail
         if (!firstImageUrl) {
-            // No comment image: set cover as thumbnail, try ameNZB for main screenshot
             embed.setThumbnail(tsukihimeCover);
-            if (infoHash && infoHash !== "Unknown") {
-                const images = await fetchAnimeImages(infoHash);
-                if (images.screenshots.length > 0) {
-                    embed.setImage(images.screenshots[0]!);
-                }
-            }
         } else {
             embed.setThumbnail(tsukihimeCover);
-        }
-    } else if (infoHash && infoHash !== "Unknown") {
-        // Tsukihime miss — fall back to ameNZB
-        const images = await fetchAnimeImages(infoHash);
-
-        if (!firstImageUrl && images.screenshots.length > 0) {
-            embed.setImage(images.screenshots[0]!);
-            if (images.cover) {
-                embed.setThumbnail(images.cover);
-            } else if (images.screenshots.length > 1) {
-                embed.setThumbnail(images.screenshots[1]!);
-            }
-        } else {
-            if (images.cover) {
-                embed.setThumbnail(images.cover);
-            } else {
-                const fallbackCover = await fetchAnilistCoverByTitle(torrentTitle);
-                if (fallbackCover) embed.setThumbnail(fallbackCover);
-            }
         }
     } else {
         const fallbackCover = await fetchAnilistCoverByTitle(torrentTitle);
@@ -321,44 +295,12 @@ export async function buildNyaaEmbed(
     }
 
     if (tsukihimeCover) {
-        // Tsukihime provided a cover — use it as thumbnail, try ameNZB for main screenshot
         thumbnail = tsukihimeCover;
-
-        if (!mainImage && info.infoHash && info.infoHash !== "Unknown") {
-            const images = await fetchAnimeImages(info.infoHash);
-            if (images.screenshots.length > 0) {
-                mainImage = images.screenshots[0]!;
-            }
-        }
-
         if (!mainImage) {
-            // No screenshots found — use Tsukihime cover as main image instead
             mainImage = tsukihimeCover;
             thumbnail = null;
         }
-    } else if (info.infoHash && info.infoHash !== "Unknown") {
-        // Tsukihime miss — fall back to ameNZB
-        const images = await fetchAnimeImages(info.infoHash);
-
-        if (!mainImage) {
-            if (images.screenshots.length > 0) {
-                mainImage = images.screenshots[0]!;
-            } else if (images.cover) {
-                mainImage = images.cover;
-            } else {
-                mainImage = await fetchAnilistCoverByTitle(info.title);
-            }
-        }
-
-        if (images.cover && images.cover !== mainImage) {
-            thumbnail = images.cover;
-        } else if (images.screenshots.length > 1 && images.screenshots[1] !== mainImage) {
-            thumbnail = images.screenshots[1]!;
-        } else if (!mainImage) {
-            thumbnail = images.cover || (images.screenshots.length > 0 ? images.screenshots[0]! : null);
-        }
     } else if (!mainImage) {
-        // No infohash and no description images: use anilist cover
         mainImage = await fetchAnilistCoverByTitle(info.title);
     }
 

@@ -180,3 +180,114 @@ export async function getRedirectUrl(
         return null;
     }
 }
+
+/**
+ * Fetches an Anilist cover image by searching with an anime title.
+ * Cleans torrent-style titles before searching.
+ * @param title - The anime title (may contain torrent-style formatting)
+ * @returns Cover image URL, or null if not found
+ */
+export async function fetchAnilistCoverByTitle(title: string): Promise<string | null> {
+    let cleanTitle = title
+        // Remove file extensions
+        .replace(/\.(mkv|mp4|avi|srt|ass)$/i, "")
+        // Remove content in brackets and parentheses
+        .replace(/\[.*?\]/g, "")
+        .replace(/\(.*?\)/g, "");
+
+    // Split by pipe and take the first non-empty part
+    if (cleanTitle.includes("|")) {
+        const parts = cleanTitle
+            .split("|")
+            .map(p => p.trim())
+            .filter(p => p.length > 0);
+        const firstPart = parts[0];
+        if (firstPart) {
+            cleanTitle = firstPart;
+        }
+    }
+
+    // Common torrent words that might not be in brackets
+    const removeWords = [
+        "1080p",
+        "720p",
+        "480p",
+        "4k",
+        "x265",
+        "x264",
+        "HEVC",
+        "10bit",
+        "8bit",
+        "60fps",
+        "AAC",
+        "FLAC",
+        "Opus",
+        "WEBRip",
+        "WEB-DL",
+        "BluRay",
+        "BDRip",
+        "PROPER",
+        "REPACK",
+        "Dual-Audio",
+        "Multi-Subs",
+        "Subs",
+        "RAW",
+        "HD",
+        "FHD",
+        "Opus2",
+        "0",
+        "v1",
+        "v2",
+        "v3",
+        "v4",
+        "HEADPATTER",
+        "Erai-raws",
+        "SubsPlease"
+    ];
+
+    const exactWordRegex = new RegExp(`\\b(${removeWords.join("|")})\\b`, "gi");
+    cleanTitle = cleanTitle.replace(exactWordRegex, "");
+
+    // Remove standalone episode numbers at the end like "- 01" or "- 12"
+    cleanTitle = cleanTitle.replace(/-\s*\d+(\.\d+)?\s*$/, "");
+    cleanTitle = cleanTitle.replace(/\bS\d{1,2}E\d{1,3}\b/gi, ""); // Remove S01E02
+    cleanTitle = cleanTitle.replace(/\bS\d{1,2}\b/gi, ""); // Remove Season numbers like S01, S2
+    cleanTitle = cleanTitle.replace(/\bE\d{1,3}\b/gi, ""); // Remove E02
+    cleanTitle = cleanTitle.replace(/\b(Episode|Ep)\s*\d+\b/gi, ""); // Remove 'Episode 12'
+
+    // Replace dots, underscores with spaces
+    cleanTitle = cleanTitle.replace(/[-_.]/g, " ");
+
+    cleanTitle = cleanTitle.replace(/\s+/g, " ").trim();
+    try {
+        const metadata = await searchAnime(cleanTitle);
+        if (metadata?.anilistId) {
+            return `https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b${metadata.anilistId}.jpg`;
+        }
+        return null;
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`[Anime Cover] Error fetching cover for title ${cleanTitle}: ${errorMessage}`);
+        return null;
+    }
+}
+
+/**
+ * Fetches an Anilist cover image using an AniDB anime ID.
+ * Maps the AniDB ID to Anilist ID via animeapi.my.id, then queries the Anilist GraphQL API.
+ * @param anidbId - The AniDB anime ID
+ * @returns Cover image URL, or null if not found
+ */
+export async function fetchAnilistCover(anidbId: number | string): Promise<string | null> {
+    try {
+        const animeData = await fetchAnimeByAnidbId(anidbId);
+        if (animeData?.anilist) {
+            return `https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b${animeData.anilist}.jpg`;
+        }
+        return null;
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error(`[Anime Cover] Error fetching cover for AniDB ${anidbId}: ${msg}`);
+        return null;
+    }
+}

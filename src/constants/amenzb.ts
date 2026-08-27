@@ -1,7 +1,7 @@
 import { config } from "../config";
 
 /**
- * ameNZB Constants
+ * @deprecated ameNZB service and constants are deprecated.
  * Configuration for ameNZB Newznab-compatible Search API
  */
 

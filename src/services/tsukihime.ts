@@ -6,13 +6,12 @@
  */
 
 import axios from "axios";
-import { TSUKIHIME_API_BASE_URL, TSUKIHIME_EMBED_COLOR } from "../constants/tsukihime.js";
-import { BROWSER_USER_AGENT } from "../constants/anime.js";
-import type { TsukihimeTorrent, TsukihimeImages } from "../types/tsukihime.js";
-import { formatBytes } from "./nekobt.js";
-import { fetchAnimeImages, fetchAnilistCoverByTitle } from "./amenzb.js";
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from "discord.js";
-import { logger } from "../core/logger.js";
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
+import { logger } from "../core/logger";
+import { BROWSER_USER_AGENT, TSUKIHIME_API_BASE_URL, TSUKIHIME_EMBED_COLOR } from "../constants";
+import type { TsukihimeImages, TsukihimeTorrent } from "../types";
+import { fetchAnilistCoverByTitle } from "./anime-metadata";
+import { formatBytes } from "./nekobt";
 
 /**
  * Common headers for Tsukihime API requests
@@ -27,6 +26,28 @@ const TSUKIHIME_HEADERS = {
  */
 const tsukihimeCache = new Map<string, { data: TsukihimeImages; expiry: number }>();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Parses and normalizes a Tsukihime date field into a Date object.
+ * @param dateVal - Unix timestamp in seconds, milliseconds, or ISO date string
+ * @returns Date object or null if invalid
+ */
+export function parseTsukihimeTimestamp(dateVal: number | string | undefined | null): Date | null {
+    if (!dateVal) return null;
+    if (typeof dateVal === "number") {
+        const ms = dateVal < 1e11 ? dateVal * 1000 : dateVal;
+        const date = new Date(ms);
+        return isNaN(date.getTime()) ? null : date;
+    }
+    const num = Number(dateVal);
+    if (!isNaN(num) && dateVal.trim() !== "") {
+        const ms = num < 1e11 ? num * 1000 : num;
+        const date = new Date(ms);
+        return isNaN(date.getTime()) ? null : date;
+    }
+    const date = new Date(dateVal);
+    return isNaN(date.getTime()) ? null : date;
+}
 
 /**
  * Fetches a torrent from Tsukihime by Nyaa.si torrent ID.
@@ -127,11 +148,14 @@ export function extractTsukihimeImages(torrent: TsukihimeTorrent): TsukihimeImag
     // Extract screenshots
     if (torrent.files && torrent.files.length > 0) {
         const file = torrent.files[0];
-        if (file && file.id && file.vidframes && file.vidframes.length > 0) {
-            const hexId = file.id.toString(16).toLowerCase().padStart(8, "0");
-            result.screenshots = file.vidframes.map(
-                frame => `https://storage.tsukihime.org/sframes/${hexId}_${frame}.webp`
-            );
+        if (file && file.id != null && file.vidframes && file.vidframes.length > 0) {
+            const numericId = typeof file.id === "number" ? file.id : parseInt(String(file.id), 10);
+            if (!isNaN(numericId)) {
+                const hexId = numericId.toString(16).toLowerCase().padStart(8, "0");
+                result.screenshots = file.vidframes.map(
+                    frame => `https://storage.tsukihime.org/sframes/${hexId}_${frame}.webp`
+                );
+            }
         }
     }
 
@@ -259,6 +283,7 @@ export async function buildTsukihimeEmbed(
     const torrent = await fetchTsukihimeTorrentById(torrentId);
     if (!torrent) return null;
 
+    const torrentTitle = (torrent.name ?? "Tsukihime Torrent").substring(0, 256);
     const groupName = torrent.group?.name || "Anonymous";
     let authorUrl = "https://tsukihime.org";
     if (torrent.group?.id) {
@@ -266,7 +291,7 @@ export async function buildTsukihimeEmbed(
     }
 
     const embed = new EmbedBuilder()
-        .setTitle(torrent.name.substring(0, 256))
+        .setTitle(torrentTitle)
         .setURL(originalUrl)
         .setColor(TSUKIHIME_EMBED_COLOR)
         .setAuthor({
@@ -274,18 +299,7 @@ export async function buildTsukihimeEmbed(
             url: authorUrl
         });
 
-    let coverImage: string | null = null;
-    if (torrent.anime?.thumbnail) {
-        coverImage = torrent.anime.thumbnail;
-    } else if (torrent.btih) {
-        const images = await fetchAnimeImages(torrent.btih);
-        if (images.cover) {
-            coverImage = images.cover;
-        } else if (images.screenshots.length > 1) {
-            coverImage = images.screenshots[1]!;
-        }
-    }
-
+    let coverImage: string | null = torrent.anime?.thumbnail || null;
     if (!coverImage) {
         coverImage = await fetchAnilistCoverByTitle(torrent.name);
     }
@@ -304,21 +318,25 @@ export async function buildTsukihimeEmbed(
         fields.push({ name: "Episode", value: torrent.episode_no.toString(), inline: true });
     }
 
-    fields.push({ name: "File Size", value: formatBytes(torrent.totalsize), inline: true });
+    const sizeInBytes =
+        typeof torrent.totalsize === "number" ? torrent.totalsize : parseInt(String(torrent.totalsize), 10);
+    const humanSize = formatBytes(isNaN(sizeInBytes) ? 0 : sizeInBytes);
+
+    fields.push({ name: "File Size", value: humanSize, inline: true });
     fields.push({ name: "NZB", value: torrent.has_nzb === 1 ? "Yes" : "No", inline: true });
 
     if (torrent.anime?.studios && torrent.anime.studios.length > 0) {
         fields.push({ name: "Studios", value: torrent.anime.studios.join(", "), inline: true });
     }
 
-    // Calculate aggregated tracker stats
+    // Calculate aggregated tracker stats safely
     let seeders = 0;
     let leechers = 0;
     let completed = 0;
     if (torrent.trackers && torrent.trackers.length > 0) {
-        seeders = Math.max(...torrent.trackers.map(t => t.seeders));
-        leechers = Math.max(...torrent.trackers.map(t => t.leechers));
-        completed = Math.max(...torrent.trackers.map(t => t.complete));
+        seeders = Math.max(0, ...torrent.trackers.map(t => Number(t.seeders) || 0));
+        leechers = Math.max(0, ...torrent.trackers.map(t => Number(t.leechers) || 0));
+        completed = Math.max(0, ...torrent.trackers.map(t => Number(t.complete) || 0));
     }
     fields.push({ name: "Swarm", value: `⬆️ ${seeders} / ⬇️ ${leechers} / ✅ ${completed}`, inline: true });
 
@@ -348,7 +366,11 @@ export async function buildTsukihimeEmbed(
     }
 
     embed.addFields(fields);
-    embed.setTimestamp(torrent.added_date * 1000);
+
+    const timestamp = parseTsukihimeTimestamp(torrent.added_date);
+    if (timestamp) {
+        embed.setTimestamp(timestamp);
+    }
 
     // Resolve main image (large image) and small thumbnail
     const tsukiImages = extractTsukihimeImages(torrent);
@@ -358,12 +380,6 @@ export async function buildTsukihimeEmbed(
     if (tsukiImages.screenshots.length > 0) {
         mainImage = tsukiImages.screenshots[0] || null;
         finalThumbnail = coverImage;
-    } else if (torrent.btih) {
-        const images = await fetchAnimeImages(torrent.btih);
-        if (images.screenshots.length > 0) {
-            mainImage = images.screenshots[0] || null;
-            finalThumbnail = coverImage;
-        }
     }
 
     // Fallback: if no main image was found, use the cover image as the large main image
@@ -383,7 +399,7 @@ export async function buildTsukihimeEmbed(
                     timeout: 8000
                 });
                 if (response.status === 200 && response.data) {
-                    const buffer = Buffer.from(response.data);
+                    const buffer = Buffer.from(response.data as ArrayBuffer);
                     const attachment = new AttachmentBuilder(buffer, { name: "screenshot.webp" });
                     files.push(attachment);
                     embed.setImage("attachment://screenshot.webp");

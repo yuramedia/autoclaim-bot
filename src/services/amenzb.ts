@@ -44,6 +44,7 @@ const imageCache = new Map<string, { data: AmeNZBImages; expiry: number }>();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
+ * @deprecated AmeNZB service is deprecated. Use Tsukihime or AniList metadata services instead.
  * Fetches ameNZB screenshots and cover image for a given torrent infohash.
  * Searches ameNZB by info_hash, then scrapes the release page for screenshot URLs.
  * Falls back to Anilist cover images when ameNZB cover is unavailable.
@@ -51,6 +52,7 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
  * @returns An object containing screenshot URLs and a cover URL (if found)
  */
 export async function fetchAnimeImages(infohash: string): Promise<AmeNZBImages> {
+    logger.warn(`[ameNZB] fetchAnimeImages is deprecated. Requested infohash: ${infohash}`);
     const hash = infohash.toLowerCase();
 
     // Check cache
@@ -127,12 +129,14 @@ export async function fetchAnimeImages(infohash: string): Promise<AmeNZBImages> 
 }
 
 /**
+ * @deprecated AmeNZB service is deprecated.
  * Build rich Discord embed from an ameNZB release ID
  * @param releaseId - Numeric ameNZB release ID
  * @param url - Original URL
  * @returns Configured EmbedBuilder
  */
 export async function buildAmeNZBEmbed(releaseId: string, url: string): Promise<EmbedBuilder | null> {
+    logger.warn(`[ameNZB] buildAmeNZBEmbed is deprecated. Requested release ID: ${releaseId}`);
     try {
         const releaseUrl = `${AMENZB_BASE_URL}/release/${releaseId}`;
         const response = await axios.get(releaseUrl, {

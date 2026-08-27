@@ -4,7 +4,9 @@ import {
     fetchAnimeByAnilistId,
     fetchAnimeByMalId,
     fetchAnimeByAnidbId,
-    getRedirectUrl
+    getRedirectUrl,
+    fetchAnilistCoverByTitle,
+    fetchAnilistCover
 } from "./anime-metadata";
 import { ANIME_API_URL } from "../constants/anime";
 
@@ -105,6 +107,43 @@ describe("animeApi.my.id metadata service", () => {
         try {
             const res = await getRedirectUrl("anilist", 154587, "myanimelist");
             expect(res).toBe(targetUrl);
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
+    test("fetchAnilistCoverByTitle returns cover image URL for torrent title", async () => {
+        const mockResponse = {
+            title: "Frieren",
+            anilist: 154587
+        };
+
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = mock(async () => {
+            return new Response(JSON.stringify(mockResponse), { status: 200 });
+        }) as unknown as typeof globalThis.fetch;
+
+        try {
+            const cover = await fetchAnilistCoverByTitle("[SubsPlease] Frieren - 01 [1080p].mkv");
+            expect(cover).toBe("https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b154587.jpg");
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
+    test("fetchAnilistCover returns cover image URL for AniDB ID", async () => {
+        const mockResponse = {
+            anilist: 154587
+        };
+
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = mock(async () => {
+            return new Response(JSON.stringify(mockResponse), { status: 200 });
+        }) as unknown as typeof globalThis.fetch;
+
+        try {
+            const cover = await fetchAnilistCover(17617);
+            expect(cover).toBe("https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b154587.jpg");
         } finally {
             globalThis.fetch = originalFetch;
         }

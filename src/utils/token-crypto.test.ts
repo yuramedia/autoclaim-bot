@@ -91,15 +91,12 @@ describe("decryptTokenCompat legacy format (3-part, no v1 prefix)", () => {
         expect(result.needsReEncryption).toBe(true);
     });
 
-    test("still returns value for corrupted 3-part format (fallback to plaintext)", () => {
+    test("throws error for corrupted 3-part format (prevents data loss)", () => {
         const encrypted = encryptToken("test");
         const parts = encrypted.split(":");
         parts[3] = "deadbeef".repeat(4);
         const legacyTampered = parts.slice(1).join(":");
-        const result = decryptTokenCompat(legacyTampered);
-        // When both HKDF and SHA-256 fail, the value is returned as-is for migration
-        expect(result.value).toBe(legacyTampered);
-        expect(result.needsReEncryption).toBe(true);
+        expect(() => decryptTokenCompat(legacyTampered)).toThrow("Legacy token decryption failed");
     });
 
     test("decrypts real legacy tokens encrypted with pre-HKDF SHA-256 key", () => {

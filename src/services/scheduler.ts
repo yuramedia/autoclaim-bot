@@ -147,6 +147,14 @@ export async function runDailyClaims(client: Client, userFilter?: Record<string,
     }
 }
 
+/** Returns midnight today in UTC+8 (Asia/Singapore timezone). */
+function getTodayMidnightUtc8(): Date {
+    const sg = getSingaporeTime();
+    return new Date(
+        `${sg.year}-${String(sg.month).padStart(2, "0")}-${String(sg.day).padStart(2, "0")}T00:00:00+08:00`
+    );
+}
+
 /**
  * Process claims for a single user
  * @param user - User document from database
@@ -157,9 +165,11 @@ async function processUserClaim(user: IUser): Promise<void> {
         const results: string[] = [];
         let hasTokenExpired = false; // Track structured token expiry from Endfield
         const claimPromises: Promise<void>[] = [];
+        const todayMidnight = getTodayMidnightUtc8();
 
-        // Claim Hoyolab
-        if (user.hoyolab?.token) {
+        // Claim Hoyolab (skip if already claimed today)
+        const hoyolabAlreadyClaimed = Boolean(user.hoyolab?.lastClaim && user.hoyolab.lastClaim >= todayMidnight);
+        if (user.hoyolab?.token && !hoyolabAlreadyClaimed) {
             claimPromises.push(
                 (async () => {
                     try {
@@ -190,8 +200,9 @@ async function processUserClaim(user: IUser): Promise<void> {
             );
         }
 
-        // Claim Endfield
-        if (user.endfield?.accountToken) {
+        // Claim Endfield (skip if already claimed today)
+        const endfieldAlreadyClaimed = Boolean(user.endfield?.lastClaim && user.endfield.lastClaim >= todayMidnight);
+        if (user.endfield?.accountToken && !endfieldAlreadyClaimed) {
             claimPromises.push(
                 (async () => {
                     try {
@@ -306,10 +317,7 @@ export async function checkMissedClaims(client: Client): Promise<void> {
         }
 
         // Calculate midnight of today in Asia/Singapore as a UTC Date
-        // Create a date string in SG timezone, then convert back to UTC
-        const todayMidnightSG = new Date(
-            `${sg.year}-${String(sg.month).padStart(2, "0")}-${String(sg.day).padStart(2, "0")}T00:00:00+08:00`
-        );
+        const todayMidnightSG = getTodayMidnightUtc8();
 
         // Find users who have tokens but haven't claimed today
         const missedFilter = {

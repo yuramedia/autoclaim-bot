@@ -70,8 +70,11 @@ export class CrunchyrollService {
      * Get auth token (cached). Concurrent callers share a single in-flight request.
      */
     async getAuth(forceRefresh = false): Promise<CrunchyrollAuth | null> {
-        // Return cached token if valid and not forcing refresh
-        if (!forceRefresh && cachedAuth && Date.now() < authExpiresAt) {
+        if (forceRefresh) {
+            cachedAuth = null;
+            authExpiresAt = 0;
+            anonymousAuthPromise = null;
+        } else if (cachedAuth && Date.now() < authExpiresAt) {
             return cachedAuth;
         }
 
@@ -367,8 +370,8 @@ export class CrunchyrollService {
 
         let formatted = "";
         if (hours > 0) formatted += `${hours}h`;
-        if (minutes > 0 || hours > 0) formatted += `${minutes}m`;
-        formatted += `${seconds}s`;
+        if (minutes > 0) formatted += `${minutes}m`;
+        if (seconds > 0 || (hours === 0 && minutes === 0)) formatted += `${seconds}s`;
 
         return formatted;
     }
@@ -608,8 +611,11 @@ export class CrunchyrollService {
      * Concurrent callers share a single in-flight request.
      */
     async getAccountAuth(forceRefresh = false): Promise<CrunchyrollAuth | null> {
-        // Return cached token if valid and not forcing refresh
-        if (!forceRefresh && cachedAccountAuth && Date.now() < accountAuthExpiresAt) {
+        if (forceRefresh) {
+            cachedAccountAuth = null;
+            accountAuthExpiresAt = 0;
+            accountAuthPromise = null;
+        } else if (cachedAccountAuth && Date.now() < accountAuthExpiresAt) {
             return cachedAccountAuth;
         }
 
@@ -866,8 +872,10 @@ export class CrunchyrollService {
                 logger.warn(`Crunchyroll play service returned ${response.status}, refreshing token...`);
                 cachedAccountAuth = null;
                 accountAuthExpiresAt = 0;
+                accountAuthPromise = null;
                 cachedAuth = null;
                 authExpiresAt = 0;
+                anonymousAuthPromise = null;
 
                 const freshAuth = (await this.getAccountAuth(true)) || (await this.getAuth(true));
                 if (freshAuth) {

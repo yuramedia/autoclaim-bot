@@ -30,6 +30,12 @@ function getKey(): Buffer {
                 "Any random string works — e.g. run: openssl rand -hex 32"
         );
     }
+    if (raw.length < 32) {
+        logger.warn(
+            "[token-crypto] TOKEN_ENCRYPTION_KEY is shorter than 32 characters. " +
+                "A 32+ character high-entropy key is strongly recommended (e.g. openssl rand -hex 32)."
+        );
+    }
     return Buffer.from(hkdfSync("sha256", raw, "", HKDF_INFO, 32));
 }
 
@@ -80,7 +86,7 @@ export interface DecryptResult {
  * Handles three cases:
  * 1. v1 format (4-part) — decrypts with HKDF key
  * 2. Legacy format (3-part) — tries HKDF key first, then SHA-256 legacy key
- * 3. Plaintext — returns raw value with needsReEncryption=true (migration path)
+ * 3. Plaintext (< 3 parts) — returns raw value with needsReEncryption=true (migration path)
  *
  * If the token is in a legacy or plaintext format, the result will have `needsReEncryption=true`
  * so callers can re-encrypt and update the DB, progressively migrating all tokens to v1.
@@ -149,18 +155,18 @@ export function decryptTokenCompat(value: string): DecryptResult {
                 needsReEncryption: true
             };
         } catch {
-            // Both keys failed — treat as potentially plaintext
-            // (token might have been stored before encryption was enabled)
-            logger.warn(
-                "[token-crypto] Legacy 3-part format decryption failed with both keys. " +
-                    "Treating as potentially plaintext token for migration."
-            );
+            // Both keys failed — throw error to prevent double-encryption data loss
+            throw new Error("Legacy token decryption failed — encryption key may have changed or data is corrupted");
         }
     }
 
-    // Plaintext token — return raw value with re-encryption flag
-    // This is the migration path for tokens stored before encryption was enabled,
-    // or for tokens where the encryption key has rotated and the old ciphertext is unrecoverable.
+    // If 4 or more parts with unrecognized version, fail fast
+    if (parts.length >= 4) {
+        throw new Error(`Unsupported encrypted token format version: ${parts[0]}`);
+    }
+
+    // Plaintext token (< 3 parts) — return raw value with re-encryption flag
+    // This is the migration path for tokens stored before encryption was enabled.
     // The caller should re-encrypt and update the DB.
     logger.warn(
         "[token-crypto] Token is not in encrypted format. " +

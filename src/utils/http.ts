@@ -70,7 +70,13 @@ export interface RetryOptions {
 /** Default predicate: retry network-level failures (timeouts, socket errors, axios transport codes). */
 function isTransientNetworkError(error: unknown): boolean {
     if (error instanceof Error) {
-        if (error.name === "AbortError" || error.name === "TimeoutError" || error.name === "TypeError") return true;
+        if (error.name === "AbortError" || error.name === "TimeoutError") return true;
+        if (error.name === "TypeError") {
+            return (
+                error.message.toLowerCase().includes("fetch failed") ||
+                Boolean((error as Error & { cause?: unknown }).cause)
+            );
+        }
         const code = (error as Error & { code?: string }).code;
         if (
             code === "ECONNRESET" ||

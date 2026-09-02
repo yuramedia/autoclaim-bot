@@ -83,7 +83,7 @@ export class HoyolabService {
             }
 
             // Already claimed today
-            if (data.retcode === -5003 || data.message?.includes("already")) {
+            if (data.retcode === -5003 || data.message?.toLowerCase().includes("already")) {
                 return {
                     success: true,
                     game: game.name,

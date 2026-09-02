@@ -28,6 +28,7 @@ export const videoSelectionCache = new Map<string, { url: string; platform: Plat
 const processedMessages = new Set<string>();
 const CACHE_TTL = 60000; // 1 minute
 const VIDEO_SELECTION_TTL = 15 * 60 * 1000; // 15 minutes
+const MAX_VIDEO_SELECTIONS = 200;
 
 /**
  * Creates a resolution selection menu for oversized videos.
@@ -42,6 +43,12 @@ function createResolutionSelectMenu(
     platform: PlatformId
 ): { selectMenu: StringSelectMenuBuilder; selectionId: string } {
     const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+
+    // Bound the cache to avoid memory leaks from excessive pending video selections
+    if (videoSelectionCache.size >= MAX_VIDEO_SELECTIONS) {
+        const oldestKey = videoSelectionCache.keys().next().value;
+        if (oldestKey) videoSelectionCache.delete(oldestKey);
+    }
 
     videoSelectionCache.set(selectionId, {
         url,

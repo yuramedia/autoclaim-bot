@@ -194,17 +194,16 @@ export async function getGuildSettings(guildId: string): Promise<IGuildSettings>
 
 /**
  * Get guild settings through a 30s read-through cache.
- * Only safe for read-only usage — any caller that mutates the returned
- * document must call {@link invalidateGuildSettingsCache} afterwards.
+ * Returns a cloned object so in-memory mutations never bleed across calls.
  *
  * @param guildId - The Discord guild ID.
- * @returns The guild settings document (possibly shared between calls).
+ * @returns The guild settings object.
  */
 export async function getCachedGuildSettings(guildId: string): Promise<IGuildSettings> {
     const now = Date.now();
     const cached = guildSettingsCache.get(guildId);
     if (cached && now < cached.expiresAt) {
-        return cached.doc;
+        return structuredClone(cached.doc);
     }
 
     // Prune expired entries opportunistically to keep the map bounded
@@ -212,11 +211,18 @@ export async function getCachedGuildSettings(guildId: string): Promise<IGuildSet
         for (const [key, entry] of guildSettingsCache) {
             if (now >= entry.expiresAt) guildSettingsCache.delete(key);
         }
+        // If still above limit after pruning expired, evict oldest entries (LRU)
+        while (guildSettingsCache.size > 1000) {
+            const oldestKey = guildSettingsCache.keys().next().value;
+            if (oldestKey) guildSettingsCache.delete(oldestKey);
+            else break;
+        }
     }
 
     const doc = await getGuildSettings(guildId);
-    guildSettingsCache.set(guildId, { doc, expiresAt: Date.now() + GUILD_SETTINGS_CACHE_TTL_MS });
-    return doc;
+    const plainDoc = (doc && typeof doc.toObject === "function" ? doc.toObject() : doc) as IGuildSettings;
+    guildSettingsCache.set(guildId, { doc: plainDoc, expiresAt: Date.now() + GUILD_SETTINGS_CACHE_TTL_MS });
+    return structuredClone(plainDoc);
 }
 
 /**

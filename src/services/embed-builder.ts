@@ -249,11 +249,23 @@ export async function fetchFacebookInfo(url: string): Promise<PostInfo | null> {
         const sharesMatch = siteName.match(/🔁\s*([\d,.KkMm]+)/);
 
         // Extract dates if available (⌚ 2026/03/24 07:40:29 UTC+07)
-        const dateMatch = siteName.match(/⌚\s*(.+)\n/);
+        const dateMatch = siteName.match(
+            /⌚\s*(\d{4})[/-](\d{2})[/-](\d{2})\s+(\d{2}:\d{2}:\d{2})(?:\s*UTC([+-]\d{1,2}(?::?\d{2})?)|\s*Z)?/i
+        );
         let timestamp: Date | undefined;
-        if (dateMatch && dateMatch[1]) {
-            timestamp = new Date(dateMatch[1].replace(" UTC", "Z"));
-            if (isNaN(timestamp.getTime())) timestamp = undefined;
+        if (dateMatch) {
+            const [, y, m, d, time, offset] = dateMatch;
+            let isoStr = `${y}-${m}-${d}T${time}`;
+            if (offset) {
+                const normalizedOffset = offset.includes(":") ? offset : offset.length === 3 ? `${offset}:00` : offset;
+                isoStr += normalizedOffset;
+            } else {
+                isoStr += "Z";
+            }
+            const parsed = new Date(isoStr);
+            if (!isNaN(parsed.getTime())) {
+                timestamp = parsed;
+            }
         }
 
         // Get images

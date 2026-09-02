@@ -65,8 +65,12 @@ const LANG_ALIASES: Record<string, string> = {
     mandarin: "zh-CN"
 };
 
-/** Reverse lookup: language input (code, name, alias) → locale code */
-function langNameToCode(name: string): string | null {
+/**
+ * Reverse lookup: language input (code, name, alias) → locale code
+ * @param name - Language name, code, or alias
+ * @returns Crunchyroll locale code or null
+ */
+export function langNameToCode(name: string): string | null {
     const clean = name.trim().toLowerCase();
 
     // 1. Direct match on LANG_MAP keys (e.g. "id-ID" or "id-id")
@@ -124,39 +128,145 @@ export const data = new SlashCommandBuilder()
     .addStringOption(opt =>
         opt
             .setName("lang")
-            .setDescription("Select subtitle language")
+            .setDescription("Select subtitle language (automatically tailored per anime)")
             .setRequired(false)
-            .addChoices(
-                ...Array.from(
-                    new Map(
-                        Object.entries(LANG_MAP)
-                            .filter(([code]) => code !== "ja-JP")
-                            .map(([code, name]) => [code, { name: `${name} (${code})`, value: code }])
-                    ).values()
-                ).slice(0, 25)
-            )
+            .setAutocomplete(true)
     );
 
 /**
- * Autocomplete handler for selecting series in subcr command.
+ * In-memory cache for available subtitle languages per anime/series/episode.
+ */
+const subtitleLangCache = new Map<string, { codes: string[]; expiry: number }>();
+const SUB_LANG_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Fetches available subtitle language codes for a given anime title or URL.
+ * @param animeInput - Anime title input
+ * @param urlInput - Episode or series URL/ID
+ * @param episodeNumber - Optional episode number
+ * @returns Array of subtitle locale codes (excluding Japanese ja-JP)
+ */
+export async function fetchAvailableSubtitleLangs(
+    animeInput: string | null,
+    urlInput: string | null,
+    episodeNumber?: number | null
+): Promise<string[]> {
+    const key = `${urlInput || ""}:${animeInput || ""}:${episodeNumber || ""}`;
+    const cached = subtitleLangCache.get(key);
+    if (cached && Date.now() < cached.expiry) {
+        return cached.codes;
+    }
+
+    let episodeId: string | null = null;
+
+    try {
+        if (urlInput) {
+            const parsed = parseCrunchyrollUrl(urlInput);
+            if (parsed) {
+                if (parsed.type === "series") {
+                    const episodes = await service.fetchEpisodesBySeriesId(parsed.id, episodeNumber ?? undefined);
+                    if (episodes.length > 0) {
+                        episodeId = episodes[0]!.id;
+                    }
+                } else {
+                    episodeId = parsed.id;
+                }
+            }
+        } else if (animeInput) {
+            const episodes = await service.searchEpisode(animeInput, episodeNumber ?? undefined);
+            if (episodes.length > 0) {
+                episodeId = episodes[0]!.id;
+            }
+        }
+
+        if (!episodeId) return [];
+
+        const subtitles = await service.fetchSubtitles(episodeId);
+        if (!subtitles) return [];
+
+        const codes = Object.keys(subtitles).filter(c => c !== "ja-JP");
+        subtitleLangCache.set(key, { codes, expiry: Date.now() + SUB_LANG_CACHE_TTL });
+
+        if (subtitleLangCache.size > 200) {
+            const firstKey = subtitleLangCache.keys().next().value;
+            if (firstKey) subtitleLangCache.delete(firstKey);
+        }
+
+        return codes;
+    } catch (error) {
+        logger.error(error as Error, "Error fetching available subtitle languages");
+        return [];
+    }
+}
+
+/**
+ * Autocomplete handler for selecting series and subtitle language in subcr command.
  *
  * @param interaction Autocomplete interaction.
  * @returns A promise that resolves when autocomplete is handled.
  */
 export async function autocomplete(interaction: AutocompleteInteraction): Promise<void> {
-    const focusedValue = interaction.options.getFocused();
-    if (!focusedValue) {
-        await interaction.respond([]);
+    const focusedOption = interaction.options.getFocused(true);
+
+    if (focusedOption.name === "anime") {
+        const focusedValue = String(focusedOption.value || "");
+        if (!focusedValue) {
+            await interaction.respond([]);
+            return;
+        }
+
+        try {
+            const results = await service.searchSeriesAutocomplete(focusedValue);
+            await interaction.respond(results);
+        } catch (error) {
+            logger.error(error, "Anime autocomplete error");
+            await interaction.respond([]);
+        }
         return;
     }
 
-    try {
-        const results = await service.searchSeriesAutocomplete(focusedValue);
-        await interaction.respond(results);
-    } catch (error) {
-        logger.error(error, "Autocomplete error");
-        await interaction.respond([]);
+    if (focusedOption.name === "lang") {
+        const query = String(focusedOption.value || "")
+            .toLowerCase()
+            .trim();
+        const animeInput = interaction.options.getString("anime");
+        const urlInput = interaction.options.getString("url");
+        const episodeInput = interaction.options.getInteger("episode");
+
+        try {
+            let availableCodes: string[] = [];
+
+            if (animeInput || urlInput) {
+                availableCodes = await fetchAvailableSubtitleLangs(animeInput, urlInput, episodeInput);
+            }
+
+            // If we found anime-specific languages, use them; otherwise fall back to common LANG_MAP codes
+            const baseCodes =
+                availableCodes.length > 0 ? availableCodes : Object.keys(LANG_MAP).filter(code => code !== "ja-JP");
+
+            const choices = baseCodes
+                .map(code => {
+                    const name = LANG_MAP[code] || code;
+                    return {
+                        name: `${name} (${code})`.substring(0, 100),
+                        value: code
+                    };
+                })
+                .filter(choice => {
+                    if (!query) return true;
+                    return choice.name.toLowerCase().includes(query) || choice.value.toLowerCase().includes(query);
+                })
+                .slice(0, 25);
+
+            await interaction.respond(choices);
+        } catch (error) {
+            logger.error(error, "Lang autocomplete error");
+            await interaction.respond([]);
+        }
+        return;
     }
+
+    await interaction.respond([]);
 }
 
 /**
@@ -322,8 +432,16 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             return;
         }
 
-        // No language specified — show select menu
-        const subEntries = Object.entries(subtitles);
+        // No language specified — if only 1 non-Japanese subtitle is available, automatically download it!
+        const nonJpSubtitles = Object.entries(subtitles).filter(([code]) => code !== "ja-JP");
+        if (nonJpSubtitles.length === 1) {
+            const [autoLang, autoSub] = nonJpSubtitles[0]!;
+            await downloadAndSend(interaction, autoSub.url, episodeId, autoLang, episodeTitle, autoSub.format);
+            return;
+        }
+
+        // Multiple subtitles available — show select menu
+        const subEntries = nonJpSubtitles.length > 0 ? nonJpSubtitles : Object.entries(subtitles);
         const options = subEntries.slice(0, 25).map(([code, sub]) => ({
             label: LANG_MAP[code] || code,
             description: `${sub.format.toUpperCase()} • ${code}`,
@@ -348,6 +466,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             .setFooter({ text: "Selection valid for 60 seconds" });
 
         const reply = await interaction.editReply({
+            content: "",
             embeds: [embed],
             components: [row]
         });
@@ -369,6 +488,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         } catch {
             // Timeout — remove components
             await interaction.editReply({
+                content: "",
                 components: [],
                 embeds: [
                     embed
@@ -429,6 +549,7 @@ async function downloadAndSend(
             .setTimestamp();
 
         await interaction.editReply({
+            content: "",
             embeds: [embed],
             files: [attachment],
             components: []

@@ -27,3 +27,47 @@ describe("subcr parseCrunchyrollUrl", () => {
         expect(result).toBeNull();
     });
 });
+
+describe("subcr langNameToCode", () => {
+    test("resolves direct locale codes", async () => {
+        const { langNameToCode } = await import("./subcr");
+        expect(langNameToCode("id-ID")).toBe("id-ID");
+        expect(langNameToCode("en-US")).toBe("en-US");
+        expect(langNameToCode("ms-MY")).toBe("ms-MY");
+    });
+
+    test("resolves aliases case-insensitively", async () => {
+        const { langNameToCode } = await import("./subcr");
+        expect(langNameToCode("indonesia")).toBe("id-ID");
+        expect(langNameToCode("Indonesian")).toBe("id-ID");
+        expect(langNameToCode("English")).toBe("en-US");
+        expect(langNameToCode("melayu")).toBe("ms-MY");
+        expect(langNameToCode("spanish")).toBe("es-419");
+    });
+
+    test("resolves language names from LANG_MAP values", async () => {
+        const { langNameToCode } = await import("./subcr");
+        expect(langNameToCode("Bahasa Indonesia")).toBe("id-ID");
+        expect(langNameToCode("Bahasa Melayu")).toBe("ms-MY");
+    });
+
+    test("resolves prefix codes", async () => {
+        const { langNameToCode } = await import("./subcr");
+        expect(langNameToCode("id")).toBe("id-ID");
+        expect(langNameToCode("en")).toBe("en-US");
+        expect(langNameToCode("ms")).toBe("ms-MY");
+    });
+
+    test("returns null for invalid or unknown language", async () => {
+        const { langNameToCode } = await import("./subcr");
+        expect(langNameToCode("nonexistent_language_xyz")).toBeNull();
+    });
+});
+
+describe("subcr fetchAvailableSubtitleLangs", () => {
+    test("returns empty array if no input is provided", async () => {
+        const { fetchAvailableSubtitleLangs } = await import("./subcr");
+        const langs = await fetchAvailableSubtitleLangs(null, null);
+        expect(langs).toEqual([]);
+    });
+});

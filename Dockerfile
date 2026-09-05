@@ -18,7 +18,7 @@ RUN bun install --frozen-lockfile --production
 # ==========================================
 # Stage 2: Runner - Lightweight production image
 # ==========================================
-FROM oven/bun:latest-alpine AS runner
+FROM oven/bun:alpine AS runner
 WORKDIR /app
 
 # Set production environment

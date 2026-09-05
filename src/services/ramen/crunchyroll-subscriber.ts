@@ -25,10 +25,14 @@ function buildEpisodeEmbed(episode: FormattedEpisode, isEdited: boolean): EmbedB
             name: authorName,
             iconURL: "https://www.crunchyroll.com/favicons/favicon-32x32.png"
         })
-        .setTitle(episode.title)
-        .setURL(episode.url)
-        .setDescription(episode.description.slice(0, 200) + (episode.description.length > 200 ? "..." : ""))
-        .setTimestamp(new Date(episode.releasedAt));
+        .setTitle((episode.title || "Crunchyroll Episode").slice(0, 256))
+        .setURL(episode.url);
+
+    const desc = episode.description || "";
+    embed.setDescription(desc.length > 200 ? desc.slice(0, 200) + "..." : desc || null);
+
+    const relDate = episode.releasedAt ? new Date(episode.releasedAt) : new Date();
+    embed.setTimestamp(!isNaN(relDate.getTime()) ? relDate : new Date());
 
     // Add image (large)
     if (episode.thumbnail) {

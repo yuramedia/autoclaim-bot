@@ -33,11 +33,12 @@ ramen.subscribe<ClaimResultEvent>("account:claim_result", async (data, meta): Pr
 
         try {
             const discordUser = await client.users.fetch(discordId);
+            const desc = results.join("\n\n");
             await discordUser.send({
                 embeds: [
                     {
                         title: embedTitle,
-                        description: results.join("\n\n"),
+                        description: desc.length > 4096 ? desc.slice(0, 4090) + "..." : desc,
                         color: embedColor,
                         timestamp: new Date().toISOString(),
                         ...(footer && { footer: { text: footer } })

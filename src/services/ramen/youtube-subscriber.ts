@@ -54,14 +54,15 @@ function buildVideoEmbed(video: FormattedYouTubeVideo): EmbedBuilder {
         footerText = "YouTube Feed • New Upload";
     }
 
+    const fullTitle = `${statusPrefix}${video.title}`;
     const embed = new EmbedBuilder()
         .setColor(embedColor)
         .setAuthor({
-            name: video.channelName,
+            name: (video.channelName || "YouTube").slice(0, 256),
             url: video.channelUrl,
             iconURL: video.channelIcon || YT_ICON
         })
-        .setTitle(`${statusPrefix}${video.title}`)
+        .setTitle(fullTitle.length > 256 ? fullTitle.slice(0, 253) + "..." : fullTitle)
         .setURL(video.videoUrl)
         .setTimestamp(video.publishedAt);
 

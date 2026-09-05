@@ -93,16 +93,17 @@ export function buildRichEmbed(info: PostInfo, platform: PlatformConfig, postUrl
 
     const embeds: EmbedBuilder[] = [embed];
 
-    // Create additional embeds for extra images (2nd, 3rd, 4th, etc.)
-    // Discord groups embeds with the same URL into a multi-image gallery
+    // Create additional embeds for extra images (2nd, 3rd, 4th)
+    // Discord groups embeds with the same URL into a multi-image gallery (max 4 per gallery)
     if (postUrl && info.images.length > 1) {
-        for (let i = 1; i < info.images.length; i++) {
+        const maxImages = Math.min(info.images.length, 4);
+        for (let i = 1; i < maxImages; i++) {
             const imageEmbed = new EmbedBuilder().setURL(postUrl).setImage(info.images[i]!).setColor(platform.color);
             embeds.push(imageEmbed);
         }
     }
 
-    return embeds;
+    return embeds.slice(0, 10);
 }
 
 /**

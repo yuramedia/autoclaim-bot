@@ -324,7 +324,7 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
         // Reply to the message
         await message.reply({
             content: content || undefined,
-            embeds,
+            embeds: embeds.length > 0 ? embeds.slice(0, 10) : undefined,
             files,
             components: components.length > 0 ? components : undefined,
             allowedMentions: { repliedUser: false }

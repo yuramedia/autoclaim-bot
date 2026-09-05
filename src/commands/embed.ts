@@ -252,7 +252,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         if (embeds.length > 0 || files.length > 0) {
             await interaction.editReply({
-                embeds: embeds.length > 0 ? embeds : undefined,
+                embeds: embeds.length > 0 ? embeds.slice(0, 10) : undefined,
                 files: files.length > 0 ? files : undefined,
                 components: components.length > 0 ? components : undefined
             });

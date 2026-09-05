@@ -74,7 +74,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             });
         }
 
-        embed.setDescription(description);
+        embed.setDescription(description.length > 4096 ? description.slice(0, 4090) + "..." : description);
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {

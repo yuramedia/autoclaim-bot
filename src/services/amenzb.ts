@@ -6,8 +6,8 @@
 
 import axios from "axios";
 import * as cheerio from "cheerio";
-import { logger } from "../core/logger";
 import { EmbedBuilder } from "discord.js";
+import { logger } from "../core/logger";
 import {
     AMENZB_BASE_URL,
     AMENZB_API_PATH,

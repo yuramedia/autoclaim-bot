@@ -30,8 +30,10 @@ function buildItemEmbed(item: FormattedU2Item): EmbedBuilder {
             iconURL: U2_ICON
         })
         .setTitle(item.title.length > 256 ? item.title.substring(0, 250) + "..." : item.title)
-        .setURL(item.link || "https://u2.dmhy.org")
-        .setTimestamp(item.pubDateUnix > 0 ? new Date(item.pubDateUnix * 1000) : item.pubDate);
+        .setURL(item.link || "https://u2.dmhy.org");
+
+    const ts = item.pubDateUnix > 0 ? new Date(item.pubDateUnix * 1000) : item.pubDate;
+    embed.setTimestamp(!isNaN(ts.getTime()) ? ts : new Date());
 
     if (item.image) {
         embed.setImage(item.image);

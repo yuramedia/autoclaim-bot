@@ -226,6 +226,9 @@ export class U2FeedService {
         // Decode HTML entities in link URL (RSS XML encodes '&' as '&amp;')
         const link = item.link ? decode(item.link.trim()) : "";
 
+        const rawDate = item.pubDate ? new Date(item.pubDate) : new Date();
+        const pubDate = !isNaN(rawDate.getTime()) ? rawDate : new Date();
+
         return {
             title,
             link,
@@ -233,7 +236,7 @@ export class U2FeedService {
             category: item.category || "BDMV",
             uploader: this.extractUploader(item.author),
             size: this.getSize(item.sizeBytes, item.title),
-            pubDate: item.pubDate ? new Date(item.pubDate) : new Date(),
+            pubDate,
             pubDateUnix,
             guid: item.guid || item.link || rawTitle,
             wasPosted: false

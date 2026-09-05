@@ -30,19 +30,24 @@ export function buildLineupEmbed(announcement: {
     author: string | null;
     pubDate: string;
 }): EmbedBuilder {
-    const authorName = announcement.author || "Kyle Cardine";
+    const authorName = (announcement.author || "Kyle Cardine").slice(0, 256);
+    const title = (announcement.title || "Crunchyroll Lineup").slice(0, 256);
+    const description = (announcement.description || "").slice(0, 4096);
+    const parsedDate = announcement.pubDate ? new Date(announcement.pubDate) : new Date();
+    const validDate = !isNaN(parsedDate.getTime()) ? parsedDate : new Date();
+
     const embed = new EmbedBuilder()
         .setColor(CRUNCHYROLL_COLOR)
         .setAuthor({
             name: authorName,
             iconURL: "https://www.crunchyroll.com/favicons/favicon-32x32.png"
         })
-        .setTitle(announcement.title)
+        .setTitle(title)
         .setURL(announcement.url)
-        .setDescription(announcement.description)
-        .setTimestamp(new Date(announcement.pubDate))
+        .setDescription(description || null)
+        .setTimestamp(validDate)
         .setFooter({
-            text: `Latest Anime News • ${announcement.url}`
+            text: `Latest Anime News • ${announcement.url}`.slice(0, 2048)
         });
 
     if (announcement.thumbnail) {

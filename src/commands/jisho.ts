@@ -56,7 +56,8 @@ function createJishoEmbed(result: JishoWord): EmbedBuilder {
     const embed = new EmbedBuilder().setColor(JISHO_COLOR);
 
     // Title / Author
-    const title = result.word + (result.reading && result.reading !== result.word ? ` (${result.reading})` : "");
+    const rawTitle = result.word + (result.reading && result.reading !== result.word ? ` (${result.reading})` : "");
+    const title = rawTitle.slice(0, 256);
     embed.setAuthor({
         name: title,
         url: result.url,
@@ -109,7 +110,7 @@ function createJishoEmbed(result: JishoWord): EmbedBuilder {
 
     footerParts.push("Powered by Jisho and JMDict data");
 
-    embed.setDescription(description);
+    embed.setDescription(description.length > 4096 ? description.slice(0, 4090) + "..." : description);
     embed.setFooter({ text: footerParts.join(" | ") });
 
     return embed;

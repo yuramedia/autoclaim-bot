@@ -150,7 +150,7 @@ function buildEmbed(
         const url = `https://www.crunchyroll.com/series/${item.id}/${item.slug_title}`;
 
         embed.addFields({
-            name: item.title,
+            name: (item.title || "Untitled").slice(0, 256),
             value: `${isSimulcast} • ${episodeCount}\n[View on Crunchyroll](${url})`,
             inline: false
         });

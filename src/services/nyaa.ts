@@ -313,16 +313,17 @@ export async function buildNyaaEmbed(
         embed.setThumbnail(`https://${domain}/static/img/avatar/default.png`);
     }
 
-    // Add additional embeds for remaining description images
+    // Add additional embeds for remaining description images (max 4 images total for Discord gallery grid)
     const additionalEmbeds: EmbedBuilder[] = [];
     if (descriptionImages.length > 1) {
-        for (let i = 1; i < descriptionImages.length; i++) {
+        const maxImages = Math.min(descriptionImages.length, 4);
+        for (let i = 1; i < maxImages; i++) {
             const imageEmbed = new EmbedBuilder().setColor(NYAA_COLOR).setURL(url).setImage(descriptionImages[i]!);
 
             additionalEmbeds.push(imageEmbed);
         }
     }
 
-    const embeds: EmbedBuilder[] = [embed, ...additionalEmbeds];
+    const embeds: EmbedBuilder[] = [embed, ...additionalEmbeds].slice(0, 10);
     return embeds;
 }

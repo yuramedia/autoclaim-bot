@@ -92,10 +92,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
             // Notes if any
             const notes = anime.notes ? `\n📝 *${anime.notes.split("\n")[0]}*` : "";
+            const fieldVal = `${releaseInfo}${notes}\n[Link](https://best-release.kazeuta.com/anime/${anime.mal_id})`;
 
             embed.addFields({
-                name: `${title}`,
-                value: `${releaseInfo}${notes}\n[Link](https://best-release.kazeuta.com/anime/${anime.mal_id})`,
+                name: (title || "Untitled").slice(0, 256),
+                value: fieldVal.length > 1024 ? fieldVal.slice(0, 1020) + "..." : fieldVal,
                 inline: false
             });
         }

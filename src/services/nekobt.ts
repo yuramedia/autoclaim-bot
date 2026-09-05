@@ -148,7 +148,7 @@ export async function buildNekoBTEmbed(
             .setURL(url)
             .setColor(NEKOBT_EMBED_COLOR)
             .setAuthor({
-                name: uploaderName,
+                name: uploaderName.slice(0, 256),
                 iconURL: authorIcon,
                 url: authorUrl
             })
@@ -156,7 +156,7 @@ export async function buildNekoBTEmbed(
                 { name: "Seeders", value: seedersStr, inline: true },
                 { name: "Leechers", value: leechersStr, inline: true },
                 { name: "File Size", value: humanSize, inline: true },
-                { name: "Uploaded By", value: uploaderName, inline: true },
+                { name: "Uploaded By", value: uploaderName.slice(0, 256), inline: true },
                 { name: "ℹ️ Info Hash", value: `\`${data.infohash ?? "Unknown"}\``, inline: false }
             );
 

@@ -427,7 +427,7 @@ export async function buildTsukihimeEmbed(
         const fileLinks = torrent.files[0].links;
         const entries = Object.entries(fileLinks).slice(0, 5);
         for (const [provider, downloadUrl] of entries) {
-            if (downloadUrl) {
+            if (downloadUrl && (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://"))) {
                 row.addComponents(
                     new ButtonBuilder().setLabel(provider).setURL(downloadUrl).setStyle(ButtonStyle.Link)
                 );

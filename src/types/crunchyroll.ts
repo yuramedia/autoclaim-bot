@@ -177,6 +177,12 @@ export interface CrunchyrollEpisode {
     episode?: string;
     /** Optional episode number as a number. */
     episode_number?: number;
+    /** Optional subtitle locales directly on episode (CMS v2 API). */
+    subtitle_locales?: string[];
+    /** Optional series title directly on episode (CMS v2 API). */
+    series_title?: string;
+    /** Optional season title directly on episode (CMS v2 API). */
+    season_title?: string;
 }
 
 /**

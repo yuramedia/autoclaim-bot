@@ -14,8 +14,8 @@ import {
     AttachmentBuilder,
     MessageFlags
 } from "discord.js";
-import { CrunchyrollService } from "../services/crunchyroll";
-import type { CrunchyrollEpisode } from "../types/crunchyroll";
+import { CrunchyrollService, CrunchyrollStreamLimitError } from "../services/crunchyroll";
+import type { CrunchyrollEpisode, CrunchyrollSubtitle } from "../types/crunchyroll";
 import { LANG_MAP, CRUNCHYROLL_COLOR } from "../constants";
 import { logger } from "../core/logger";
 
@@ -169,7 +169,13 @@ export async function fetchAvailableSubtitleLangs(
                 if (parsed.type === "series") {
                     const episodes = await service.fetchEpisodesBySeriesId(parsed.id, episodeNumber ?? undefined);
                     if (episodes.length > 0) {
-                        episodeId = episodes[0]!.id;
+                        const targetEp = episodes[0];
+                        if (targetEp?.subtitle_locales && targetEp.subtitle_locales.length > 0) {
+                            const codes = targetEp.subtitle_locales.filter(c => c !== "ja-JP");
+                            subtitleLangCache.set(key, { codes, expiry: Date.now() + SUB_LANG_CACHE_TTL });
+                            return codes;
+                        }
+                        episodeId = targetEp!.id;
                     }
                 } else {
                     episodeId = parsed.id;
@@ -178,24 +184,28 @@ export async function fetchAvailableSubtitleLangs(
         } else if (animeInput) {
             const episodes = await service.searchEpisode(animeInput, episodeNumber ?? undefined);
             if (episodes.length > 0) {
-                episodeId = episodes[0]!.id;
+                const targetEp = episodes[0];
+                if (targetEp?.subtitle_locales && targetEp.subtitle_locales.length > 0) {
+                    const codes = targetEp.subtitle_locales.filter(c => c !== "ja-JP");
+                    subtitleLangCache.set(key, { codes, expiry: Date.now() + SUB_LANG_CACHE_TTL });
+                    return codes;
+                }
+                episodeId = targetEp!.id;
             }
         }
 
         if (!episodeId) return [];
 
-        const subtitles = await service.fetchSubtitles(episodeId);
-        if (!subtitles) return [];
-
-        const codes = Object.keys(subtitles).filter(c => c !== "ja-JP");
-        subtitleLangCache.set(key, { codes, expiry: Date.now() + SUB_LANG_CACHE_TTL });
-
-        if (subtitleLangCache.size > 200) {
-            const firstKey = subtitleLangCache.keys().next().value;
-            if (firstKey) subtitleLangCache.delete(firstKey);
+        // For direct episode ID/URL without series metadata, fetch lightweight CMS metadata
+        // to avoid calling play service and exhausting stream limits during autocomplete
+        const cmsLocales = await service.fetchEpisodeSubtitleLocales(episodeId);
+        if (cmsLocales.length > 0) {
+            const codes = cmsLocales.filter(c => c !== "ja-JP");
+            subtitleLangCache.set(key, { codes, expiry: Date.now() + SUB_LANG_CACHE_TTL });
+            return codes;
         }
 
-        return codes;
+        return [];
     } catch (error) {
         logger.error(error as Error, "Error fetching available subtitle languages");
         return [];
@@ -410,7 +420,21 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         }
 
         // Fetch available subtitles
-        const subtitles = await service.fetchSubtitles(episodeId);
+        let subtitles: Record<string, CrunchyrollSubtitle> | null = null;
+        try {
+            subtitles = await service.fetchSubtitles(episodeId);
+        } catch (err) {
+            if (err instanceof CrunchyrollStreamLimitError) {
+                await interaction.editReply({
+                    content:
+                        "⚠️ **Crunchyroll Stream Limit Reached** (`TOO_MANY_ACTIVE_STREAMS`).\n" +
+                        "Akun Crunchyroll sedang memiliki sesi pemutaran aktif atau batas stream tercapai. Harap tunggu 1–2 menit agar sesi sebelumnya ditutup, lalu coba lagi."
+                });
+                return;
+            }
+            throw err;
+        }
+
         if (!subtitles || Object.keys(subtitles).length === 0) {
             await interaction.editReply({
                 content: "❌ No subtitles available for this episode. Ensure your Crunchyroll account is configured."

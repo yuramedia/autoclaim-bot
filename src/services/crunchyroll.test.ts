@@ -1,5 +1,5 @@
 import { describe, expect, test, mock } from "bun:test";
-import { CrunchyrollService } from "./crunchyroll";
+import { CrunchyrollService, CrunchyrollStreamLimitError } from "./crunchyroll";
 import { config } from "../config";
 
 describe("CrunchyrollService subtitle functions", () => {
@@ -16,7 +16,7 @@ describe("CrunchyrollService subtitle functions", () => {
         expect(service.sanitizeSubtitleUrl(normalUrl)).toBe(normalUrl);
     });
 
-    test("downloadSubtitle replaces modified CDN domain before fetching content", async () => {
+    test("downloadSubtitle fetches original URL directly without pre-emptive domain replacement", async () => {
         let requestedUrl = "";
         const originalFetch = globalThis.fetch;
         globalThis.fetch = mock(async (url: string | URL | Request) => {
@@ -28,14 +28,14 @@ describe("CrunchyrollService subtitle functions", () => {
             const inputUrl = "https://vod-fy-mod.crunchyrollcdn.com/subtitles/test.ass";
             const content = await service.downloadSubtitle(inputUrl);
 
-            expect(requestedUrl).toBe("https://vod-fy.crunchyrollcdn.com/subtitles/test.ass");
+            expect(requestedUrl).toBe("https://vod-fy-mod.crunchyrollcdn.com/subtitles/test.ass");
             expect(content).toBe("[Script Info]\nTitle: Test Subtitle");
         } finally {
             globalThis.fetch = originalFetch;
         }
     });
 
-    test("downloadSubtitle retries replacing vod-fy-mod. with vod-fy. on 403 Forbidden status", async () => {
+    test("downloadSubtitle retries with fallback sanitized URL if original URL fails", async () => {
         const requestedUrls: string[] = [];
         const originalFetch = globalThis.fetch;
         globalThis.fetch = mock(async (url: string | URL | Request) => {
@@ -52,13 +52,14 @@ describe("CrunchyrollService subtitle functions", () => {
             const content = await service.downloadSubtitle(inputUrl);
 
             expect(content).toBe("[Script Info]\nTitle: Fallback Subtitle");
-            expect(requestedUrls).toContain("https://vod-fy.crunchyrollcdn.com/subtitles/test.txt?format=ass");
+            expect(requestedUrls[0]).toBe("https://vod-fy-mod.crunchyrollcdn.com/subtitles/test.txt?format=ass");
+            expect(requestedUrls[1]).toBe("https://vod-fy.crunchyrollcdn.com/subtitles/test.txt?format=ass");
         } finally {
             globalThis.fetch = originalFetch;
         }
     });
 
-    test("fetchSubtitles sanitizes returned subtitle URLs in response", async () => {
+    test("fetchSubtitles preserves pristine subtitle URLs returned by Crunchyroll", async () => {
         config.crunchyroll.email = "test@example.com";
         config.crunchyroll.password = "testpass";
         const originalFetch = globalThis.fetch;
@@ -95,8 +96,79 @@ describe("CrunchyrollService subtitle functions", () => {
         try {
             const subtitles = await service.fetchSubtitles("GEXH3WP91");
             expect(subtitles).not.toBeNull();
-            expect(subtitles?.["en-US"]?.url).toBe("https://vod-fy.crunchyrollcdn.com/subtitles/en.ass");
+            expect(subtitles?.["en-US"]?.url).toBe("https://vod-fy-mod.crunchyrollcdn.com/subtitles/en.ass");
             expect(subtitles?.["en-US"]?.format).toBe("ass");
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
+    test("fetchSubtitles throws CrunchyrollStreamLimitError on HTTP 420", async () => {
+        config.crunchyroll.email = "test@example.com";
+        config.crunchyroll.password = "testpass";
+        const originalFetch = globalThis.fetch;
+
+        globalThis.fetch = mock(async (url: string | URL | Request) => {
+            const urlStr = url.toString();
+            if (urlStr.includes("/auth/v1/token")) {
+                return new Response(
+                    JSON.stringify({
+                        access_token: "fake_token",
+                        expires_in: 3600
+                    }),
+                    { status: 200 }
+                );
+            }
+            if (urlStr.includes("/play")) {
+                return new Response(
+                    JSON.stringify({
+                        error: "TOO_MANY_ACTIVE_STREAMS"
+                    }),
+                    { status: 420 }
+                );
+            }
+            return new Response(null, { status: 404 });
+        }) as unknown as typeof globalThis.fetch;
+
+        try {
+            await expect(service.fetchSubtitles("GEXH3WP91")).rejects.toThrow(CrunchyrollStreamLimitError);
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
+    test("fetchEpisodeSubtitleLocales returns subtitle locales from CMS endpoint without play session", async () => {
+        const originalFetch = globalThis.fetch;
+
+        globalThis.fetch = mock(async (url: string | URL | Request) => {
+            const urlStr = url.toString();
+            if (urlStr.includes("/auth/v1/token")) {
+                return new Response(
+                    JSON.stringify({
+                        access_token: "fake_anon_token",
+                        expires_in: 3600
+                    }),
+                    { status: 200 }
+                );
+            }
+            if (urlStr.includes("/cms/episodes/GEXH3WP91")) {
+                return new Response(
+                    JSON.stringify({
+                        data: [
+                            {
+                                subtitle_locales: ["en-US", "id-ID", "ja-JP"]
+                            }
+                        ]
+                    }),
+                    { status: 200 }
+                );
+            }
+            return new Response(null, { status: 404 });
+        }) as unknown as typeof globalThis.fetch;
+
+        try {
+            const locales = await service.fetchEpisodeSubtitleLocales("GEXH3WP91");
+            expect(locales).toEqual(["en-US", "id-ID", "ja-JP"]);
         } finally {
             globalThis.fetch = originalFetch;
         }

@@ -38,6 +38,16 @@ let accountAuthExpiresAt = 0;
 let accountAuthPromise: Promise<CrunchyrollAuth | null> | null = null;
 
 /**
+ * Error thrown when Crunchyroll active stream concurrency limit is reached (HTTP 420).
+ */
+export class CrunchyrollStreamLimitError extends Error {
+    constructor(message = "Crunchyroll stream limit reached (TOO_MANY_ACTIVE_STREAMS)") {
+        super(message);
+        this.name = "CrunchyrollStreamLimitError";
+    }
+}
+
+/**
  * Service for interacting with Crunchyroll APIs (Discovery, Search, Subtitles, etc.).
  * Supports both anonymous auth and account-based premium auth.
  */
@@ -889,6 +899,11 @@ export class CrunchyrollService {
                 }
             }
 
+            if (response.status === 420) {
+                logger.warn("Crunchyroll play service stream limit reached: 420 (TOO_MANY_ACTIVE_STREAMS)");
+                throw new CrunchyrollStreamLimitError();
+            }
+
             if (!response.ok) {
                 logger.error(`Crunchyroll play service failed: ${response.status}`);
                 return null;
@@ -898,18 +913,16 @@ export class CrunchyrollService {
             if (data.subtitles) {
                 for (const key of Object.keys(data.subtitles)) {
                     const sub = data.subtitles[key];
-                    if (sub) {
-                        if (sub.url) {
-                            sub.url = this.sanitizeSubtitleUrl(sub.url);
-                        }
-                        if (sub.format === "txt") {
-                            sub.format = "ass";
-                        }
+                    if (sub && sub.format === "txt") {
+                        sub.format = "ass";
                     }
                 }
             }
             return data.subtitles || null;
         } catch (error) {
+            if (error instanceof CrunchyrollStreamLimitError) {
+                throw error;
+            }
             logger.error(error as Error, "Crunchyroll subtitle fetch error");
             return null;
         }
@@ -927,18 +940,24 @@ export class CrunchyrollService {
     }
 
     /**
-     * Download a single subtitle file content
+     * Download a single subtitle file content.
+     * Fetches the original signed URL directly first, falling back to sanitized CDN host if direct fetch fails.
      * Returns the raw subtitle text (.ass format)
      */
     async downloadSubtitle(url: string): Promise<string | null> {
         try {
-            let targetUrl = this.sanitizeSubtitleUrl(url);
-            let response = await fetchWithTimeout(targetUrl, { timeoutMs: 15000 });
+            // First attempt: fetch the original signed URL directly
+            let response = await fetchWithTimeout(url, { timeoutMs: 15000 });
 
-            // If 403 Forbidden or failed and original URL contains vod-fy-mod., retry replacing vod-fy-mod. with vod-fy.
-            if ((!response.ok || response.status === 403) && url.includes("vod-fy-mod.")) {
-                targetUrl = url.replace(/vod-fy-mod\./g, "vod-fy.");
-                response = await fetchWithTimeout(targetUrl, { timeoutMs: 15000 });
+            // Fallback: If original URL fails, retry with alternate sanitized CDN domain
+            if (!response.ok) {
+                const fallbackUrl = this.sanitizeSubtitleUrl(url);
+                if (fallbackUrl !== url) {
+                    const fallbackRes = await fetchWithTimeout(fallbackUrl, { timeoutMs: 15000 });
+                    if (fallbackRes.ok) {
+                        response = fallbackRes;
+                    }
+                }
             }
 
             if (!response.ok) return null;
@@ -946,6 +965,38 @@ export class CrunchyrollService {
         } catch (error) {
             logger.error(error as Error, "Subtitle download error");
             return null;
+        }
+    }
+
+    /**
+     * Fetch episode subtitle locales directly from CMS API without opening a playback stream session.
+     * Used for lightweight language detection in autocomplete.
+     *
+     * @param episodeId - Crunchyroll episode ID
+     * @returns Array of subtitle locale codes (e.g. ["en-US", "id-ID"])
+     */
+    async fetchEpisodeSubtitleLocales(episodeId: string): Promise<string[]> {
+        const auth = await this.getAuth();
+        if (!auth) return [];
+
+        try {
+            const url = `${this.API_BASE}/content/v2/cms/episodes/${episodeId}?locale=en-US`;
+            const response = await fetchWithTimeout(url, {
+                timeoutMs: 10000,
+                headers: {
+                    Authorization: `Bearer ${auth.access_token}`,
+                    "User-Agent": this.userAgent
+                }
+            });
+
+            if (!response.ok) return [];
+
+            const data = (await response.json()) as { data?: Array<{ subtitle_locales?: string[] }> };
+            const ep = data.data?.[0];
+            return ep?.subtitle_locales || [];
+        } catch (error) {
+            logger.error(error as Error, `Error fetching episode subtitle locales for ${episodeId}`);
+            return [];
         }
     }
 

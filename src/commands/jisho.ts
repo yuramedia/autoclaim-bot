@@ -27,9 +27,17 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         const results = await searchJisho(keyword);
 
         if (!results || results.length === 0) {
-            await interaction.editReply({
-                content: `No results found for word **"${keyword}"**.`
-            });
+            const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
+            const segments = Array.from(segmenter.segment(keyword))
+                .filter(s => s.isWordLike)
+                .map(s => s.segment);
+
+            let message = `No results found for word **"${keyword}"**.`;
+            if (segments.length > 1) {
+                message += `\n💡 **Word breakdown suggestion**: ${segments.map(w => `\`${w}\``).join(" • ")}\nTry searching for individual words!`;
+            }
+
+            await interaction.editReply({ content: message });
             return;
         }
 

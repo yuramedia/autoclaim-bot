@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { parseStat } from "./stats";
+import { parseStat, formatNumber, formatCompactNumber } from "./stats";
 
 describe("parseStat", () => {
     // ── Falsy / empty input ───────────────────────────────────────────────────
@@ -82,5 +82,22 @@ describe("parseStat", () => {
         expect(parseStat("1.0005M")).toBe(1_000_500);
         // 1.5K = 1500 (no rounding)
         expect(parseStat("1.5K")).toBe(1_500);
+    });
+});
+
+describe("formatNumber", () => {
+    test("formats integers with thousands separators", () => {
+        expect(formatNumber(1000)).toBe("1,000");
+        expect(formatNumber(1234567)).toBe("1,234,567");
+        expect(formatNumber(0)).toBe("0");
+    });
+});
+
+describe("formatCompactNumber", () => {
+    test("formats numbers into compact representations", () => {
+        expect(formatCompactNumber(1500)).toBe("1.5K");
+        expect(formatCompactNumber(2500000)).toBe("2.5M");
+        expect(formatCompactNumber(1000000000)).toBe("1B");
+        expect(formatCompactNumber(42)).toBe("42");
     });
 });

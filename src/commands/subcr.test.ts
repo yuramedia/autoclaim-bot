@@ -51,11 +51,22 @@ describe("subcr langNameToCode", () => {
         expect(langNameToCode("Bahasa Melayu")).toBe("ms-MY");
     });
 
-    test("resolves prefix codes", async () => {
+    test("resolves prefix and ISO language codes via Intl.Locale", async () => {
         const { langNameToCode } = await import("./subcr");
         expect(langNameToCode("id")).toBe("id-ID");
         expect(langNameToCode("en")).toBe("en-US");
         expect(langNameToCode("ms")).toBe("ms-MY");
+        expect(langNameToCode("de")).toBe("de-DE");
+        expect(langNameToCode("ja")).toBe("ja-JP");
+        expect(langNameToCode("fr")).toBe("fr-FR");
+    });
+
+    test("LANG_MAP dynamically resolves unlisted BCP-47 codes via Intl.DisplayNames", async () => {
+        const { LANG_MAP, getLanguageDisplayName } = await import("../constants/languages");
+        expect(LANG_MAP["uk-UA"]).toContain("Ukrainian");
+        expect(LANG_MAP["ro-RO"]).toContain("Romanian");
+        expect(getLanguageDisplayName("uk-UA")).toContain("Ukrainian");
+        expect(getLanguageDisplayName("nonexistent_tag_123")).toBe("nonexistent_tag_123");
     });
 
     test("returns null for invalid or unknown language", async () => {

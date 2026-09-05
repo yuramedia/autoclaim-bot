@@ -56,14 +56,16 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         }
 
         if (result.synonyms && result.synonyms.length > 0) {
+            const listFormatter = new Intl.ListFormat("id", { style: "long", type: "conjunction" });
             description += "\n";
             result.synonyms.forEach(group => {
                 const maxSynonyms = 15;
                 const shownSynonyms = group.words.slice(0, maxSynonyms);
-                let synonymText = shownSynonyms.join(", ");
+                let synonymText =
+                    shownSynonyms.length > 1 ? listFormatter.format(shownSynonyms) : shownSynonyms.join("");
                 if (group.words.length > maxSynonyms) {
                     const remainingCount = group.words.length - maxSynonyms;
-                    const linkText = `and ${remainingCount} others`;
+                    const linkText = `dan ${remainingCount} lainnya`;
                     if (result.thesaurusUrl) {
                         synonymText += ` [${linkText}](${result.thesaurusUrl})`;
                     } else {

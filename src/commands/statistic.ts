@@ -14,6 +14,7 @@ import {
 import os from "os";
 import { version as nodeVersion } from "process";
 import { formatUptimeSeconds } from "../utils/time";
+import { formatNumber } from "../utils/stats";
 import { logger } from "../core/logger";
 
 /**
@@ -88,10 +89,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             .setColor(0x0099ff)
             .addFields(
                 { name: "• Owner", value: owner?.toString() || "Unknown", inline: false },
-                { name: "• Total Users", value: totalUsers.toLocaleString(), inline: true },
-                { name: "• Total Guilds", value: totalGuilds.toLocaleString(), inline: true },
-                { name: "• Total Channels", value: totalChannels.toLocaleString(), inline: true },
-                { name: "• Total Shards", value: client.shard ? client.shard.count.toString() : "1", inline: true },
+                { name: "• Total Users", value: formatNumber(totalUsers), inline: true },
+                { name: "• Total Guilds", value: formatNumber(totalGuilds), inline: true },
+                { name: "• Total Channels", value: formatNumber(totalChannels), inline: true },
+                { name: "• Total Shards", value: client.shard ? formatNumber(client.shard.count) : "1", inline: true },
                 { name: "• Uptime", value: formatUptimeSeconds(process.uptime()), inline: true },
                 { name: "• Network Latency", value: `${client.ws.ping}ms`, inline: true },
                 { name: "• Memory Usage", value: `${memUsage} MB`, inline: true },

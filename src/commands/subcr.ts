@@ -21,72 +21,75 @@ import { logger } from "../core/logger";
 
 const service = new CrunchyrollService();
 
-/** Aliases mapping common user inputs / language names to Crunchyroll locale codes */
-const LANG_ALIASES: Record<string, string> = {
-    id: "id-ID",
-    indonesia: "id-ID",
-    indonesian: "id-ID",
-    "bahasa indonesia": "id-ID",
-    en: "en-US",
-    english: "en-US",
-    ms: "ms-MY",
-    melayu: "ms-MY",
-    "bahasa melayu": "ms-MY",
-    malay: "ms-MY",
-    ja: "ja-JP",
-    japanese: "ja-JP",
-    es: "es-419",
-    spanish: "es-419",
-    "spanish (la)": "es-419",
-    "spanish (es)": "es-ES",
-    pt: "pt-BR",
-    portuguese: "pt-BR",
-    "portuguese (br)": "pt-BR",
-    fr: "fr-FR",
-    french: "fr-FR",
-    de: "de-DE",
-    german: "de-DE",
-    it: "it-IT",
-    italian: "it-IT",
-    ru: "ru-RU",
-    russian: "ru-RU",
-    ar: "ar-SA",
-    arabic: "ar-SA",
-    hi: "hi-IN",
-    hindi: "hi-IN",
-    ko: "ko-KR",
-    korean: "ko-KR",
-    th: "th-TH",
-    thai: "th-TH",
-    vi: "vi-VN",
-    vietnamese: "vi-VN",
-    zh: "zh-CN",
-    cantonese: "zh-HK",
-    mandarin: "zh-CN"
-};
+/**
+ * Standard Intl display name formatters for auto-detecting language names
+ */
+const displayNamesEn = new Intl.DisplayNames(["en"], { type: "language" });
+const displayNamesId = new Intl.DisplayNames(["id"], { type: "language" });
 
 /**
- * Reverse lookup: language input (code, name, alias) → locale code
- * @param name - Language name, code, or alias
- * @returns Crunchyroll locale code or null
+ * Reverse lookup: language input (code, English name, Indonesian name) → Crunchyroll locale code.
+ * Auto-detected dynamically using standard ECMAScript Internationalization API (Intl).
+ *
+ * @param name - Language name or code (e.g. "id-ID", "indonesia", "Japanese", "de")
+ * @returns Crunchyroll locale code or null if invalid
  */
 export function langNameToCode(name: string): string | null {
-    const clean = name.trim().toLowerCase();
+    if (!name) return null;
+
+    let clean = name.trim().toLowerCase();
+    // Strip common language prefixes like "bahasa " (e.g. "bahasa indonesia" -> "indonesia")
+    if (clean.startsWith("bahasa ")) {
+        clean = clean.replace(/^bahasa\s+/, "").trim();
+    }
 
     // 1. Direct match on LANG_MAP keys (e.g. "id-ID" or "id-id")
     const mapKey = Object.keys(LANG_MAP).find(k => k.toLowerCase() === clean);
     if (mapKey) return mapKey;
 
-    // 2. Direct match on alias map
-    if (LANG_ALIASES[clean]) return LANG_ALIASES[clean];
+    // 2. Prefix match on locale code keys (e.g. "id" -> "id-ID")
+    const prefixMatch = Object.keys(LANG_MAP).find(k => k.toLowerCase().startsWith(`${clean}-`));
+    if (prefixMatch) return prefixMatch;
 
-    // 3. Match on LANG_MAP values (case-insensitive)
+    // 3. Match on LANG_MAP values
     const mapVal = Object.entries(LANG_MAP).find(([, v]) => v.toLowerCase() === clean);
     if (mapVal) return mapVal[0];
 
-    // 4. Prefix match on locale code keys (e.g. "id" -> "id-ID")
-    const prefixMatch = Object.keys(LANG_MAP).find(k => k.toLowerCase().startsWith(`${clean}-`));
-    if (prefixMatch) return prefixMatch;
+    // Special Chinese variants
+    if (clean === "mandarin") return "zh-CN";
+    if (clean === "cantonese") return "zh-HK";
+
+    // 4. Auto-detect via Intl.DisplayNames across all known LANG_MAP codes (English and Indonesian names)
+    for (const code of Object.keys(LANG_MAP)) {
+        try {
+            const loc = new Intl.Locale(code);
+            const enFull = displayNamesEn.of(code)?.toLowerCase();
+            const enBase = displayNamesEn.of(loc.language)?.toLowerCase();
+            const idFull = displayNamesId.of(code)?.toLowerCase();
+            const idBase = displayNamesId.of(loc.language)?.toLowerCase();
+
+            if (clean === enFull || clean === enBase || clean === idFull || clean === idBase) {
+                return code;
+            }
+        } catch {
+            // Ignore
+        }
+    }
+
+    // 5. Match using Intl.Locale language subtag against available LANG_MAP keys
+    try {
+        const inputLocale = new Intl.Locale(clean);
+        const localeMatch = Object.keys(LANG_MAP).find(k => {
+            try {
+                return new Intl.Locale(k).language === inputLocale.language;
+            } catch {
+                return false;
+            }
+        });
+        if (localeMatch) return localeMatch;
+    } catch {
+        // Not a valid BCP-47 tag, continue
+    }
 
     return null;
 }

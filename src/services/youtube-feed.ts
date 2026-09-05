@@ -279,21 +279,24 @@ export class YouTubeFeedService {
 
             for (const entry of rawEntries) {
                 try {
-                    const videoId = String(entry["yt:videoId"] || entry.id || "").replace(/^yt:video:/, "");
-                    const title = xmlText(entry.title);
-                    const channelId = String(entry["yt:channelId"] || "");
-                    const channelName = xmlText((entry.author as XmlNode | undefined)?.name);
-                    const published = String(entry.published || "");
-                    const updated = String(entry.updated || "");
+                    const rawVideoId = xmlText(entry["yt:videoId"]) || xmlText(entry.videoId) || xmlText(entry.id);
+                    const videoId = rawVideoId.replace(/^yt:video:/, "").trim();
+                    const title = xmlText(entry.title).trim();
+                    const channelId = (xmlText(entry["yt:channelId"]) || xmlText(entry.channelId)).trim();
+                    const authorNode = entry.author as XmlNode | undefined;
+                    const channelName = xmlText(authorNode?.name).trim();
+                    const published = xmlText(entry.published).trim();
+                    const updated = xmlText(entry.updated).trim();
 
                     const mediaGroup = entry["media:group"] as XmlNode | undefined;
                     const thumbnails = xmlNodeArray(mediaGroup?.["media:thumbnail"]);
                     const thumbnail =
                         xmlAttr(thumbnails[0], "url") || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-                    const description = xmlText(mediaGroup?.["media:description"]);
+                    const description = xmlText(mediaGroup?.["media:description"]).trim();
 
                     const altLink = xmlNodeArray(entry.link).find(l => l["@rel"] === "alternate" || !l["@rel"]);
-                    const link = xmlAttr(altLink, "href") || "";
+                    const link =
+                        xmlAttr(altLink, "href") || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : "");
 
                     if (videoId && title) {
                         entries.push({
@@ -305,7 +308,7 @@ export class YouTubeFeedService {
                             updated,
                             thumbnail,
                             description,
-                            link: link || `https://www.youtube.com/watch?v=${videoId}`
+                            link
                         });
                     }
                 } catch (entryError) {
@@ -342,16 +345,25 @@ export class YouTubeFeedService {
 
             const match =
                 html.match(/var\s+ytInitialData\s*=\s*({.*?});<\/script>/s) ||
-                html.match(/window\[["']ytInitialData["']\]\s*=\s*({.*?});<\/script>/s);
+                html.match(/window\[["']ytInitialData["']\]\s*=\s*({.*?});<\/script>/s) ||
+                html.match(/ytInitialData\s*=\s*({.*?});/s);
 
             if (!match || !match[1]) return entries;
 
             const data = JSON.parse(match[1]);
             const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs || [];
 
-            // Extract channel name from the page metadata for web-only entries
+            // Extract channel name & canonical channel ID from the page metadata for web-only entries
             const webChannelName =
-                data?.metadata?.channelMetadataRenderer?.title || data?.header?.c4TabbedHeaderRenderer?.title || "";
+                data?.metadata?.channelMetadataRenderer?.title ||
+                data?.header?.c4TabbedHeaderRenderer?.title ||
+                data?.header?.pageHeaderRenderer?.pageTitle ||
+                "";
+
+            const canonicalChannelId =
+                data?.metadata?.channelMetadataRenderer?.externalId ||
+                data?.header?.c4TabbedHeaderRenderer?.channelId ||
+                (channelIdOrHandle.startsWith("UC") ? channelIdOrHandle : "");
 
             let videoTab = tabs.find((t: Record<string, unknown>) => {
                 const tab = t?.tabRenderer as Record<string, unknown> | undefined;
@@ -443,7 +455,7 @@ export class YouTubeFeedService {
                     entries.push({
                         videoId,
                         title,
-                        channelId: channelIdOrHandle,
+                        channelId: canonicalChannelId || channelIdOrHandle,
                         channelName: webChannelName,
                         published: "",
                         updated: "",
@@ -492,13 +504,18 @@ export class YouTubeFeedService {
             let scheduledStartTimeUnix: number | null = null;
             const startDateMatch =
                 html.match(/meta\s+itemprop=["']startDate["']\s+content=["']([^"']+)["']/i) ||
-                html.match(/["']startTimestamp["']\s*:\s*["']([^"']+)["']/);
+                html.match(/["']startTimestamp["']\s*:\s*["']([^"']+)["']/) ||
+                html.match(/["']startTime["']\s*:\s*["']?(\d+)["']?/);
 
             if (startDateMatch?.[1]) {
-                const dateStr = startDateMatch[1];
-                const dateObj = new Date(dateStr);
-                if (!isNaN(dateObj.getTime())) {
-                    scheduledStartTimeUnix = Math.floor(dateObj.getTime() / 1000);
+                const dateStr = startDateMatch[1].trim();
+                if (/^\d{9,12}$/.test(dateStr)) {
+                    scheduledStartTimeUnix = parseInt(dateStr, 10);
+                } else {
+                    const parsedMs = Date.parse(dateStr);
+                    if (!isNaN(parsedMs)) {
+                        scheduledStartTimeUnix = Math.floor(parsedMs / 1000);
+                    }
                 }
             }
 
@@ -516,17 +533,14 @@ export class YouTubeFeedService {
                 return { statusType: "live", scheduledStartTimeUnix, realTitle };
             }
 
-            // Check if upcoming
+            // Check if upcoming (premiere / scheduled stream)
             const nowUnix = Math.floor(Date.now() / 1000);
             const isUpcomingJson =
-                html.match(/["']upcomingEventData["']/i) || html.match(/["']isUpcoming["']\s*:\s*true/i);
+                html.match(/["']upcomingEventData["']/i) ||
+                html.match(/["']isUpcoming["']\s*:\s*true/i) ||
+                html.match(/["']status["']\s*:\s*["']LIVE_STREAM_OFFLINE["']/i);
 
-            // A video is UPCOMING only if explicitly flagged as upcoming AND start time is in the future
-            if (
-                (isUpcomingJson || (scheduledStartTimeUnix && scheduledStartTimeUnix > nowUnix)) &&
-                scheduledStartTimeUnix &&
-                scheduledStartTimeUnix > nowUnix
-            ) {
+            if (isUpcomingJson || (scheduledStartTimeUnix !== null && scheduledStartTimeUnix > nowUnix)) {
                 return { statusType: "upcoming", scheduledStartTimeUnix, realTitle };
             }
 
@@ -594,17 +608,26 @@ export class YouTubeFeedService {
         if (title.length > 256) title = title.substring(0, 250) + "...";
 
         const videoUrl = entry.link || `https://www.youtube.com/watch?v=${entry.videoId}`;
-        const channelUrl = entry.channelId
-            ? `https://www.youtube.com/channel/${entry.channelId}`
-            : "https://www.youtube.com";
-        const publishedDate = entry.published ? new Date(entry.published) : new Date();
+        const channelUrl =
+            entry.channelId && entry.channelId.startsWith("UC")
+                ? `https://www.youtube.com/channel/${entry.channelId}`
+                : entry.channelId && entry.channelId.startsWith("@")
+                  ? `https://www.youtube.com/${entry.channelId}`
+                  : "https://www.youtube.com";
+
+        let publishedDate: Date;
+        if (entry.published) {
+            const parsed = new Date(entry.published);
+            publishedDate = isNaN(parsed.getTime()) ? new Date() : parsed;
+        } else {
+            publishedDate = new Date();
+        }
         const publishedUnix = Math.floor(publishedDate.getTime() / 1000);
 
         let description = entry.description ? decode(entry.description.trim()) : "";
         if (description.length > 300) {
             description = description.substring(0, 297) + "...";
         }
-
         const thumbnail = entry.videoId
             ? `https://i.ytimg.com/vi/${entry.videoId}/maxresdefault.jpg`
             : entry.thumbnail

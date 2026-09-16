@@ -5,6 +5,7 @@
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
 import { formatUptime } from "../utils/time";
+import { getDatabaseHealth } from "../database";
 import { logger } from "../core/logger";
 
 /**
@@ -20,11 +21,11 @@ export const data = new SlashCommandBuilder().setName("ping").setDescription("Ch
  */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     try {
-        const startTime = Date.now();
-        await interaction.reply({ content: "🏓 Pinging..." });
+        const sent = await interaction.reply({ content: "🏓 Pinging...", fetchReply: true });
 
-        const roundtrip = Date.now() - startTime;
+        const roundtrip = sent.createdTimestamp - interaction.createdTimestamp;
         const wsLatency = interaction.client.ws.ping;
+        const dbHealth = getDatabaseHealth();
 
         const embed = new EmbedBuilder()
             .setTitle("🏓 Pong!")
@@ -38,6 +39,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 {
                     name: "💓 WebSocket",
                     value: `\`${wsLatency}ms\``,
+                    inline: true
+                },
+                {
+                    name: "🗄️ Database",
+                    value: `\`${dbHealth.isConnected ? `Online (${dbHealth.stateName})` : "Offline"}\``,
                     inline: true
                 },
                 {

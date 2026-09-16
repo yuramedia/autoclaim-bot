@@ -156,7 +156,9 @@ async function postNewItems(): Promise<void> {
         const guilds = (await GuildSettings.find({
             "u2Feed.enabled": true,
             "u2Feed.channelId": { $ne: null }
-        }).lean()) as unknown as U2FeedGuild[];
+        })
+            .select({ u2Feed: 1, _id: 0 })
+            .lean()) as unknown as U2FeedGuild[];
 
         if (guilds.length > 0) {
             const targets = guilds.map((g: U2FeedGuild) => ({

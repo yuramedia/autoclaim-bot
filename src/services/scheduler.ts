@@ -7,14 +7,12 @@
 import cron from "node-cron";
 import { Client } from "discord.js";
 import { ramen } from "../core/ramen";
-import { User } from "../database/models/user";
-import type { IUser } from "../database/models/user";
+import { User, type IUser, recordClaimHistory, ensureDatabaseConnected, isDatabaseConnected } from "../database";
 import { HoyolabService, formatHoyolabResults } from "./hoyolab";
 import { EndfieldService, formatEndfieldResult } from "./endfield";
 import { config } from "../config";
 import { logger } from "../core/logger";
 import { decryptTokenCompat, encryptToken } from "../utils/token-crypto";
-import { ensureDatabaseConnected, isDatabaseConnected } from "../database/connection";
 
 /** Batch processing configuration */
 const BATCH_SIZE = 5; // Process 5 users concurrently
@@ -281,6 +279,17 @@ async function executeUserClaims(user: IUser): Promise<void> {
                         hoyolabUpdate["hoyolab.token"] = encryptToken(hoyolabDecrypt.value);
                     }
                     await User.updateOne({ discordId: user.discordId }, { $set: hoyolabUpdate });
+
+                    // Record claim history
+                    void recordClaimHistory(
+                        hoyolabResults.map(r => ({
+                            discordId: user.discordId,
+                            service: "hoyolab",
+                            game: r.game,
+                            success: r.success,
+                            message: r.message
+                        }))
+                    );
                 } catch (error: unknown) {
                     const err = error as { message?: string };
                     logger.error({
@@ -321,6 +330,15 @@ async function executeUserClaims(user: IUser): Promise<void> {
                         endfieldUpdate["endfield.accountToken"] = encryptToken(endfieldDecrypt.value);
                     }
                     await User.updateOne({ discordId: user.discordId }, { $set: endfieldUpdate });
+
+                    // Record claim history
+                    void recordClaimHistory({
+                        discordId: user.discordId,
+                        service: "endfield",
+                        game: "Endfield",
+                        success: endfieldResult.success,
+                        message: endfieldResult.message
+                    });
                 } catch (error: unknown) {
                     const err = error as { message?: string };
                     logger.error({

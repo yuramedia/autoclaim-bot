@@ -15,6 +15,7 @@ import os from "os";
 import { version as nodeVersion } from "process";
 import { formatUptimeSeconds } from "../utils/time";
 import { formatNumber } from "../utils/stats";
+import { getDatabaseHealth } from "../database";
 import { logger } from "../core/logger";
 
 /**
@@ -84,6 +85,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             }
         }
 
+        const dbHealth = getDatabaseHealth();
+
         const embed = new EmbedBuilder()
             .setTitle(`${client.user?.username} Statistics`)
             .setColor(0x0099ff)
@@ -95,6 +98,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 { name: "• Total Shards", value: client.shard ? formatNumber(client.shard.count) : "1", inline: true },
                 { name: "• Uptime", value: formatUptimeSeconds(process.uptime()), inline: true },
                 { name: "• Network Latency", value: `${client.ws.ping}ms`, inline: true },
+                {
+                    name: "• Database",
+                    value: dbHealth.isConnected ? `Online (${dbHealth.stateName})` : "Offline",
+                    inline: true
+                },
                 { name: "• Memory Usage", value: `${memUsage} MB`, inline: true },
                 { name: "• CPU", value: `${os.cpus().length} cores - ${os.arch()}`, inline: true },
                 { name: "• Model", value: cpu?.model || "Unknown", inline: false },

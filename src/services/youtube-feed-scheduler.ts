@@ -122,7 +122,9 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
             "youtubeFeed.enabled": true,
             "youtubeFeed.channelId": { $ne: null },
             "youtubeFeed.youtubeChannels.0": { $exists: true }
-        }).lean();
+        })
+            .select({ youtubeFeed: 1, _id: 0 })
+            .lean();
 
         if (!guilds || guilds.length === 0) {
             return;

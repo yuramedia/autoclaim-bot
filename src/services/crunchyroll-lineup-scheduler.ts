@@ -115,7 +115,9 @@ async function checkForNewAnnouncements(): Promise<void> {
         const guilds = await GuildSettings.find({
             "crunchyrollLineup.enabled": true,
             "crunchyrollLineup.channelId": { $ne: null }
-        }).lean();
+        })
+            .select({ "crunchyrollLineup.channelId": 1, _id: 0 })
+            .lean();
 
         if (guilds.length === 0) {
             // Commit seen URLs even if no active guilds are subscribed right now

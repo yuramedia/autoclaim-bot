@@ -79,43 +79,61 @@ export interface IGuildSettings extends Document {
     updatedAt: Date;
 }
 
-const EmbedFixSettingsSchema = new Schema<IEmbedFixSettings>({
-    enabled: { type: Boolean, default: true },
-    autoUpload: { type: Boolean, default: true },
-    richEmbeds: { type: Boolean, default: true },
-    disabledPlatforms: { type: [String], default: [] },
-    deleteReaction: { type: String, default: "❌" }
-});
+const EmbedFixSettingsSchema = new Schema<IEmbedFixSettings>(
+    {
+        enabled: { type: Boolean, default: true },
+        autoUpload: { type: Boolean, default: true },
+        richEmbeds: { type: Boolean, default: true },
+        disabledPlatforms: { type: [String], default: [] },
+        deleteReaction: { type: String, default: "❌" }
+    },
+    { _id: false }
+);
 
-const CrunchyrollFeedSettingsSchema = new Schema<ICrunchyrollFeedSettings>({
-    enabled: { type: Boolean, default: false },
-    channelId: { type: String, default: null }
-});
+const CrunchyrollFeedSettingsSchema = new Schema<ICrunchyrollFeedSettings>(
+    {
+        enabled: { type: Boolean, default: false },
+        channelId: { type: String, default: null }
+    },
+    { _id: false }
+);
 
-const U2FeedSettingsSchema = new Schema<IU2FeedSettings>({
-    enabled: { type: Boolean, default: false },
-    channelId: { type: String, default: null },
-    filter: { type: String, default: "BDMV|Blu-ray|BD-BOX" }
-});
+const U2FeedSettingsSchema = new Schema<IU2FeedSettings>(
+    {
+        enabled: { type: Boolean, default: false },
+        channelId: { type: String, default: null },
+        filter: { type: String, default: "BDMV|Blu-ray|BD-BOX" }
+    },
+    { _id: false }
+);
 
-const AntihackSettingsSchema = new Schema<IAntihackSettings>({
-    enabled: { type: Boolean, default: false },
-    channelIds: { type: [String], default: [] },
-    logChannelId: { type: String, default: null }
-});
+const AntihackSettingsSchema = new Schema<IAntihackSettings>(
+    {
+        enabled: { type: Boolean, default: false },
+        channelIds: { type: [String], default: [] },
+        logChannelId: { type: String, default: null }
+    },
+    { _id: false }
+);
 
-const YouTubeFeedChannelSchema = new Schema<IYouTubeFeedChannel>({
-    channelId: { type: String, required: true },
-    channelName: { type: String, required: true },
-    handle: { type: String, required: true },
-    region: { type: String, default: "ID" }
-});
+const YouTubeFeedChannelSchema = new Schema<IYouTubeFeedChannel>(
+    {
+        channelId: { type: String, required: true },
+        channelName: { type: String, required: true },
+        handle: { type: String, required: true },
+        region: { type: String, default: "ID" }
+    },
+    { _id: false }
+);
 
-const YouTubeFeedSettingsSchema = new Schema<IYouTubeFeedSettings>({
-    enabled: { type: Boolean, default: false },
-    channelId: { type: String, default: null },
-    youtubeChannels: { type: [YouTubeFeedChannelSchema], default: [] }
-});
+const YouTubeFeedSettingsSchema = new Schema<IYouTubeFeedSettings>(
+    {
+        enabled: { type: Boolean, default: false },
+        channelId: { type: String, default: null },
+        youtubeChannels: { type: [YouTubeFeedChannelSchema], default: [] }
+    },
+    { _id: false }
+);
 
 const GuildSettingsSchema = new Schema<IGuildSettings>(
     {
@@ -131,6 +149,25 @@ const GuildSettingsSchema = new Schema<IGuildSettings>(
         timestamps: true
     }
 );
+
+// Partial filter indexes for background schedulers — index only guilds where feeds are active
+GuildSettingsSchema.index(
+    { "youtubeFeed.enabled": 1, "youtubeFeed.channelId": 1 },
+    { partialFilterExpression: { "youtubeFeed.enabled": true } }
+);
+GuildSettingsSchema.index(
+    { "u2Feed.enabled": 1, "u2Feed.channelId": 1 },
+    { partialFilterExpression: { "u2Feed.enabled": true } }
+);
+GuildSettingsSchema.index(
+    { "crunchyrollFeed.enabled": 1, "crunchyrollFeed.channelId": 1 },
+    { partialFilterExpression: { "crunchyrollFeed.enabled": true } }
+);
+GuildSettingsSchema.index(
+    { "crunchyrollLineup.enabled": 1, "crunchyrollLineup.channelId": 1 },
+    { partialFilterExpression: { "crunchyrollLineup.enabled": true } }
+);
+GuildSettingsSchema.index({ "antihack.enabled": 1 }, { partialFilterExpression: { "antihack.enabled": true } });
 
 /**
  * Mongoose model for GuildSettings documents.

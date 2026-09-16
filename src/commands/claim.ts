@@ -4,38 +4,39 @@
  */
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
-import { User } from "../database/models/user";
+import { User, recordClaimHistory } from "../database";
 import { HoyolabService, formatHoyolabResults } from "../services/hoyolab";
 import { EndfieldService, formatEndfieldResult } from "../services/endfield";
+import { logger } from "../core/logger";
 import { decryptTokenCompat, encryptToken } from "../utils/token-crypto";
 import { getCooldownRemaining, setCooldown, formatCooldown } from "../utils/cooldown";
-import { logger } from "../core/logger";
 
-const CLAIM_COOLDOWN_MS = 30_000; // 30 seconds
+/** Cooldown duration for the claim command in milliseconds (30 seconds). */
+export const CLAIM_COOLDOWN_MS = 30_000;
 
 /**
- * Slash command data for the claim command.
+ * Slash command definition for manual daily rewards claiming.
  */
 export const data = new SlashCommandBuilder()
     .setName("claim")
-    .setDescription("Manually claim daily rewards now")
+    .setDescription("Manually claim daily check-in rewards")
     .addStringOption(option =>
         option
             .setName("service")
-            .setDescription("Which service to claim (default: all)")
+            .setDescription("Service to claim rewards for")
             .setRequired(false)
             .addChoices(
-                { name: "All", value: "all" },
-                { name: "Hoyolab", value: "hoyolab" },
-                { name: "Endfield", value: "endfield" }
+                { name: "All Services", value: "all" },
+                { name: "Hoyolab (Genshin, HSR, HI3, etc.)", value: "hoyolab" },
+                { name: "SKPORT (Arknights: Endfield)", value: "endfield" }
             )
     );
 
 /**
  * Executes the claim command to manually trigger daily reward claims.
  *
- * @param interaction The command interaction from Discord.
- * @returns A promise that resolves when the command is executed.
+ * @param interaction Chat input command interaction.
+ * @returns A promise that resolves when the command finishes.
  */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     try {
@@ -52,7 +53,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const service = interaction.options.getString("service") || "all";
-        const user = await User.findOne({ discordId: interaction.user.id });
+        const user = await User.findOne({ discordId: interaction.user.id }).lean();
 
         if (!user) {
             await interaction.editReply({
@@ -85,6 +86,17 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     }
                     await User.updateOne({ discordId: interaction.user.id }, { $set: hoyolabUpdate });
 
+                    // Record history asynchronously
+                    void recordClaimHistory(
+                        results.map(r => ({
+                            discordId: interaction.user.id,
+                            service: "hoyolab",
+                            game: r.game,
+                            success: r.success,
+                            message: r.message
+                        }))
+                    );
+
                     return { name: "🌟 Hoyolab", value: formatHoyolabResults(results) };
                 } catch (error) {
                     logger.error(error, "[Claim] Hoyolab claim failed");
@@ -111,6 +123,15 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                         endfieldUpdate["endfield.accountToken"] = encryptToken(endfieldDecrypt.value);
                     }
                     await User.updateOne({ discordId: interaction.user.id }, { $set: endfieldUpdate });
+
+                    // Record history asynchronously
+                    void recordClaimHistory({
+                        discordId: interaction.user.id,
+                        service: "endfield",
+                        game: "Endfield",
+                        success: result.success,
+                        message: result.message
+                    });
 
                     return { name: "🎮 Endfield", value: formatEndfieldResult(result) };
                 } catch (error) {

@@ -4,7 +4,7 @@
  */
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, MessageFlags } from "discord.js";
-import { User } from "../database/models/user";
+import { updateUserSettings } from "../database";
 import { logger } from "../core/logger";
 
 /**
@@ -37,16 +37,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         if (subcommand === "notify") {
             const enabled = interaction.options.getBoolean("enabled", true);
 
-            await User.findOneAndUpdate(
-                { discordId: interaction.user.id },
-                {
-                    $set: {
-                        username: interaction.user.username,
-                        "settings.notifyOnClaim": enabled
-                    }
-                },
-                { upsert: true }
-            );
+            await updateUserSettings(interaction.user.id, { notifyOnClaim: enabled }, interaction.user.username);
 
             await interaction.editReply({
                 content: enabled

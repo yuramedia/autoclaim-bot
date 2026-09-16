@@ -173,7 +173,9 @@ async function checkForNewEpisodes(client: Client, service: CrunchyrollService):
         const guilds = await GuildSettings.find({
             "crunchyrollFeed.enabled": true,
             "crunchyrollFeed.channelId": { $ne: null }
-        }).lean();
+        })
+            .select({ "crunchyrollFeed.channelId": 1, _id: 0 })
+            .lean();
 
         if (guilds.length === 0) {
             // Commit seen episodes even if no active guilds are subscribed right now

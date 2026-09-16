@@ -4,7 +4,7 @@
  */
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
-import { User } from "../database/models/user";
+import { User, getUserRecentClaimHistory } from "../database";
 import { GAME_DISPLAY_NAMES } from "../constants";
 import { formatUtc8DateTime, discordTimestamp } from "../utils/time";
 import { logger } from "../core/logger";
@@ -24,7 +24,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     try {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const user = await User.findOne({ discordId: interaction.user.id });
+        const user = await User.findOne({ discordId: interaction.user.id }).lean();
 
         if (!user) {
             await interaction.editReply({
@@ -101,6 +101,22 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             value: `**Notify on Claim:** ${user.settings?.notifyOnClaim ? "✅ Enabled" : "❌ Disabled"}`,
             inline: false
         });
+
+        // Recent Claim History (if any)
+        const recentHistory = await getUserRecentClaimHistory(interaction.user.id, 5);
+        if (recentHistory.length > 0) {
+            const historyLines = recentHistory.map(entry => {
+                const icon = entry.success ? "✅" : "❌";
+                const time = discordTimestamp(entry.claimedAt, "R");
+                const desc = entry.message ? ` - ${entry.message.slice(0, 50)}` : "";
+                return `${icon} **${entry.game}** (${time})${desc}`;
+            });
+            embed.addFields({
+                name: "📜 Recent Claim History",
+                value: historyLines.join("\n"),
+                inline: false
+            });
+        }
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {

@@ -10,7 +10,7 @@ import {
     StringSelectMenuOptionBuilder,
     ActionRowBuilder
 } from "discord.js";
-import { User } from "../database/models/user";
+import { updateHoyolabCredentials } from "../database";
 import { HoyolabService } from "../services/hoyolab";
 import { GAME_DISPLAY_NAMES, type HoyolabGameKey } from "../constants";
 import { encryptToken } from "../utils/token-crypto";
@@ -95,28 +95,14 @@ export async function handleHoyolabModal(interaction: ModalSubmitInteraction): P
             return;
         }
 
-        // Save to database (partial update) — encrypt token before storage
-        await User.findOneAndUpdate(
-            { discordId: interaction.user.id },
+        // Save to database using repository helper — encrypt token before storage
+        await updateHoyolabCredentials(
+            interaction.user.id,
             {
-                $set: {
-                    username: interaction.user.username,
-                    "hoyolab.token": encryptToken(token),
-                    "hoyolab.accountName": nickname
-                },
-                $setOnInsert: {
-                    settings: { notifyOnClaim: true },
-                    // Only set default games on insert (new user) — preserve existing games on update
-                    "hoyolab.games": {
-                        genshin: false,
-                        starRail: false,
-                        honkai3: false,
-                        tearsOfThemis: false,
-                        zenlessZoneZero: false
-                    }
-                }
+                token: encryptToken(token),
+                accountName: nickname
             },
-            { upsert: true, new: true }
+            interaction.user.username
         );
 
         // Create Select Menu using centralized constants

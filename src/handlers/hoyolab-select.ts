@@ -1,5 +1,5 @@
 import { StringSelectMenuInteraction, MessageFlags } from "discord.js";
-import { User } from "../database/models/user";
+import { updateHoyolabGames } from "../database";
 import { getGameDisplayName } from "../constants/games";
 import { config } from "../config";
 import { logger } from "../core/logger";
@@ -24,7 +24,7 @@ export async function handleHoyolabSelect(interaction: StringSelectMenuInteracti
             zenlessZoneZero: selectedGames.includes("zenlessZoneZero")
         };
 
-        await User.findOneAndUpdate({ discordId: interaction.user.id }, { $set: { "hoyolab.games": games } });
+        await updateHoyolabGames(interaction.user.id, games);
 
         const enabledGamesList = Object.entries(games)
             .filter(([, enabled]) => enabled)

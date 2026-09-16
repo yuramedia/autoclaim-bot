@@ -1,6 +1,6 @@
 import { Events } from "discord.js";
 import { config } from "./config";
-import { connectDatabase, disconnectDatabase } from "./database/connection";
+import { connectDatabase, disconnectDatabase } from "./database";
 import { startScheduler, checkMissedClaims } from "./services/scheduler";
 import { startCrunchyrollFeed } from "./services/crunchyroll-scheduler";
 import { startCrunchyrollLineupFeed } from "./services/crunchyroll-lineup-scheduler";

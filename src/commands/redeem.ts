@@ -4,7 +4,7 @@
  */
 
 import { SlashCommandBuilder, type ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from "discord.js";
-import { User } from "../database/models/user";
+import { User } from "../database";
 import { HoyolabService, type GameAccount } from "../services/hoyolab";
 import { getCodes } from "../services/code-source";
 import { getGameDisplayName } from "../constants";
@@ -97,7 +97,7 @@ const REDEEM_GAME_STAGGER_MS = 1500;
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const user = await User.findOne({ discordId: interaction.user.id });
+    const user = await User.findOne({ discordId: interaction.user.id }).lean();
     if (!user || !user.hoyolab?.token) {
         await interaction.editReply({
             content: "❌ You need to setup your Hoyolab account first using `/setup-hoyolab`."

@@ -3,8 +3,7 @@
  * Handles resolving YouTube handles/URLs to Channel IDs and parsing YouTube Atom RSS XML feeds.
  */
 
-import he from "he";
-const { decode } = he;
+import { decode } from "he";
 import { YT_FEED_BASE_URL, YT_ICON_CACHE_TTL } from "../constants/youtube-feed";
 import { logger } from "../core/logger";
 import { parseXml, xmlNodeArray, xmlText, xmlAttr, type XmlNode } from "../utils/xml";

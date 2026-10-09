@@ -16,7 +16,8 @@ import type {
     CrunchyrollBrowseResponse,
     LineupAnnouncement
 } from "../types/crunchyroll";
-import { LANG_MAP, CR_RELEASE_ITEMS_PER_PAGE, CRUNCHYROLL_BASIC_AUTH, CRUNCHYROLL_USER_AGENT } from "../constants";
+import { LANG_MAP, CR_RELEASE_ITEMS_PER_PAGE, getActiveCrunchyrollAuth } from "../constants";
+import { syncCrunchyrollCredentials } from "./crunchyroll-credentials";
 import { config } from "../config";
 import { logger } from "../core/logger";
 import { fetchWithTimeout } from "../utils/http";
@@ -55,8 +56,13 @@ export class CrunchyrollService {
     private readonly subtitleCollator = new Intl.Collator("en", { sensitivity: "base" });
 
     private readonly API_BASE = "https://beta-api.crunchyroll.com";
-    private basicAuth = CRUNCHYROLL_BASIC_AUTH;
-    private userAgent = CRUNCHYROLL_USER_AGENT;
+    private get basicAuth(): string {
+        return getActiveCrunchyrollAuth().basicAuth;
+    }
+
+    private get userAgent(): string {
+        return getActiveCrunchyrollAuth().userAgent;
+    }
 
     /**
      * Deterministic device ID derived from config seed.
@@ -99,7 +105,7 @@ export class CrunchyrollService {
     /**
      * Perform the anonymous client_id grant and populate the cache.
      */
-    private async requestAnonymousAuth(): Promise<CrunchyrollAuth | null> {
+    private async requestAnonymousAuth(retryOnAuthError = true): Promise<CrunchyrollAuth | null> {
         try {
             const body = new URLSearchParams();
             body.append("grant_type", "client_id");
@@ -117,6 +123,18 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
+                // Self-healing: if 401 or 403, credentials may be expired or revoked
+                if ((response.status === 401 || response.status === 403) && retryOnAuthError) {
+                    logger.warn(
+                        `[CrunchyrollService] Auth failed with HTTP ${response.status}. Attempting self-healing credential sync...`
+                    );
+                    const updated = await syncCrunchyrollCredentials(true);
+                    if (updated) {
+                        logger.info("[CrunchyrollService] Credentials updated, retrying anonymous auth once...");
+                        return await this.requestAnonymousAuth(false);
+                    }
+                }
+
                 logger.error(`Crunchyroll auth failed: ${response.status}`);
                 return null;
             }
@@ -207,7 +225,7 @@ export class CrunchyrollService {
             const response = await fetchWithTimeout("https://www.crunchyroll.com/rss/anime", {
                 timeoutMs: 10000,
                 headers: {
-                    "User-Agent": CRUNCHYROLL_USER_AGENT
+                    "User-Agent": this.userAgent
                 }
             });
 
@@ -449,7 +467,7 @@ export class CrunchyrollService {
             const response = await fetchWithTimeout("https://www.crunchyroll.com/rss/anime", {
                 timeoutMs: 10000,
                 headers: {
-                    "User-Agent": CRUNCHYROLL_USER_AGENT
+                    "User-Agent": this.userAgent
                 }
             });
 

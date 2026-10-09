@@ -5,8 +5,7 @@
  * Based on Rimuru-Bot's Feed.kt / FeedItem.kt patterns
  */
 
-import he from "he";
-const { decode } = he;
+import { decode } from "he";
 import type { U2FeedItem, FormattedU2Item } from "../types/u2-feed";
 import { U2_IMAGE_PATTERN, U2_ATTACH_IMAGE_PATTERN } from "../constants/u2-feed";
 import { logger } from "../core/logger.js";

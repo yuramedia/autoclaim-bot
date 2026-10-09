@@ -13,6 +13,35 @@ export const CRUNCHYROLL_BASIC_AUTH = "dng1bThwOWZzYm16em15bnZnemo6Q2NjNXp6UkNxT
 export const CRUNCHYROLL_USER_AGENT =
     "Crunchyroll/ANDROIDTV/3.71.0_22359 (Android 12; en-US; SHIELD Android TV Build/SR1A.220624.014)";
 
+/** Active in-memory credentials interface */
+export interface CrunchyrollCredentials {
+    basicAuth: string;
+    userAgent: string;
+}
+
+/** Active in-memory credentials, initialized with defaults */
+let activeCredentials: CrunchyrollCredentials = {
+    basicAuth: CRUNCHYROLL_BASIC_AUTH,
+    userAgent: CRUNCHYROLL_USER_AGENT
+};
+
+/**
+ * Get the currently active Crunchyroll basic auth token and user agent.
+ */
+export function getActiveCrunchyrollAuth(): CrunchyrollCredentials {
+    return { ...activeCredentials };
+}
+
+/**
+ * Update the active Crunchyroll credentials in memory.
+ */
+export function setActiveCrunchyrollAuth(creds: Partial<CrunchyrollCredentials>): void {
+    activeCredentials = {
+        ...activeCredentials,
+        ...creds
+    };
+}
+
 /** Poll interval for checking new episodes (2 minutes) */
 export const CRUNCHYROLL_POLL_INTERVAL = 2 * 60 * 1000;
 

@@ -1,0 +1,55 @@
+name: Update Crunchyroll Tokens
+
+on:
+    schedule:
+        # Run daily at 00:00 UTC
+        - cron: "0 0 * * *"
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+jobs:
+    extract-and-update:
+        name: Extract & Update Crunchyroll Tokens
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@main
+
+            - name: Setup Java (for JADX)
+              uses: actions/setup-java@main
+              with:
+                  java-version: "17"
+                  distribution: "temurin"
+
+            - name: Install JADX
+              run: |
+                  JADX_TAG=$(curl -s https://api.github.com/repos/skylot/jadx/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+                  echo "Installing JADX version: ${JADX_TAG}"
+                  JADX_VER="${JADX_TAG#v}"
+                  curl -sL -o /tmp/jadx.zip "https://github.com/skylot/jadx/releases/download/${JADX_TAG}/jadx-${JADX_VER}.zip"
+                  sudo unzip -q /tmp/jadx.zip -d /opt/jadx
+                  sudo ln -s /opt/jadx/bin/jadx /usr/local/bin/jadx
+                  jadx --version
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@main
+              with:
+                  bun-version: latest
+
+            - name: Run Independent Extraction Script
+              run: bun run scripts/extract-crunchyroll-tokens.ts
+
+            - name: Commit and Push Changes
+              run: |
+                  if [[ -n $(git status -s src/constants/crunchyroll.ts) ]]; then
+                    git config user.name "github-actions[bot]"
+                    git config user.email "github-actions[bot]@users.noreply.github.com"
+                    git add src/constants/crunchyroll.ts
+                    git commit -m "chore(crunchyroll): auto-update basic auth token and UA"
+                    git push origin main
+                  else
+                    echo "No token changes detected."
+                  fi

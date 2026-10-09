@@ -32,7 +32,10 @@ export const config = {
     },
     crunchyroll: {
         email: process.env.CR_EMAIL || "",
-        password: process.env.CR_PASSWORD || ""
+        password: process.env.CR_PASSWORD || "",
+        basicAuth: process.env.CR_BASIC_AUTH || "",
+        userAgent: process.env.CR_USER_AGENT || "",
+        autoUpdateCredentials: process.env.CR_AUTO_UPDATE_CREDENTIALS !== "false"
     },
     u2: {
         rssUrl: process.env.U2_RSS_URL || ""

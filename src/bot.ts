@@ -13,6 +13,10 @@ import { client } from "./core/client";
 import { logger } from "./core/logger";
 import { ramen } from "./core/ramen";
 import { fetchCrunchyrollLanguages } from "./constants";
+import {
+    startCrunchyrollCredentialsScheduler,
+    stopCrunchyrollCredentialsScheduler
+} from "./services/crunchyroll-credentials";
 import { shutdownCooldown } from "./utils/cooldown";
 import { prewarmSeasonCache } from "./commands/crrelease";
 import "./services/ramen/crunchyroll-subscriber";
@@ -74,6 +78,9 @@ async function main() {
         // defaults, so boot must never depend on this CDN round-trip.
         void fetchCrunchyrollLanguages();
 
+        // Start Crunchyroll credentials background synchronizer & daily scheduler
+        startCrunchyrollCredentialsScheduler();
+
         // Connect to database
         await connectDatabase();
 
@@ -98,6 +105,7 @@ async function shutdown(signal: string): Promise<void> {
 
     if (presenceTimer) clearInterval(presenceTimer);
     shutdownCooldown();
+    stopCrunchyrollCredentialsScheduler();
 
     try {
         await client.destroy();

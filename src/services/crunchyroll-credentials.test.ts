@@ -148,7 +148,7 @@ export const CRUNCHYROLL_USER_AGENT =
         test("updates active credentials when remote has a newer version", async () => {
             const mockRemoteTs = `
 export const CRUNCHYROLL_BASIC_AUTH = "bmV3LWF1dGgtdG9rZW4=";
-export const CRUNCHYROLL_USER_AGENT = "Crunchyroll/ANDROIDTV/3.72.0_22360 (Android 12; en-US; SHIELD Android TV Build/SR1A.220624.014)";
+export const CRUNCHYROLL_USER_AGENT = "Crunchyroll/ANDROIDTV/4.0.0_30000 (Android 12; en-US; SHIELD Android TV Build/SR1A.220624.014)";
             `;
 
             globalThis.fetch = mock(async () => {
@@ -160,7 +160,7 @@ export const CRUNCHYROLL_USER_AGENT = "Crunchyroll/ANDROIDTV/3.72.0_22360 (Andro
 
             const active = getActiveCrunchyrollAuth();
             expect(active.basicAuth).toBe("bmV3LWF1dGgtdG9rZW4=");
-            expect(active.userAgent).toContain("3.72.0_22360");
+            expect(active.userAgent).toContain("4.0.0_30000");
         });
 
         test("does not downgrade if remote version is older", async () => {

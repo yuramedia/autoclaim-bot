@@ -7,11 +7,11 @@
 export const CRUNCHYROLL_COLOR = 0xf47521;
 
 /** Crunchyroll basic auth token */
-export const CRUNCHYROLL_BASIC_AUTH = "dng1bThwOWZzYm16em15bnZnemo6Q2NjNXp6UkNxTDgtNWpVTDdJZFJRODU2Z0l6WlVZVk0=";
+export const CRUNCHYROLL_BASIC_AUTH = "ZXI5bmdnMmtvNW9oaXJsYTUxaTI6VmwxVDBQbjhRWko2d3o0NnhYRGxIekRGUDV0Wlgxb3E=";
 
 /** Crunchyroll android TV User-Agent */
 export const CRUNCHYROLL_USER_AGENT =
-    "Crunchyroll/ANDROIDTV/3.71.0_22359 (Android 12; en-US; SHIELD Android TV Build/SR1A.220624.014)";
+    "Crunchyroll/ANDROIDTV/3.76.0_22366 (Android 12; en-US; SHIELD Android TV Build/SR1A.220624.014)";
 
 /** Active in-memory credentials interface */
 export interface CrunchyrollCredentials {

@@ -27,7 +27,7 @@
         "cheerio": "^1.2.0",
         "discord.js": "^14.27.0",
         "he": "^2.0.0",
-        "mongoose": "^9.11.3",
+        "mongoose": "^9.11.4",
         "node-cron": "^4.6.0",
         "pino": "^10.4.0",
         "pino-pretty": "^13.2.0"

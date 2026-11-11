@@ -160,8 +160,10 @@ export async function fetchTwitterInfo(statusId: string): Promise<PostInfo | nul
             }
         }
 
-        // Fallback: if no photos exist, use video thumbnails so embed has an image preview
-        const images = photos.length > 0 ? photos : videoThumbnails;
+        // Only use actual photos for embed images.
+        // Do not use video thumbnails as images, otherwise Discord shows a redundant
+        // static thumbnail picture right below the playable video attachment.
+        const images = photos;
 
         return {
             author: {

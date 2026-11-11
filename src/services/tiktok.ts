@@ -70,9 +70,10 @@ export async function fetchTikTokInfo(url: string): Promise<PostInfo | null> {
         const commentsMatch = statsText.match(/(💬|comments?)\s*([\d,.KkMm]+)/i);
         const repostsMatch = statsText.match(/(🔁|shares?|reposts?)\s*([\d,.KkMm]+)/i);
 
-        // Get images
-        const images: string[] = [...ogImages];
-        if (images.length === 0 && tags["og:image"]) images.push(tags["og:image"]);
+        // Get images - if post is a video, do not populate images with video thumbnail
+        // so Discord does not show a redundant static thumbnail image under the video attachment.
+        const images: string[] = videoUrl ? [] : [...ogImages];
+        if (images.length === 0 && !videoUrl && tags["og:image"]) images.push(tags["og:image"]);
 
         return {
             author: {

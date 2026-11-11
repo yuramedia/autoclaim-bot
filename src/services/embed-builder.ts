@@ -334,7 +334,16 @@ export async function fetchFacebookInfo(url: string): Promise<PostInfo | null> {
             }
         });
 
-        const images = ogImages.length > 0 ? ogImages : tags["og:image"] ? [tags["og:image"]] : [];
+        const video = tags["og:video"] || tags["og:video:secure_url"];
+
+        // If post has video, keep images empty so Discord does not show a redundant static thumbnail
+        const images: string[] = video
+            ? []
+            : ogImages.length > 0
+              ? ogImages
+              : tags["og:image"]
+                ? [tags["og:image"]]
+                : [];
         const authorName = tags["og:title"] || "Facebook User";
         const urlMatch = tags["og:url"] || url;
 
@@ -362,7 +371,7 @@ export async function fetchFacebookInfo(url: string): Promise<PostInfo | null> {
             }
         }
 
-        if (tags["og:image"] && !images.includes(tags["og:image"])) {
+        if (!video && tags["og:image"] && !images.includes(tags["og:image"])) {
             images.push(tags["og:image"]);
         }
 
@@ -370,12 +379,12 @@ export async function fetchFacebookInfo(url: string): Promise<PostInfo | null> {
             author: {
                 name: authorName,
                 username,
-                avatar: images[0] || tags["og:image"] || undefined,
+                avatar: tags["og:image"] || undefined,
                 url: urlMatch
             },
             content: tags["og:description"] || "",
             images,
-            video: tags["og:video"] || tags["og:video:secure_url"],
+            video,
             stats: {
                 likes: parseStat(likesMatch?.[1]),
                 comments: parseStat(commentsMatch?.[1]),

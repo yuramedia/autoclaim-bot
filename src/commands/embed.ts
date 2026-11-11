@@ -208,26 +208,49 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 if (info) {
                     embeds.push(...buildRichEmbed(info, platform, url));
 
+                    const videoList =
+                        info.videos && info.videos.length > 0 ? info.videos : info.video ? [info.video] : [];
+
                     // Try to download & upload video when available
-                    if (info.video && canDownload) {
-                        let downloadResult;
+                    if (videoList.length > 0 && canDownload) {
                         const { downloadMedia, downloadDirect } = await import("../services/media-downloader");
 
-                        if (platform.id === PlatformId.FACEBOOK || platform.id === PlatformId.TIKTOK) {
-                            downloadResult = await downloadDirect(info.video, `${platform.id}_video.mp4`, maxSizeLimit);
-                            if (!downloadResult.success) {
+                        for (let idx = 0; idx < videoList.length; idx++) {
+                            const videoUrl = videoList[idx]!;
+                            let downloadResult;
+
+                            if (
+                                platform.id === PlatformId.FACEBOOK ||
+                                platform.id === PlatformId.TIKTOK ||
+                                platform.id === PlatformId.TWITTER
+                            ) {
+                                downloadResult = await downloadDirect(
+                                    videoUrl,
+                                    `${platform.id}_video_${idx + 1}.mp4`,
+                                    maxSizeLimit
+                                );
+                                if (!downloadResult.success) {
+                                    downloadResult = await downloadMedia(url, maxSizeLimit);
+                                }
+                            } else {
                                 downloadResult = await downloadMedia(url, maxSizeLimit);
                             }
-                        } else {
-                            downloadResult = await downloadMedia(url, maxSizeLimit);
-                        }
 
-                        if (downloadResult.success && downloadResult.buffer) {
-                            files.push(new AttachmentBuilder(downloadResult.buffer, { name: downloadResult.filename }));
-                        } else {
-                            const row = buildResolutionSelect(downloadResult, url, platform.id);
-                            if (row) components.push(row);
+                            if (downloadResult.success && downloadResult.buffer) {
+                                files.push(
+                                    new AttachmentBuilder(downloadResult.buffer, { name: downloadResult.filename })
+                                );
+                            } else {
+                                const row = buildResolutionSelect(downloadResult, url, platform.id);
+                                if (row) components.push(row);
+                            }
                         }
+                    }
+
+                    // If video post but no attachment or select menu, fallback to fixedUrl unfurl
+                    if (videoList.length > 0 && files.length === 0 && components.length === 0 && fixedUrl !== url) {
+                        await interaction.editReply({ content: fixedUrl });
+                        return;
                     }
                 }
 

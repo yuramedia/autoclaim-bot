@@ -249,42 +249,67 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
                 const richEmbeds = buildRichEmbed(postInfo, processed.platform, processed.originalUrl);
                 embeds.push(...richEmbeds);
 
+                const videoList =
+                    postInfo.videos && postInfo.videos.length > 0
+                        ? postInfo.videos
+                        : postInfo.video
+                          ? [postInfo.video]
+                          : [];
+
                 // Try to download and upload media if enabled (only for supported platforms)
-                if (settings.embedFix.autoUpload && postInfo.video && canDownload) {
-                    let downloadResult;
+                if (settings.embedFix.autoUpload && videoList.length > 0 && canDownload) {
+                    const directDownloader = await import("../services/media-downloader");
 
-                    if (processed.platform.id === PlatformId.FACEBOOK) {
-                        // Facebook video URLs from our scraper are direct mp4 links
-                        const directDownloader = await import("../services/media-downloader");
-                        downloadResult = await directDownloader.downloadDirect(
-                            postInfo.video,
-                            "facebook_video.mp4",
-                            maxSizeLimit
-                        );
+                    for (let idx = 0; idx < videoList.length; idx++) {
+                        const videoUrl = videoList[idx]!;
+                        let downloadResult;
 
-                        // If direct download fails (e.g. maxContentLength exceeded), fallback to VKrDownloader
-                        // which might offer lower resolutions via the select menu
-                        if (!downloadResult.success) {
-                            downloadResult = await directDownloader.downloadMedia(processed.originalUrl, maxSizeLimit);
+                        // Facebook, Twitter, and TikTok provide direct MP4 URLs
+                        if (
+                            processed.platform.id === PlatformId.FACEBOOK ||
+                            processed.platform.id === PlatformId.TWITTER ||
+                            processed.platform.id === PlatformId.TIKTOK
+                        ) {
+                            downloadResult = await directDownloader.downloadDirect(
+                                videoUrl,
+                                `${processed.platform.id}_video_${idx + 1}.mp4`,
+                                maxSizeLimit
+                            );
+
+                            if (!downloadResult.success) {
+                                downloadResult = await directDownloader.downloadMedia(
+                                    processed.originalUrl,
+                                    maxSizeLimit
+                                );
+                            }
+                        } else {
+                            const { downloadMedia } = await import("../services/media-downloader");
+                            downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
                         }
-                    } else {
-                        const { downloadMedia } = await import("../services/media-downloader");
-                        downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
-                    }
 
-                    if (downloadResult.success && downloadResult.buffer) {
-                        const attachment = new AttachmentBuilder(downloadResult.buffer, {
-                            name: processed.spoilered ? `SPOILER_${downloadResult.filename}` : downloadResult.filename
-                        });
-                        files.push(attachment);
-                    } else if (downloadResult.oversized && downloadResult.availableFormats) {
-                        const { selectMenu } = createResolutionSelectMenu(
-                            downloadResult.availableFormats,
-                            processed.originalUrl,
-                            processed.platform.id
-                        );
-                        components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
+                        if (downloadResult.success && downloadResult.buffer) {
+                            const attachment = new AttachmentBuilder(downloadResult.buffer, {
+                                name: processed.spoilered
+                                    ? `SPOILER_${downloadResult.filename}`
+                                    : downloadResult.filename
+                            });
+                            files.push(attachment);
+                        } else if (downloadResult.oversized && downloadResult.availableFormats) {
+                            const { selectMenu } = createResolutionSelectMenu(
+                                downloadResult.availableFormats,
+                                processed.originalUrl,
+                                processed.platform.id
+                            );
+                            components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
+                        }
                     }
+                }
+
+                // If post has video but no file was attached and no select menu,
+                // provide fixedUrl so Discord client native video player can unfurl
+                if (videoList.length > 0 && files.length === 0 && components.length === 0) {
+                    content = processed.spoilered ? `||${processed.fixedUrl}||` : processed.fixedUrl;
+                    embeds.length = 0;
                 }
             }
         }

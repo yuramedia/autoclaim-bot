@@ -24,6 +24,7 @@ export interface PostInfo {
     content: string;
     images: string[];
     video?: string;
+    videos?: string[];
     stats: PostStats;
     timestamp?: Date;
 }

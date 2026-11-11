@@ -22,11 +22,12 @@ export function extractUrls(content: string): { url: string; spoilered: boolean 
     const skipPattern = /\$https?:\/\/|<https?:\/\/[^>]+>/g;
     const cleanContent = content.replace(skipPattern, "");
 
-    // Match spoilered URLs: ||url||
-    const spoilerPattern = /\|\|(https?:\/\/[^\s|]+)\|\|/g;
+    // Match spoilered URLs: ||url|| or || url ||
+    const spoilerPattern = /\|\|\s*(https?:\/\/[^\s|]+)\s*\|\|/g;
     let spoilerMatch: RegExpExecArray | null;
     while ((spoilerMatch = spoilerPattern.exec(content)) !== null) {
-        results.push({ url: spoilerMatch[1]!, spoilered: true });
+        const cleanUrl = spoilerMatch[1]!.replace(/[.,;:!?)]+$/, "");
+        results.push({ url: cleanUrl, spoilered: true });
     }
 
     // Match regular URLs
@@ -75,8 +76,10 @@ export function applyFix(url: string, platform: PlatformConfig): string {
                 break;
             }
         } else if (url.includes(fix.oldDomain)) {
-            fixedUrl = url.replace(fix.oldDomain, fix.newDomain);
-            break;
+            if (!url.includes(fix.newDomain)) {
+                fixedUrl = url.replace(fix.oldDomain, fix.newDomain);
+                break;
+            }
         }
     }
     return fixedUrl;
@@ -99,8 +102,26 @@ export function extractPostId(url: string, platform: PlatformConfig): string | n
             return bskyMatch?.[1] ?? null;
         }
         case PlatformId.PIXIV: {
-            const pixivMatch = url.match(/\/artworks\/(\d+)/);
+            const pixivMatch = url.match(/\/artworks\/(\d+)/) || url.match(/[?&]illust_id=(\d+)/);
             return pixivMatch?.[1] ?? null;
+        }
+        case PlatformId.TIKTOK: {
+            const tiktokMatch = url.match(/\/(?:video|photo)\/(\d+)/) || url.match(/\/(?:t|vm|vt)\/(\w+)/);
+            return tiktokMatch?.[1] ?? null;
+        }
+        case PlatformId.REDDIT: {
+            const redditMatch =
+                url.match(/\/comments\/(\w+)/) || url.match(/redd\.it\/(\w+)/) || url.match(/\/s\/(\w+)/);
+            return redditMatch?.[1] ?? null;
+        }
+        case PlatformId.INSTAGRAM: {
+            const igMatch =
+                url.match(/\/(?:p|reel|reels|tv)\/([\w-]+)/) || url.match(/\/share\/(?:p|reel|reels?|r)\/([\w-]+)/);
+            return igMatch?.[1] ?? null;
+        }
+        case PlatformId.THREADS: {
+            const threadsMatch = url.match(/\/post\/([\w-]+)/);
+            return threadsMatch?.[1] ?? null;
         }
         case PlatformId.NYAA: {
             const isSukebei = url.includes("sukebei.nyaa.si");

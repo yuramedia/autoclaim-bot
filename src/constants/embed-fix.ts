@@ -14,13 +14,12 @@ export const PLATFORMS: PlatformConfig[] = [
         name: "Twitter/X",
         color: 0x1da1f2,
         patterns: [
-            /https?:\/\/(www\.)?(twitter|x)\.com\/\w+\/status\/(\d+)/i,
-            /https?:\/\/(www\.)?fxtwitter\.com\/\w+\/status\/(\d+)/i,
-            /https?:\/\/(www\.)?fixupx\.com\/\w+\/status\/(\d+)/i
+            /https?:\/\/(?:[a-z0-9-]+\.)*(?:twitter|x)\.com\/(?:\w+|i\/web)\/status\/(\d+)/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*(?:fxtwitter|fixupx|vxtwitter)\.com\/\w+\/status\/(\d+)/i
         ],
         fixes: [
-            { oldDomain: "twitter.com", newDomain: "fxtwitter.com" },
-            { oldDomain: "x.com", newDomain: "fixupx.com" }
+            { oldDomain: /https?:\/\/(?:[a-z0-9-]+\.)*twitter\.com/i, newDomain: "https://fxtwitter.com" },
+            { oldDomain: /https?:\/\/(?:[a-z0-9-]+\.)*x\.com/i, newDomain: "https://fixupx.com" }
         ]
     },
     {
@@ -28,53 +27,74 @@ export const PLATFORMS: PlatformConfig[] = [
         name: "TikTok",
         color: 0x000000,
         patterns: [
-            /https?:\/\/(www\.)?tiktok\.com\/@[\w.]+\/video\/\d+/i,
-            /https?:\/\/(www\.)?tiktok\.com\/t\/\w+/i,
-            /https?:\/\/vm\.tiktok\.com\/\w+/i,
-            /https?:\/\/vt\.tiktok\.com\/\w+/i
+            /https?:\/\/(?:[a-z0-9-]+\.)*tiktok\.com\/@[\w.]+\/(?:video|photo)\/\d+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*tiktok\.com\/t\/\w+/i,
+            /https?:\/\/(?:vm|vt)\.tiktok\.com\/\w+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*tiktok\.com\/v\/\d+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*(?:tnktok|vxtiktok)\.com\/@[\w.]+\/(?:video|photo)\/\d+/i
         ],
-        fixes: [{ oldDomain: "tiktok.com", newDomain: "tnktok.com" }]
+        fixes: [
+            { oldDomain: /https?:\/\/(?:www\.|m\.)?tiktok\.com/i, newDomain: "https://tnktok.com" },
+            { oldDomain: /https?:\/\/(?:vm|vt)\.tiktok\.com/i, newDomain: "https://vm.tnktok.com" },
+            { oldDomain: /https?:\/\/(?:[a-z0-9-]+\.)*tiktok\.com/i, newDomain: "https://tnktok.com" }
+        ]
     },
     {
         id: PlatformId.REDDIT,
         name: "Reddit",
         color: 0xff4500,
         patterns: [
-            /https?:\/\/(www\.)?reddit\.com\/r\/\w+\/comments\/\w+/i,
-            /https?:\/\/(www\.)?reddit\.com\/r\/\w+\/s\/\w+/i
+            /https?:\/\/(?:[a-z0-9-]+\.)*reddit\.com\/r\/\w+\/comments\/\w+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*reddit\.com\/r\/\w+\/s\/\w+/i,
+            /https?:\/\/redd\.it\/\w+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*(?:vxreddit|rxddit)\.com\/r\/\w+\/comments\/\w+/i
         ],
-        fixes: [{ oldDomain: "reddit.com", newDomain: "vxreddit.com" }]
+        fixes: [
+            { oldDomain: /https?:\/\/(?:[a-z0-9-]+\.)*reddit\.com/i, newDomain: "https://vxreddit.com" },
+            { oldDomain: /https?:\/\/redd\.it/i, newDomain: "https://rxddit.com" }
+        ]
     },
     {
         id: PlatformId.INSTAGRAM,
         name: "Instagram",
         color: 0xe1306c,
         patterns: [
-            /https?:\/\/(www\.)?instagram\.com\/(p|reel|reels)\/[\w-]+/i,
-            /https?:\/\/(www\.)?instagram\.com\/share\/(p|reel|reels?)\/[\w-]+/i
+            /https?:\/\/(?:[a-z0-9-]+\.)*instagram\.com\/(?:p|reel|reels|tv)\/[\w-]+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*instagram\.com\/share\/(?:p|reel|reels?|r)\/[\w-]+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*(?:eeinstagram|ddinstagram)\.com\/(?:p|reel|reels|tv)\/[\w-]+/i
         ],
-        fixes: [{ oldDomain: "instagram.com", newDomain: "eeinstagram.com" }]
+        fixes: [{ oldDomain: /https?:\/\/(?:[a-z0-9-]+\.)*instagram\.com/i, newDomain: "https://eeinstagram.com" }]
     },
     {
         id: PlatformId.PIXIV,
         name: "Pixiv",
         color: 0x0096fa,
-        patterns: [/https?:\/\/(www\.)?pixiv\.net(\/\w+)?\/artworks\/\d+/i],
-        fixes: [{ oldDomain: "pixiv.net", newDomain: "phixiv.net" }]
+        patterns: [
+            /https?:\/\/(?:[a-z0-9-]+\.)*pixiv\.net(?:\/\w+)?\/artworks\/\d+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*pixiv\.net\/member_illust\.php\?.*illust_id=\d+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*phixiv\.net(?:\/\w+)?\/artworks\/\d+/i
+        ],
+        fixes: [{ oldDomain: /https?:\/\/(?:[a-z0-9-]+\.)*pixiv\.net/i, newDomain: "https://phixiv.net" }]
     },
     {
         id: PlatformId.BLUESKY,
         name: "Bluesky",
         color: 0x0085ff,
-        patterns: [/https?:\/\/bsky\.app\/profile\/[\w.]+\/post\/\w+/i],
-        fixes: [{ oldDomain: "bsky.app", newDomain: "fxbsky.app" }]
+        patterns: [
+            /https?:\/\/(?:[a-z0-9-]+\.)*bsky\.app\/profile\/[\w.-]+\/post\/\w+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*fxbsky\.app\/profile\/[\w.-]+\/post\/\w+/i
+        ],
+        fixes: [{ oldDomain: /https?:\/\/(?:[a-z0-9-]+\.)*bsky\.app/i, newDomain: "https://fxbsky.app" }]
     },
     {
         id: PlatformId.THREADS,
         name: "Threads",
         color: 0x000000,
-        patterns: [/https?:\/\/(www\.)?threads\.net\/@?\w+\/post\/\w+/i],
-        fixes: [{ oldDomain: "threads.net", newDomain: "fixthreads.net" }]
+        patterns: [
+            /https?:\/\/(?:[a-z0-9-]+\.)*threads\.net\/@?[\w.]+\/post\/[\w-]+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*fixthreads\.net\/@?[\w.]+\/post\/[\w-]+/i
+        ],
+        fixes: [{ oldDomain: /https?:\/\/(?:[a-z0-9-]+\.)*threads\.net/i, newDomain: "https://fixthreads.net" }]
     },
     {
         id: PlatformId.FACEBOOK,
@@ -84,22 +104,24 @@ export const PLATFORMS: PlatformConfig[] = [
             // Supported by Facebed: /:user/posts/:(id|hash)
             /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/[\w.]+\/posts\/[\w]+/i,
             // Supported: /share/p/:hash (posts) and /share/v/:hash (videos - partial support) and /share/r/:hash (reels)
-            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/share\/(v|p|r)\/\w+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/share\/(?:v|p|r)\/\w+/i,
             // Supported: /groups/:id/posts/:(id|hash)
             /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/groups\/\d+\/posts\/[\w]+/i,
             // Supported: /permalink.php?story_fbid and /story.php?story_fbid
-            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/(permalink|story)\.php\?story_fbid/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/(?:permalink|story)\.php\?story_fbid/i,
             // Reels (supported)
-            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/reel\/\d+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/(?:reel|reels)\/[\w]+/i,
             // Videos and watch
             /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/[\w.]+\/videos\/\d+/i,
             /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com\/watch\/?/i,
             // fb.watch short links
-            /https?:\/\/(?:www\.)?fb\.watch\/\w+/i
+            /https?:\/\/(?:www\.)?fb\.watch\/\w+/i,
+            // facebed URLs
+            /https?:\/\/(?:www\.)?facebed\.com\/.+/i
         ],
         fixes: [
-            { oldDomain: /(?:[a-z0-9-]+\.)*facebook\.com/i, newDomain: "www.facebed.com" },
-            { oldDomain: /(?:www\.)?fb\.watch/i, newDomain: "www.facebed.com" }
+            { oldDomain: /https?:\/\/(?:[a-z0-9-]+\.)*facebook\.com/i, newDomain: "https://www.facebed.com" },
+            { oldDomain: /https?:\/\/(?:www\.)?fb\.watch/i, newDomain: "https://www.facebed.com" }
         ]
     },
     {

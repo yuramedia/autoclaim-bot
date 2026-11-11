@@ -21,17 +21,28 @@ export async function fetchTikTokInfo(url: string): Promise<PostInfo | null> {
 
         const $ = cheerio.load(response.data);
         const tags: Record<string, string> = {};
+        const ogImages: string[] = [];
 
-        $('meta[property^="og:"]').each((i, el) => {
+        $('meta[property^="og:"]').each((_, el) => {
             const prop = $(el).attr("property");
             const content = $(el).attr("content");
-            if (prop && content) tags[prop] = content;
+            if (prop && content) {
+                tags[prop] = content;
+                if (prop === "og:image" && !ogImages.includes(content)) {
+                    ogImages.push(content);
+                }
+            }
         });
 
-        $('meta[name^="twitter:"]').each((i, el) => {
+        $('meta[name^="twitter:"]').each((_, el) => {
             const name = $(el).attr("name");
             const content = $(el).attr("content");
-            if (name && content) tags[name] = content;
+            if (name && content) {
+                tags[name] = content;
+                if ((name === "twitter:image" || name === "twitter:image:src") && !ogImages.includes(content)) {
+                    ogImages.push(content);
+                }
+            }
         });
 
         const title = tags["og:title"] || $("title").text();
@@ -60,8 +71,8 @@ export async function fetchTikTokInfo(url: string): Promise<PostInfo | null> {
         const repostsMatch = statsText.match(/(🔁|shares?|reposts?)\s*([\d,.KkMm]+)/i);
 
         // Get images
-        const images: string[] = [];
-        if (tags["og:image"]) images.push(tags["og:image"]);
+        const images: string[] = [...ogImages];
+        if (images.length === 0 && tags["og:image"]) images.push(tags["og:image"]);
 
         return {
             author: {

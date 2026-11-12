@@ -20,6 +20,22 @@ import type { FormattedU2Item } from "../types/u2-feed";
 let cachedItems: FormattedU2Item[] = [];
 let isFirstCheck = true;
 const u2Lock = { isChecking: false };
+let startupTimer: ReturnType<typeof setTimeout> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Stops the U2 feed scheduler timers for graceful shutdown.
+ */
+export function stopU2Feed(): void {
+    if (startupTimer) {
+        clearTimeout(startupTimer);
+        startupTimer = null;
+    }
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
 
 /**
  * Check if two items are equal (for U2, match on link OR title)
@@ -43,13 +59,15 @@ export function startU2Feed(client: Client): void {
         return;
     }
 
+    stopU2Feed();
     logger.info("📦 Starting U2 BDMV feed scheduler...");
     const maskedUrl = feedUrl.replace(/passkey=[^&\s]*/i, "passkey=***");
     logger.info(`📦 Feed URL: ${maskedUrl}`);
     const service = new U2FeedService();
 
     // First check after a small delay (shard-guarded)
-    setTimeout(async () => {
+    startupTimer = setTimeout(async () => {
+        startupTimer = null;
         try {
             if (client.shard && client.shard.ids[0] !== 0) return;
             await checkFeed(service, feedUrl);
@@ -57,9 +75,10 @@ export function startU2Feed(client: Client): void {
             logger.error(error, "U2 Feed initial check failed:");
         }
     }, 5000);
+    if (typeof startupTimer.unref === "function") startupTimer.unref();
 
     // Poll at configured interval
-    setInterval(async () => {
+    pollTimer = setInterval(async () => {
         try {
             // Only run on Shard 0 or un-sharded clients
             if (client.shard && client.shard.ids[0] !== 0) return;
@@ -68,6 +87,7 @@ export function startU2Feed(client: Client): void {
             logger.error(error, "U2 Feed poll check failed:");
         }
     }, U2_POLL_INTERVAL);
+    if (typeof pollTimer.unref === "function") pollTimer.unref();
 }
 
 /**

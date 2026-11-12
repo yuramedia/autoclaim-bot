@@ -14,17 +14,21 @@ import {
     ComponentType
 } from "discord.js";
 import { CrunchyrollService } from "../services/crunchyroll";
-import { CRUNCHYROLL_COLOR, CR_SEASONS, CR_RELEASE_ITEMS_PER_PAGE, CR_SEASON_CACHE_TTL } from "../constants";
+import { CRUNCHYROLL_COLOR, CR_SEASONS, CR_SEASON_CACHE_TTL } from "../constants";
 import type { CrunchyrollBrowseItem } from "../types/crunchyroll";
 import { logger } from "../core/logger";
 
 const service = new CrunchyrollService();
+
+/** Discord embeds allow at most 25 fields; paginate at 20 to stay safely within both field and 6000-char limits. */
+const EMBED_PAGE_SIZE = 20;
 
 /** Cache for valid seasons (avoid re-checking the API) */
 const VALID_SEASONS_CACHE: { seasons: string[]; expiresAt: number } = {
     seasons: [],
     expiresAt: 0
 };
+let inFlightSeasonsPromise: Promise<{ tag: string; label: string }[]> | null = null;
 
 /**
  * Get the current season index from a month (0-11)
@@ -78,38 +82,48 @@ function generateCandidateSeasons(): { tag: string; label: string }[] {
  * Only returns seasons that actually have content on Crunchyroll
  */
 async function getValidSeasons(): Promise<{ tag: string; label: string }[]> {
-    try {
-        if (VALID_SEASONS_CACHE.seasons.length > 0 && Date.now() < VALID_SEASONS_CACHE.expiresAt) {
-            const candidates = generateCandidateSeasons();
-            return candidates.filter(c => VALID_SEASONS_CACHE.seasons.includes(c.tag));
-        }
-
+    if (VALID_SEASONS_CACHE.seasons.length > 0 && Date.now() < VALID_SEASONS_CACHE.expiresAt) {
         const candidates = generateCandidateSeasons();
-
-        // Check each candidate concurrently
-        const results = await Promise.all(
-            candidates.map(async c => {
-                try {
-                    const items = await service.fetchSeasonalSeries(c.tag);
-                    return { tag: c.tag, hasData: items.length > 0 };
-                } catch (err) {
-                    logger.error(err, `Error fetching seasonal series for ${c.tag}`);
-                    return { tag: c.tag, hasData: false };
-                }
-            })
-        );
-
-        const validSeasons = results.filter(r => r.hasData).map(r => r.tag);
-
-        // Update cache
-        VALID_SEASONS_CACHE.seasons = validSeasons;
-        VALID_SEASONS_CACHE.expiresAt = Date.now() + CR_SEASON_CACHE_TTL;
-
         return candidates.filter(c => VALID_SEASONS_CACHE.seasons.includes(c.tag));
-    } catch (error) {
-        logger.error(error, "getValidSeasons failed");
-        return [];
     }
+
+    if (inFlightSeasonsPromise) {
+        return inFlightSeasonsPromise;
+    }
+
+    inFlightSeasonsPromise = (async () => {
+        try {
+            const candidates = generateCandidateSeasons();
+
+            // Check each candidate concurrently
+            const results = await Promise.all(
+                candidates.map(async c => {
+                    try {
+                        const items = await service.fetchSeasonalSeries(c.tag);
+                        return { tag: c.tag, hasData: items.length > 0 };
+                    } catch (err) {
+                        logger.error(err, `Error fetching seasonal series for ${c.tag}`);
+                        return { tag: c.tag, hasData: false };
+                    }
+                })
+            );
+
+            const validSeasons = results.filter(r => r.hasData).map(r => r.tag);
+
+            // Update cache
+            VALID_SEASONS_CACHE.seasons = validSeasons;
+            VALID_SEASONS_CACHE.expiresAt = Date.now() + CR_SEASON_CACHE_TTL;
+
+            return candidates.filter(c => VALID_SEASONS_CACHE.seasons.includes(c.tag));
+        } catch (error) {
+            logger.error(error, "getValidSeasons failed");
+            return [];
+        } finally {
+            inFlightSeasonsPromise = null;
+        }
+    })();
+
+    return inFlightSeasonsPromise;
 }
 
 /**
@@ -130,8 +144,8 @@ function buildEmbed(
     page: number,
     totalPages: number
 ): EmbedBuilder {
-    const start = page * CR_RELEASE_ITEMS_PER_PAGE;
-    const end = Math.min(start + CR_RELEASE_ITEMS_PER_PAGE, series.length);
+    const start = page * EMBED_PAGE_SIZE;
+    const end = Math.min(start + EMBED_PAGE_SIZE, series.length);
     const pageItems = series.slice(start, end);
 
     const embed = new EmbedBuilder()
@@ -274,7 +288,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             .map((part, i) => (i === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part))
             .join(" ");
 
-        const totalPages = Math.ceil(series.length / CR_RELEASE_ITEMS_PER_PAGE);
+        const totalPages = Math.ceil(series.length / EMBED_PAGE_SIZE);
         let currentPage = 0;
 
         const embed = buildEmbed(series, seasonLabel, currentPage, totalPages);

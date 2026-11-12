@@ -15,6 +15,17 @@ const MAX_SEEN_LINEUPS = 500;
 const seenLineups = new Set<string>();
 const lock = { isChecking: false };
 let isFirstRun = true;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Stops the Crunchyroll lineup feed scheduler timer for graceful shutdown.
+ */
+export function stopCrunchyrollLineupFeed(): void {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
 
 /** Prune oldest entries when the set exceeds MAX_SEEN_LINEUPS */
 function pruneSeenLineups(): void {
@@ -37,6 +48,7 @@ const service = new CrunchyrollService();
  */
 export function startCrunchyrollLineupFeed(client: Client): void {
     logger.info("📺 Starting Crunchyroll lineup feed scheduler...");
+    stopCrunchyrollLineupFeed();
 
     // Initial fetch to populate cache (shard-guarded — only shard 0 polls/publishes)
     if (!client.shard || client.shard.ids[0] === 0) {
@@ -44,7 +56,7 @@ export function startCrunchyrollLineupFeed(client: Client): void {
     }
 
     // Poll every interval
-    setInterval(async () => {
+    pollTimer = setInterval(async () => {
         try {
             // Only run on Shard 0 to prevent duplicates
             if (client.shard && client.shard.ids[0] !== 0) {
@@ -62,6 +74,7 @@ export function startCrunchyrollLineupFeed(client: Client): void {
             logger.error(error as Error, "Error in Crunchyroll lineup feed poll");
         }
     }, POLL_INTERVAL);
+    if (typeof pollTimer.unref === "function") pollTimer.unref();
 }
 
 async function initializeCache(): Promise<void> {

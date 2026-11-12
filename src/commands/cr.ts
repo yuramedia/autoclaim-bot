@@ -9,53 +9,16 @@ import {
     PermissionFlagsBits,
     ChannelType,
     EmbedBuilder,
-    TextChannel,
     MessageFlags
 } from "discord.js";
 import { getGuildSettings, updateCrunchyrollFeedSettings } from "../database/models/guild-settings";
-import { CrunchyrollService } from "../services/crunchyroll";
+import { CrunchyrollService, buildLineupEmbed } from "../services/crunchyroll";
 import { CRUNCHYROLL_COLOR } from "../constants";
 import { logger } from "../core/logger";
 
 const service = new CrunchyrollService();
 
-/**
- * Build a beautiful lineup announcement embed matching the screenshot styling
- */
-export function buildLineupEmbed(announcement: {
-    title: string;
-    url: string;
-    description: string;
-    thumbnail: string | null;
-    author: string | null;
-    pubDate: string;
-}): EmbedBuilder {
-    const authorName = (announcement.author || "Kyle Cardine").slice(0, 256);
-    const title = (announcement.title || "Crunchyroll Lineup").slice(0, 256);
-    const description = (announcement.description || "").slice(0, 4096);
-    const parsedDate = announcement.pubDate ? new Date(announcement.pubDate) : new Date();
-    const validDate = !isNaN(parsedDate.getTime()) ? parsedDate : new Date();
-
-    const embed = new EmbedBuilder()
-        .setColor(CRUNCHYROLL_COLOR)
-        .setAuthor({
-            name: authorName,
-            iconURL: "https://www.crunchyroll.com/favicons/favicon-32x32.png"
-        })
-        .setTitle(title)
-        .setURL(announcement.url)
-        .setDescription(description || null)
-        .setTimestamp(validDate)
-        .setFooter({
-            text: `Latest Anime News • ${announcement.url}`.slice(0, 2048)
-        });
-
-    if (announcement.thumbnail) {
-        embed.setImage(announcement.thumbnail);
-    }
-
-    return embed;
-}
+export { buildLineupEmbed };
 
 export const data = new SlashCommandBuilder()
     .setName("cr")
@@ -84,7 +47,7 @@ export const data = new SlashCommandBuilder()
                         opt
                             .setName("channel")
                             .setDescription("Channel to send lineup notifications (required for enable)")
-                            .addChannelTypes(ChannelType.GuildText)
+                            .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
                     )
             )
     );
@@ -129,7 +92,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     if (announcement) {
                         try {
                             const targetChannel = interaction.guild?.channels.cache.get(channel.id);
-                            if (targetChannel && targetChannel instanceof TextChannel) {
+                            if (
+                                targetChannel &&
+                                (targetChannel.type === ChannelType.GuildText ||
+                                    targetChannel.type === ChannelType.GuildAnnouncement)
+                            ) {
                                 const embed = buildLineupEmbed(announcement);
                                 await targetChannel.send({ embeds: [embed] });
                             }

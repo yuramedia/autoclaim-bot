@@ -51,7 +51,8 @@ export async function handleResolutionSelect(interaction: StringSelectMenuIntera
             const result = await downloadDirect(selectedFormatUrl, "video.mp4", maxSizeLimit);
 
             if (result.success && result.buffer) {
-                const attachment = new AttachmentBuilder(result.buffer, { name: result.filename });
+                const filename = cachedData.spoilered ? `SPOILER_${result.filename}` : result.filename;
+                const attachment = new AttachmentBuilder(result.buffer, { name: filename });
                 // By passing only files array, discord.js will append the file to the existing message
                 await interaction.editReply({ files: [attachment] });
             } else {

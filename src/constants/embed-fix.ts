@@ -81,8 +81,8 @@ export const PLATFORMS: PlatformConfig[] = [
         name: "Bluesky",
         color: 0x0085ff,
         patterns: [
-            /https?:\/\/(?:[a-z0-9-]+\.)*bsky\.app\/profile\/[\w.-]+\/post\/\w+/i,
-            /https?:\/\/(?:[a-z0-9-]+\.)*fxbsky\.app\/profile\/[\w.-]+\/post\/\w+/i
+            /https?:\/\/(?:[a-z0-9-]+\.)*bsky\.app\/profile\/[\w.:-]+\/post\/\w+/i,
+            /https?:\/\/(?:[a-z0-9-]+\.)*fxbsky\.app\/profile\/[\w.:-]+\/post\/\w+/i
         ],
         fixes: [{ oldDomain: /https?:\/\/(?:[a-z0-9-]+\.)*bsky\.app/i, newDomain: "https://fxbsky.app" }]
     },

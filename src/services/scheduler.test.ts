@@ -189,5 +189,57 @@ describe("Scheduler Service", () => {
                 User.countDocuments = originalCount;
             }
         });
+        it("skips countDocuments when scheduler is already running", async () => {
+            const mockClient = { shard: null } as unknown as Client;
+            setMongoReadyState(1);
+
+            const origFind = User.find;
+            let resolveFind!: () => void;
+            const findBlocked = new Promise<void>(r => {
+                resolveFind = r;
+            });
+
+            User.find = (() => ({
+                select: (proj: Record<string, number>) => {
+                    expect(proj["hoyolab.lastClaim"]).toBe(1);
+                    expect(proj["endfield.lastClaim"]).toBe(1);
+                    return {
+                        lean: () => ({
+                            cursor: () => ({
+                                [Symbol.asyncIterator]: () => ({
+                                    next: async () => {
+                                        await findBlocked;
+                                        return { done: true as const, value: undefined };
+                                    }
+                                })
+                            })
+                        })
+                    };
+                }
+            })) as unknown as typeof User.find;
+
+            let countCalled = false;
+            const originalCount = User.countDocuments;
+            User.countDocuments = (() => {
+                countCalled = true;
+                return Promise.resolve(0);
+            }) as unknown as typeof User.countDocuments;
+
+            try {
+                const runPromise = runDailyClaims(mockClient);
+                // Allow runDailyClaims to advance through ensureDatabaseConnected and acquire lock
+                await new Promise(r => setTimeout(r, 10));
+                expect(isSchedulerRunning()).toBe(true);
+
+                await checkMissedClaims(mockClient);
+                expect(countCalled).toBe(false);
+
+                resolveFind();
+                await runPromise;
+            } finally {
+                User.find = origFind;
+                User.countDocuments = originalCount;
+            }
+        });
     });
 });

@@ -21,7 +21,11 @@ const IV_LENGTH = 16; // bytes
 const FORMAT_VERSION = "v1";
 const HKDF_INFO = "aes-256-gcm-token-encryption"; // application-specific info for HKDF
 
-/** Derive a 32-byte key from the config value using HKDF-SHA256 (v1 format). */
+let cachedRawKey: string | null = null;
+let cachedHkdfKey: Buffer | null = null;
+let cachedLegacyKey: Buffer | null = null;
+
+/** Derive a 32-byte key from the config value using HKDF-SHA256 (v1 format), cached per key string. */
 function getKey(): Buffer {
     const raw = config.security.tokenEncryptionKey;
     if (!raw) {
@@ -30,13 +34,19 @@ function getKey(): Buffer {
                 "Any random string works — e.g. run: openssl rand -hex 32"
         );
     }
+    if (cachedRawKey === raw && cachedHkdfKey) {
+        return cachedHkdfKey;
+    }
     if (raw.length < 32) {
         logger.warn(
             "[token-crypto] TOKEN_ENCRYPTION_KEY is shorter than 32 characters. " +
                 "A 32+ character high-entropy key is strongly recommended (e.g. openssl rand -hex 32)."
         );
     }
-    return Buffer.from(hkdfSync("sha256", raw, "", HKDF_INFO, 32));
+    cachedRawKey = raw;
+    cachedHkdfKey = Buffer.from(hkdfSync("sha256", raw, "", HKDF_INFO, 32));
+    cachedLegacyKey = null;
+    return cachedHkdfKey;
 }
 
 /** Derive a 32-byte key using the legacy single-pass SHA-256 method (pre-v1 format).
@@ -47,7 +57,15 @@ function getLegacyKey(): Buffer {
     if (!raw) {
         throw new Error("TOKEN_ENCRYPTION_KEY is not set.");
     }
-    return createHash("sha256").update(raw).digest();
+    if (cachedRawKey === raw && cachedLegacyKey) {
+        return cachedLegacyKey;
+    }
+    if (cachedRawKey !== raw) {
+        cachedRawKey = raw;
+        cachedHkdfKey = null;
+    }
+    cachedLegacyKey = createHash("sha256").update(raw).digest();
+    return cachedLegacyKey;
 }
 
 /**

@@ -60,7 +60,7 @@ export function buildRichEmbed(info: PostInfo, platform: PlatformConfig, postUrl
         }
 
         embed.setAuthor({
-            name: displayName,
+            name: displayName.slice(0, 256),
             iconURL: avatarUrl,
             url: info.author.url
         });
@@ -170,7 +170,7 @@ export async function fetchTwitterInfo(statusId: string): Promise<PostInfo | nul
                 name: tweet.author?.name || "Unknown",
                 username: tweet.author?.screen_name || "unknown",
                 avatar: tweet.author?.avatar_url,
-                url: `https://twitter.com/${tweet.author?.screen_name}`
+                url: tweet.author?.screen_name ? `https://twitter.com/${tweet.author.screen_name}` : undefined
             },
             content: tweet.text || "",
             images,
@@ -196,19 +196,21 @@ export async function fetchTwitterInfo(statusId: string): Promise<PostInfo | nul
  */
 export async function fetchBlueskyInfo(url: string): Promise<PostInfo | null> {
     try {
-        // Extract handle and post ID from URL
-        const match = url.match(/\/profile\/([\w.-]+)\/post\/(\w+)/);
+        // Extract handle (or DID) and post ID from URL
+        const match = url.match(/\/profile\/([\w.:-]+)\/post\/(\w+)/);
         if (!match) return null;
 
-        const [, handle, postId] = match;
+        const [, actor, postId] = match;
+        let did = actor?.startsWith("did:") ? actor : null;
 
-        // Resolve handle to DID
-        const resolveResponse = await axios.get(
-            `https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${handle}`,
-            { timeout: 10000 }
-        );
-
-        const did = resolveResponse.data?.did;
+        if (!did) {
+            // Resolve handle to DID
+            const resolveResponse = await axios.get(
+                `https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(actor!)}`,
+                { timeout: 10000 }
+            );
+            did = resolveResponse.data?.did ?? null;
+        }
         if (!did) return null;
 
         // Fetch post

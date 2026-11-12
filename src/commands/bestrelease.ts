@@ -16,6 +16,36 @@ export const data = new SlashCommandBuilder()
     .setDescription("Search for best subtitle releases for anime")
     .addStringOption(opt => opt.setName("anime").setDescription("Anime title to search for").setRequired(true));
 
+const BEST_RELEASE_CACHE_TTL_MS = 5 * 60 * 1000;
+let cachedAnimeList: AnimeEntry[] | null = null;
+let cachedAnimeExpiresAt = 0;
+let inFlightBestRelease: Promise<AnimeEntry[]> | null = null;
+
+async function getBestReleaseList(): Promise<AnimeEntry[]> {
+    if (cachedAnimeList && Date.now() < cachedAnimeExpiresAt) {
+        return cachedAnimeList;
+    }
+    if (inFlightBestRelease) {
+        return inFlightBestRelease;
+    }
+
+    inFlightBestRelease = (async () => {
+        const response = await fetchWithTimeout("https://best-release.kazeuta.com/__data.json", { timeoutMs: 15000 });
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+        const json = (await response.json()) as { nodes?: { data?: unknown[] }[] };
+        const parsed = parseApiData(json);
+        cachedAnimeList = parsed;
+        cachedAnimeExpiresAt = Date.now() + BEST_RELEASE_CACHE_TTL_MS;
+        return parsed;
+    })().finally(() => {
+        inFlightBestRelease = null;
+    });
+
+    return inFlightBestRelease;
+}
+
 /**
  * Executes the bestrelease command to search for subtitle releases.
  *
@@ -28,15 +58,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     const query = interaction.options.getString("anime", true).toLowerCase();
 
     try {
-        const response = await fetchWithTimeout("https://best-release.kazeuta.com/__data.json", { timeoutMs: 15000 });
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status}`);
-        }
-
-        const json = (await response.json()) as { nodes?: { data?: unknown[] }[] };
-
-        // Parse the SvelteKit data format
-        const animeList = parseApiData(json);
+        const animeList = await getBestReleaseList();
 
         // Search for matching anime
         const results = animeList.filter(anime => {

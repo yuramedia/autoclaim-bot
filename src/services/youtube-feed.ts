@@ -6,6 +6,7 @@
 import { decode } from "he";
 import { YT_FEED_BASE_URL, YT_ICON_CACHE_TTL } from "../constants/youtube-feed";
 import { logger } from "../core/logger";
+import { fetchWithTimeout as httpFetchWithTimeout } from "../utils/http";
 import { parseXml, xmlNodeArray, xmlText, xmlAttr, type XmlNode } from "../utils/xml";
 import type { YouTubeFeedEntry, FormattedYouTubeVideo, YouTubeVideoStatusType } from "../types/youtube-feed";
 
@@ -43,17 +44,14 @@ export class YouTubeFeedService {
         timeoutMs: number,
         headers?: Record<string, string>
     ): Promise<string | null> {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
         try {
-            const response = await fetch(url, {
+            const response = await httpFetchWithTimeout(url, {
+                timeoutMs,
                 headers: {
                     "User-Agent":
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     ...headers
-                },
-                signal: controller.signal
+                }
             });
 
             if (!response.ok) {
@@ -63,14 +61,12 @@ export class YouTubeFeedService {
 
             return await response.text();
         } catch (error: unknown) {
-            if (error instanceof Error && error.name === "AbortError") {
+            if (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError")) {
                 logger.error(`Fetch timed out after ${timeoutMs}ms for ${url}`);
             } else {
                 logger.error(error, `Fetch error for ${url}`);
             }
             return null;
-        } finally {
-            clearTimeout(timeoutId);
         }
     }
 
@@ -87,11 +83,15 @@ export class YouTubeFeedService {
     }
 
     /**
-     * Set a channel icon in the TTL-aware cache.
+     * Set a channel icon in the TTL-aware cache (bounded to 500 entries).
      * @param channelId YouTube channel ID
      * @param url Icon URL
      */
     private setCachedIcon(channelId: string, url: string): void {
+        if (this.channelIconCache.size >= 500) {
+            const oldestKey = this.channelIconCache.keys().next().value;
+            if (oldestKey) this.channelIconCache.delete(oldestKey);
+        }
         this.channelIconCache.set(channelId, { url, cachedAt: Date.now() });
     }
 
@@ -129,8 +129,13 @@ export class YouTubeFeedService {
             if (/^UC[a-zA-Z0-9_-]{22}$/.test(cleanInput)) {
                 targetUrl = `https://www.youtube.com/channel/${cleanInput}`;
             } else if (cleanInput.startsWith("http://") || cleanInput.startsWith("https://")) {
-                targetUrl = cleanInput;
                 const urlObj = new URL(cleanInput);
+                const hostname = urlObj.hostname.toLowerCase();
+                if (hostname !== "youtube.com" && !hostname.endsWith(".youtube.com") && hostname !== "youtu.be") {
+                    logger.warn(`[YouTube] Rejected non-YouTube URL in resolveChannelId: ${hostname}`);
+                    return null;
+                }
+                targetUrl = urlObj.toString();
                 const pathname = urlObj.pathname;
 
                 if (pathname.startsWith("/@")) {

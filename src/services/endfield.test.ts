@@ -177,4 +177,36 @@ describe("EndfieldService", () => {
             "❌ [4797152091_2] Cannot get character position. Please make sure you have logged into the game."
         );
     });
+
+    test("does not flag tokenExpired on transient network error", async () => {
+        shouldThrow = true;
+        const service = new EndfieldService({ accountToken: "valid_token" });
+        const result = await service.claim();
+
+        expect(result.success).toBe(false);
+        expect(result.tokenExpired).toBeUndefined();
+    });
+
+    test("retries transient HTTP 502 on OAuth grant", async () => {
+        let attempts = 0;
+        global.fetch = mock(async (url: string | URL | Request) => {
+            const urlString = url.toString();
+            if (urlString === ENDFIELD_GRANT_URL && attempts === 0) {
+                attempts++;
+                return { ok: false, status: 502, json: async () => ({}) } as Response;
+            }
+            const responseData = mockResponses[urlString];
+            return {
+                ok: Boolean(responseData),
+                status: responseData ? 200 : 404,
+                json: async () => responseData ?? {}
+            } as Response;
+        }) as unknown as typeof fetch;
+
+        const service = new EndfieldService({ accountToken: "valid_token" });
+        const result = await service.claim();
+
+        expect(attempts).toBe(1);
+        expect(result.success).toBe(true);
+    });
 });

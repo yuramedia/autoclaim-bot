@@ -9,7 +9,8 @@ import {
     AttachmentBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
-    StringSelectMenuOptionBuilder
+    StringSelectMenuOptionBuilder,
+    type ButtonBuilder
 } from "discord.js";
 import { processUrls, PlatformId, type ProcessedUrl } from "../services/embed-fix";
 import { getCachedGuildSettings, type IGuildSettings } from "../database/models/guild-settings";
@@ -19,13 +20,27 @@ import { logger } from "../core/logger";
 
 import type { VKRFormat } from "../types/media-downloader";
 
+/** Platforms that VKrDownloader supports (video download). */
+export const DOWNLOADABLE_PLATFORMS = new Set<PlatformId>([
+    PlatformId.TWITTER,
+    PlatformId.TIKTOK,
+    PlatformId.INSTAGRAM,
+    PlatformId.REDDIT,
+    PlatformId.FACEBOOK,
+    PlatformId.THREADS
+]);
+
 /**
  * Cache for storing video URLs and format details for interactive resolution selection.
  */
-export const videoSelectionCache = new Map<string, { url: string; platform: PlatformId; formats?: VKRFormat[] }>();
+export const videoSelectionCache = new Map<
+    string,
+    { url: string; platform: PlatformId; formats?: VKRFormat[]; spoilered?: boolean }
+>();
 
 // Cache to avoid processing same message twice
 const processedMessages = new Set<string>();
+const MAX_PROCESSED_MESSAGES = 5000;
 const CACHE_TTL = 60000; // 1 minute
 const VIDEO_SELECTION_TTL = 15 * 60 * 1000; // 15 minutes
 const MAX_VIDEO_SELECTIONS = 200;
@@ -35,12 +50,14 @@ const MAX_VIDEO_SELECTIONS = 200;
  * @param formats - Available video formats
  * @param url - Original video URL
  * @param platform - Platform ID
+ * @param spoilered - Whether the media should preserve SPOILER_ filename prefix
  * @returns Object containing the select menu and selection ID
  */
-function createResolutionSelectMenu(
+export function createResolutionSelectMenu(
     formats: VKRFormat[],
     url: string,
-    platform: PlatformId
+    platform: PlatformId,
+    spoilered = false
 ): { selectMenu: StringSelectMenuBuilder; selectionId: string } {
     const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
 
@@ -53,9 +70,11 @@ function createResolutionSelectMenu(
     videoSelectionCache.set(selectionId, {
         url,
         platform,
-        formats
+        formats,
+        spoilered
     });
-    setTimeout(() => videoSelectionCache.delete(selectionId), VIDEO_SELECTION_TTL);
+    const expiryTimer = setTimeout(() => videoSelectionCache.delete(selectionId), VIDEO_SELECTION_TTL);
+    if (typeof expiryTimer.unref === "function") expiryTimer.unref();
 
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId(`res_select|${selectionId}`)
@@ -65,7 +84,9 @@ function createResolutionSelectMenu(
                 .slice(0, 25)
                 .map((fmt, idx) =>
                     new StringSelectMenuOptionBuilder()
-                        .setLabel(`${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`)
+                        .setLabel(
+                            `${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`.trim().slice(0, 100)
+                        )
                         .setValue(idx.toString())
                 )
         );
@@ -91,6 +112,16 @@ export async function handleMessage(message: Message): Promise<void> {
         // Skip webhook messages
         if (message.webhookId) return;
 
+        // Skip if already processed (before hitting DB/antihack)
+        if (processedMessages.has(message.id)) return;
+        if (processedMessages.size >= MAX_PROCESSED_MESSAGES) {
+            const oldestMsg = processedMessages.values().next().value;
+            if (oldestMsg) processedMessages.delete(oldestMsg);
+        }
+        processedMessages.add(message.id);
+        const dedupTimer = setTimeout(() => processedMessages.delete(message.id), CACHE_TTL);
+        if (typeof dedupTimer.unref === "function") dedupTimer.unref();
+
         // Get guild settings once (cached, single DB read per TTL window)
         // and share it with the antihack check to avoid a duplicate query.
         const settings = await getCachedGuildSettings(message.guild.id);
@@ -99,11 +130,6 @@ export async function handleMessage(message: Message): Promise<void> {
         // If triggered (user banned), stop all further processing
         const antihackTriggered = await checkAntihack(message, settings);
         if (antihackTriggered) return;
-
-        // Skip if already processed
-        if (processedMessages.has(message.id)) return;
-        processedMessages.add(message.id);
-        setTimeout(() => processedMessages.delete(message.id), CACHE_TTL);
 
         // Skip if embed fix is disabled
         if (!settings.embedFix.enabled) return;
@@ -116,20 +142,24 @@ export async function handleMessage(message: Message): Promise<void> {
 
         try {
             // Process each URL in parallel
-            await Promise.all(processedUrls.map(processed => processUrl(message, processed, settings)));
+            const repliedFlags = await Promise.all(
+                processedUrls.map(processed => processUrl(message, processed, settings))
+            );
 
-            // Suppress original embeds after bot has replied
-            // Wait briefly for Discord to generate the original embed
-            setTimeout(async () => {
-                try {
-                    const updatedMessage = await message.fetch();
-                    if (updatedMessage.embeds.length > 0) {
-                        await updatedMessage.suppressEmbeds(true);
+            // Only suppress original embeds if the bot actually sent a replacement reply
+            if (repliedFlags.some(Boolean)) {
+                const suppressTimer = setTimeout(async () => {
+                    try {
+                        const updatedMessage = await message.fetch();
+                        if (updatedMessage.embeds.length > 0) {
+                            await updatedMessage.suppressEmbeds(true);
+                        }
+                    } catch {
+                        // Ignore if we don't have permission (Manage Messages required)
                     }
-                } catch {
-                    // Ignore if we don't have permission (Manage Messages required)
-                }
-            }, 2000);
+                }, 2000);
+                if (typeof suppressTimer.unref === "function") suppressTimer.unref();
+            }
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
             logger.error("Error processing embed fix: %s", msg);
@@ -149,24 +179,14 @@ export async function handleMessage(message: Message): Promise<void> {
  * @param settings - The guild settings configuration
  * @returns A promise that resolves when processing is complete
  */
-async function processUrl(message: Message, processed: ProcessedUrl, settings: IGuildSettings): Promise<void> {
+async function processUrl(message: Message, processed: ProcessedUrl, settings: IGuildSettings): Promise<boolean> {
     try {
         const embeds: EmbedBuilder[] = [];
         const files: AttachmentBuilder[] = [];
-        const components: Array<ActionRowBuilder<StringSelectMenuBuilder | import("discord.js").ButtonBuilder>> = [];
+        const components: Array<ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>> = [];
         let content = "";
 
-        // Platforms that VKrDownloader supports (video platforms only)
-        const DOWNLOADABLE_PLATFORMS: PlatformId[] = [
-            PlatformId.TWITTER,
-            PlatformId.TIKTOK,
-            PlatformId.INSTAGRAM,
-            PlatformId.REDDIT,
-            PlatformId.FACEBOOK,
-            PlatformId.THREADS
-        ];
-
-        const canDownload = DOWNLOADABLE_PLATFORMS.includes(processed.platform.id);
+        const canDownload = DOWNLOADABLE_PLATFORMS.has(processed.platform.id);
         const maxSizeLimit = getMaxDownloadSize(message.guild?.premiumTier);
 
         // Custom flow for Nyaa.si
@@ -260,16 +280,20 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
                 if (settings.embedFix.autoUpload && videoList.length > 0 && canDownload) {
                     const directDownloader = await import("../services/media-downloader");
 
+                    const isDirectPlatform =
+                        processed.platform.id === PlatformId.FACEBOOK ||
+                        processed.platform.id === PlatformId.TWITTER ||
+                        processed.platform.id === PlatformId.TIKTOK;
+
                     for (let idx = 0; idx < videoList.length; idx++) {
+                        // Non-direct platforms download via original post URL once
+                        if (!isDirectPlatform && idx > 0) break;
+
                         const videoUrl = videoList[idx]!;
                         let downloadResult;
 
                         // Facebook, Twitter, and TikTok provide direct MP4 URLs
-                        if (
-                            processed.platform.id === PlatformId.FACEBOOK ||
-                            processed.platform.id === PlatformId.TWITTER ||
-                            processed.platform.id === PlatformId.TIKTOK
-                        ) {
+                        if (isDirectPlatform) {
                             downloadResult = await directDownloader.downloadDirect(
                                 videoUrl,
                                 `${processed.platform.id}_video_${idx + 1}.mp4`,
@@ -283,8 +307,7 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
                                 );
                             }
                         } else {
-                            const { downloadMedia } = await import("../services/media-downloader");
-                            downloadResult = await downloadMedia(processed.originalUrl, maxSizeLimit);
+                            downloadResult = await directDownloader.downloadMedia(processed.originalUrl, maxSizeLimit);
                         }
 
                         if (downloadResult.success && downloadResult.buffer) {
@@ -298,7 +321,8 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
                             const { selectMenu } = createResolutionSelectMenu(
                                 downloadResult.availableFormats,
                                 processed.originalUrl,
-                                processed.platform.id
+                                processed.platform.id,
+                                processed.spoilered
                             );
                             components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
                         }
@@ -330,7 +354,8 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
                     const { selectMenu } = createResolutionSelectMenu(
                         downloadResult.availableFormats,
                         processed.originalUrl,
-                        processed.platform.id
+                        processed.platform.id,
+                        processed.spoilered
                     );
                     components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
                 } else if (processed.fixedUrl !== processed.originalUrl) {
@@ -344,18 +369,20 @@ async function processUrl(message: Message, processed: ProcessedUrl, settings: I
         }
 
         // Skip if nothing to send
-        if (!content && embeds.length === 0 && files.length === 0 && components.length === 0) return;
+        if (!content && embeds.length === 0 && files.length === 0 && components.length === 0) return false;
 
         // Reply to the message
         await message.reply({
             content: content || undefined,
             embeds: embeds.length > 0 ? embeds.slice(0, 10) : undefined,
-            files,
-            components: components.length > 0 ? components : undefined,
+            files: files.length > 0 ? files.slice(0, 10) : undefined,
+            components: components.length > 0 ? components.slice(0, 5) : undefined,
             allowedMentions: { repliedUser: false }
         });
+        return true;
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
         logger.error(`[processUrl] Error processing URL ${processed.originalUrl}: ${msg}`);
+        return false;
     }
 }

@@ -40,6 +40,16 @@ function formatBytes(bytes: number): string {
 }
 
 /**
+ * Validate whether a user-supplied regex filter pattern is safe against ReDoS.
+ */
+export function isSafeRegex(pattern: string): boolean {
+    if (!pattern || pattern.length > 200) return false;
+    // Reject nested quantifiers such as (a+)+, (a*)+, (a+){2,}, (?:a+)+
+    if (/\([^)]*[+*][^)]*\)(?:[+*]|\{\d+,?\d*\})/.test(pattern)) return false;
+    return true;
+}
+
+/**
  * Service to fetch, parse, and format the U2 RSS feed.
  */
 export class U2FeedService {

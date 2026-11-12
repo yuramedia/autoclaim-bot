@@ -13,6 +13,7 @@ import {
     MessageFlags
 } from "discord.js";
 import { getGuildSettings, updateU2FeedSettings } from "../database/models/guild-settings";
+import { isSafeRegex } from "../services/u2-feed";
 import { U2_DEFAULT_FILTER } from "../constants/u2-feed";
 import { logger } from "../core/logger";
 
@@ -31,7 +32,7 @@ export const data = new SlashCommandBuilder()
                 option
                     .setName("channel")
                     .setDescription("Channel to send notifications")
-                    .addChannelTypes(ChannelType.GuildText)
+                    .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
                     .setRequired(true)
             )
             .addStringOption(option =>
@@ -70,7 +71,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                 const channel = interaction.options.getChannel("channel", true) as TextChannel;
                 const filter = interaction.options.getString("filter") || U2_DEFAULT_FILTER;
 
-                // Validate regex
+                // Validate regex syntax and ReDoS safety
+                if (!isSafeRegex(filter)) {
+                    await interaction.editReply({
+                        content: "❌ Filter regex is too long (max 200 chars) or uses unsafe nested quantifiers."
+                    });
+                    return;
+                }
                 try {
                     void new RegExp(filter, "i");
                 } catch {

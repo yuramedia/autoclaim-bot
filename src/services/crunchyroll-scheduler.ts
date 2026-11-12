@@ -19,6 +19,17 @@ import { searchAnime } from "./anime-metadata";
 import type { FormattedEpisode } from "../types/crunchyroll";
 
 let isFirstRun = true;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Stops the Crunchyroll feed scheduler timer for graceful shutdown.
+ */
+export function stopCrunchyrollFeed(): void {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
 
 /** Prune oldest entries when the map exceeds MAX_SEEN_EPISODES */
 function pruneSeenEpisodes(): void {
@@ -39,6 +50,7 @@ function pruneSeenEpisodes(): void {
  */
 export function startCrunchyrollFeed(client: Client): void {
     logger.info("📺 Starting Crunchyroll feed scheduler...");
+    stopCrunchyrollFeed();
 
     const service = new CrunchyrollService();
 
@@ -48,7 +60,7 @@ export function startCrunchyrollFeed(client: Client): void {
     }
 
     // Poll every interval
-    setInterval(async () => {
+    pollTimer = setInterval(async () => {
         try {
             // Only run on Shard 0 to prevent duplicates
             if (client.shard && client.shard.ids[0] !== 0) {
@@ -66,6 +78,7 @@ export function startCrunchyrollFeed(client: Client): void {
             logger.error(error as Error, "Error in Crunchyroll feed poll");
         }
     }, CRUNCHYROLL_POLL_INTERVAL);
+    if (typeof pollTimer.unref === "function") pollTimer.unref();
 }
 
 async function initializeCache(service: CrunchyrollService): Promise<void> {

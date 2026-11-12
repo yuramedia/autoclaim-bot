@@ -1,9 +1,12 @@
-import { TextChannel, EmbedBuilder } from "discord.js";
+import { ChannelType, EmbedBuilder } from "discord.js";
 import { client } from "../../core/client";
 import { ramen } from "../../core/ramen";
 import { logger } from "../../core/logger";
+import { isSafeRegex } from "../u2-feed";
 import type { FormattedU2Item } from "../../types/u2-feed";
 import { U2_COLOR, U2_ICON } from "../../constants/u2-feed";
+
+const CHANNEL_CONCURRENCY = 5;
 
 /**
  * Interface representing target channel and filter settings for U2 feed alerts.
@@ -62,68 +65,52 @@ function buildItemEmbed(item: FormattedU2Item): EmbedBuilder {
     return embed;
 }
 
-/**
- * Check if a regex pattern is safe to execute (prevents ReDoS).
- * Rejects patterns that are too long or contain nested quantifiers like (a+)+.
- * @param pattern - The regex pattern string to validate.
- * @returns True if the pattern is considered safe.
- */
-function isSafeRegex(pattern: string): boolean {
-    // Reject overly long patterns
-    if (pattern.length > 200) return false;
-    // Reject nested quantifiers: (…+)+, (…*)+, (…+)*, (…*)*, etc.
-    // Simplified check — catches the most common dangerous patterns.
-    const nestedQuantifier = /\([^)]*[+*][^)]*\)[+*]/;
-    if (nestedQuantifier.test(pattern)) return false;
-    return true;
+async function sendU2Target(target: U2Target, items: FormattedU2Item[]): Promise<void> {
+    try {
+        // When sharded, only handle channels owned (cached) by this shard to prevent duplicates.
+        const channel = client.shard
+            ? client.channels.cache.get(target.channelId)
+            : (client.channels.cache.get(target.channelId) ??
+              (await client.channels.fetch(target.channelId).catch(() => null)));
+
+        if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) {
+            return;
+        }
+
+        let filterRegex: RegExp | null = null;
+        if (isSafeRegex(target.filter)) {
+            try {
+                filterRegex = new RegExp(target.filter, "i");
+            } catch {
+                filterRegex = null;
+            }
+        }
+
+        for (const item of items) {
+            if (filterRegex) {
+                if (!filterRegex.test(item.title)) continue;
+            } else if (!item.title.toLowerCase().includes(target.filter.toLowerCase())) {
+                continue;
+            }
+
+            const embed = buildItemEmbed(item);
+            const message = await channel.send({ embeds: [embed] });
+            if (channel.type === ChannelType.GuildAnnouncement) {
+                await message.crosspost().catch(() => {});
+            }
+        }
+    } catch (error: unknown) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        logger.error(err, `RAMEN: Failed to send U2 feed to channel ${target.channelId}`);
+    }
 }
 
 ramen.subscribe<U2TorrentsEvent>("u2:new_torrents", async (data): Promise<void> => {
     try {
         const { items, targets } = data;
-
-        for (const target of targets) {
-            try {
-                const channel =
-                    client.channels.cache.get(target.channelId) ??
-                    (await client.channels.fetch(target.channelId).catch(() => null));
-                if (channel && channel instanceof TextChannel) {
-                    // Apply guild's filter — use regex only if pattern is safe,
-                    // otherwise fall back to simple string matching to prevent ReDoS.
-                    const useRegex = isSafeRegex(target.filter);
-                    let filterRegex: RegExp | null = null;
-                    if (useRegex) {
-                        try {
-                            filterRegex = new RegExp(target.filter, "i");
-                        } catch {
-                            // Invalid regex syntax — treat as unsafe and fall back to substring
-                            filterRegex = null;
-                        }
-                    }
-
-                    for (const item of items) {
-                        if (filterRegex) {
-                            if (!filterRegex.test(item.title)) continue;
-                        } else {
-                            // Fallback: simple case-insensitive substring match
-                            if (!item.title.toLowerCase().includes(target.filter.toLowerCase())) continue;
-                        }
-
-                        const embed = buildItemEmbed(item);
-                        const message = await channel.send({ embeds: [embed] });
-
-                        // Cross-post if the channel is an announcement channel
-                        try {
-                            await message.crosspost();
-                        } catch {
-                            // Not an announcement channel or no permissions — ignore
-                        }
-                    }
-                }
-            } catch (error: unknown) {
-                const err = error instanceof Error ? error : new Error(String(error));
-                logger.error(err, `RAMEN: Failed to send U2 feed to channel ${target.channelId}`);
-            }
+        for (let i = 0; i < targets.length; i += CHANNEL_CONCURRENCY) {
+            const batch = targets.slice(i, i + CHANNEL_CONCURRENCY);
+            await Promise.all(batch.map(target => sendU2Target(target, items)));
         }
     } catch (outerError: unknown) {
         const err = outerError instanceof Error ? outerError : new Error(String(outerError));

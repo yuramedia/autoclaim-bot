@@ -141,6 +141,15 @@ export const data = new SlashCommandBuilder()
  */
 const subtitleLangCache = new Map<string, { codes: string[]; expiry: number }>();
 const SUB_LANG_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const MAX_SUB_LANG_CACHE = 500;
+
+function setSubtitleLangCache(key: string, codes: string[]): void {
+    if (subtitleLangCache.size >= MAX_SUB_LANG_CACHE) {
+        const oldestKey = subtitleLangCache.keys().next().value;
+        if (oldestKey) subtitleLangCache.delete(oldestKey);
+    }
+    subtitleLangCache.set(key, { codes, expiry: Date.now() + SUB_LANG_CACHE_TTL });
+}
 
 /**
  * Fetches available subtitle language codes for a given anime title or URL.
@@ -172,7 +181,7 @@ export async function fetchAvailableSubtitleLangs(
                         const targetEp = episodes[0];
                         if (targetEp?.subtitle_locales && targetEp.subtitle_locales.length > 0) {
                             const codes = targetEp.subtitle_locales.filter(c => c !== "ja-JP");
-                            subtitleLangCache.set(key, { codes, expiry: Date.now() + SUB_LANG_CACHE_TTL });
+                            setSubtitleLangCache(key, codes);
                             return codes;
                         }
                         episodeId = targetEp!.id;
@@ -187,7 +196,7 @@ export async function fetchAvailableSubtitleLangs(
                 const targetEp = episodes[0];
                 if (targetEp?.subtitle_locales && targetEp.subtitle_locales.length > 0) {
                     const codes = targetEp.subtitle_locales.filter(c => c !== "ja-JP");
-                    subtitleLangCache.set(key, { codes, expiry: Date.now() + SUB_LANG_CACHE_TTL });
+                    setSubtitleLangCache(key, codes);
                     return codes;
                 }
                 episodeId = targetEp!.id;
@@ -201,7 +210,7 @@ export async function fetchAvailableSubtitleLangs(
         const cmsLocales = await service.fetchEpisodeSubtitleLocales(episodeId);
         if (cmsLocales.length > 0) {
             const codes = cmsLocales.filter(c => c !== "ja-JP");
-            subtitleLangCache.set(key, { codes, expiry: Date.now() + SUB_LANG_CACHE_TTL });
+            setSubtitleLangCache(key, codes);
             return codes;
         }
 

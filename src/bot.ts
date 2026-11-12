@@ -1,11 +1,11 @@
 import { Events } from "discord.js";
 import { config } from "./config";
 import { connectDatabase, disconnectDatabase } from "./database";
-import { startScheduler, checkMissedClaims } from "./services/scheduler";
-import { startCrunchyrollFeed } from "./services/crunchyroll-scheduler";
-import { startCrunchyrollLineupFeed } from "./services/crunchyroll-lineup-scheduler";
-import { startU2Feed } from "./services/u2-feed-scheduler";
-import { startYouTubeFeed } from "./services/youtube-feed-scheduler";
+import { startScheduler, stopScheduler, checkMissedClaims } from "./services/scheduler";
+import { startCrunchyrollFeed, stopCrunchyrollFeed } from "./services/crunchyroll-scheduler";
+import { startCrunchyrollLineupFeed, stopCrunchyrollLineupFeed } from "./services/crunchyroll-lineup-scheduler";
+import { startU2Feed, stopU2Feed } from "./services/u2-feed-scheduler";
+import { startYouTubeFeed, stopYouTubeFeed } from "./services/youtube-feed-scheduler";
 import { handleInteraction } from "./handlers/interaction";
 import { handleMessage } from "./handlers/message";
 import { startPresenceUpdater } from "./utils/presence";
@@ -104,6 +104,11 @@ async function shutdown(signal: string): Promise<void> {
     logger.info(`👋 Received ${signal}, shutting down gracefully...`);
 
     if (presenceTimer) clearInterval(presenceTimer);
+    stopScheduler();
+    stopCrunchyrollFeed();
+    stopCrunchyrollLineupFeed();
+    stopU2Feed();
+    stopYouTubeFeed();
     shutdownCooldown();
     stopCrunchyrollCredentialsScheduler();
 

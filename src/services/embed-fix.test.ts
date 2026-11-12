@@ -104,6 +104,9 @@ describe("Embed Fix Service", () => {
             expect(findPlatform("https://fxbsky.app/profile/alice.bsky.social/post/3l12345")?.id).toBe(
                 PlatformId.BLUESKY
             );
+            expect(findPlatform("https://bsky.app/profile/did:plc:abc123xyz/post/3l12345")?.id).toBe(
+                PlatformId.BLUESKY
+            );
         });
 
         it("detects Threads usernames with dots and dashes", () => {

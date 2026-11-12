@@ -67,8 +67,17 @@ export interface RetryOptions {
     shouldRetry?: (error: unknown) => boolean;
 }
 
-/** Default predicate: retry network-level failures (timeouts, socket errors, axios transport codes). */
+/** Default predicate: retry network-level failures and transient HTTP 429 / 5xx responses. */
 function isTransientNetworkError(error: unknown): boolean {
+    if (error && typeof error === "object") {
+        // Axios-style HTTP response status (429 Too Many Requests, 5xx Server Error)
+        const status =
+            (error as { response?: { status?: number }; status?: number }).response?.status ??
+            (error as { status?: number }).status;
+        if (typeof status === "number" && (status === 429 || status >= 500)) {
+            return true;
+        }
+    }
     if (error instanceof Error) {
         if (error.name === "AbortError" || error.name === "TimeoutError") return true;
         if (error.name === "TypeError") {

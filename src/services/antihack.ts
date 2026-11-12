@@ -121,8 +121,9 @@ async function sendLogEmbed(message: Message, settings: IGuildSettings, data: An
     if (!logChannelId) return;
 
     try {
-        // Use fetch() instead of cache.get() to avoid cold-cache issues after restart
-        const logChannel = await message.guild.channels.fetch(logChannelId).catch(() => null);
+        const logChannel =
+            message.guild.channels.cache.get(logChannelId) ??
+            (await message.guild.channels.fetch(logChannelId).catch(() => null));
 
         if (!logChannel) {
             logger.warn(`[Antihack] Log channel ${logChannelId} not found in guild ${message.guild.id}, skipping log`);

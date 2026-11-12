@@ -93,44 +93,46 @@ function buildVideoEmbed(video: FormattedYouTubeVideo): EmbedBuilder {
     return embed;
 }
 
+const CHANNEL_CONCURRENCY = 5;
+
+async function sendToChannel(channelId: string, videos: FormattedYouTubeVideo[]): Promise<number> {
+    try {
+        // When sharded, only send from the shard that owns (caches) the channel.
+        const channel = client.shard
+            ? client.channels.cache.get(channelId)
+            : (client.channels.cache.get(channelId) ?? (await client.channels.fetch(channelId).catch(() => null)));
+
+        if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) {
+            return 0;
+        }
+
+        let count = 0;
+        for (let i = 0; i < videos.length; i++) {
+            if (i > 0) await sleep(DISCORD_SEND_DELAY);
+            const embed = buildVideoEmbed(videos[i]!);
+            const message = await channel.send({ embeds: [embed] });
+            if (channel.type === ChannelType.GuildAnnouncement) {
+                await message.crosspost().catch(() => {});
+            }
+            count++;
+        }
+        return count;
+    } catch (error: unknown) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        logger.error(err, `RAMEN: Failed to send YouTube feed to channel ${channelId}`);
+        return 0;
+    }
+}
+
 ramen.subscribe<YouTubeNewVideosEvent>("youtube:new_videos", async (data): Promise<void> => {
     try {
         const { videos, targets } = data;
         let sentCount = 0;
 
-        for (let i = 0; i < targets.length; i++) {
-            const channelId = targets[i]!;
-            try {
-                // Stagger sends between different Discord channels
-                if (i > 0) {
-                    await sleep(DISCORD_SEND_DELAY);
-                }
-
-                const channel =
-                    client.channels.cache.get(channelId) ?? (await client.channels.fetch(channelId).catch(() => null));
-                if (
-                    channel &&
-                    (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement)
-                ) {
-                    for (const video of videos) {
-                        const embed = buildVideoEmbed(video);
-                        const message = await channel.send({ embeds: [embed] });
-
-                        // Cross-post if the channel is an announcement channel
-                        if (channel.type === ChannelType.GuildAnnouncement) {
-                            try {
-                                await message.crosspost();
-                            } catch {
-                                // Missing permissions for crosspost — ignore
-                            }
-                        }
-                        sentCount++;
-                    }
-                }
-            } catch (error: unknown) {
-                const err = error instanceof Error ? error : new Error(String(error));
-                logger.error(err, `RAMEN: Failed to send YouTube feed to channel ${channelId}`);
-            }
+        for (let i = 0; i < targets.length; i += CHANNEL_CONCURRENCY) {
+            const batch = targets.slice(i, i + CHANNEL_CONCURRENCY);
+            const counts = await Promise.all(batch.map(channelId => sendToChannel(channelId, videos)));
+            for (const c of counts) sentCount += c;
         }
 
         if (sentCount > 0) {

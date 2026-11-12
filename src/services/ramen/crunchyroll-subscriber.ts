@@ -1,9 +1,12 @@
-import { TextChannel, EmbedBuilder } from "discord.js";
+import { ChannelType, EmbedBuilder } from "discord.js";
 import { client } from "../../core/client";
 import { ramen } from "../../core/ramen";
 import { logger } from "../../core/logger";
+import { buildLineupEmbed } from "../crunchyroll";
 import type { FormattedEpisode } from "../../types/crunchyroll";
 import { LANG_MAP, CRUNCHYROLL_COLOR, MESSAGE_DELAY } from "../../constants";
+
+const CHANNEL_CONCURRENCY = 5;
 
 /**
  * Event data interface for new Crunchyroll episodes sent over the event bus.
@@ -116,25 +119,44 @@ function buildEpisodeEmbed(episode: FormattedEpisode, isEdited: boolean): EmbedB
     return embed;
 }
 
+async function resolveTargetChannel(channelId: string) {
+    // When sharded, only handle channels owned (cached) by this shard to prevent duplicates.
+    const channel = client.shard
+        ? client.channels.cache.get(channelId)
+        : (client.channels.cache.get(channelId) ?? (await client.channels.fetch(channelId).catch(() => null)));
+
+    if (channel && (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement)) {
+        return channel;
+    }
+    return null;
+}
+
 ramen.subscribe<CrunchyrollEpisodesEvent>("crunchyroll:new_episodes", async (data): Promise<void> => {
     try {
         const { episodes, targetChannelIds } = data;
+        const embeds = episodes.map(({ episode, isEdited }) => buildEpisodeEmbed(episode, isEdited));
 
-        for (const channelId of targetChannelIds) {
-            try {
-                const channel =
-                    client.channels.cache.get(channelId) ?? (await client.channels.fetch(channelId).catch(() => null));
-                if (channel && channel instanceof TextChannel) {
-                    for (const { episode, isEdited } of episodes) {
-                        const embed = buildEpisodeEmbed(episode, isEdited);
-                        await channel.send({ embeds: [embed] });
-                        await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
+        for (let i = 0; i < targetChannelIds.length; i += CHANNEL_CONCURRENCY) {
+            const batch = targetChannelIds.slice(i, i + CHANNEL_CONCURRENCY);
+            await Promise.all(
+                batch.map(async channelId => {
+                    try {
+                        const channel = await resolveTargetChannel(channelId);
+                        if (!channel) return;
+
+                        for (let j = 0; j < embeds.length; j++) {
+                            if (j > 0) await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
+                            const message = await channel.send({ embeds: [embeds[j]!] });
+                            if (channel.type === ChannelType.GuildAnnouncement) {
+                                await message.crosspost().catch(() => {});
+                            }
+                        }
+                    } catch (error: unknown) {
+                        const err = error instanceof Error ? error : new Error(String(error));
+                        logger.error(err, `RAMEN: Failed to send crunchyroll embedded update to channel ${channelId}`);
                     }
-                }
-            } catch (error: unknown) {
-                const err = error instanceof Error ? error : new Error(String(error));
-                logger.error(err, `RAMEN: Failed to send crunchyroll embedded update to channel ${channelId}`);
-            }
+                })
+            );
         }
     } catch (outerError: unknown) {
         const err = outerError instanceof Error ? outerError : new Error(String(outerError));
@@ -142,8 +164,6 @@ ramen.subscribe<CrunchyrollEpisodesEvent>("crunchyroll:new_episodes", async (dat
     }
 });
 logger.info("🍜 RAMEN Subscriber registered: crunchyroll:new_episodes");
-
-import { buildLineupEmbed } from "../../commands/cr";
 
 export interface CrunchyrollLineupEvent {
     announcements: {
@@ -160,22 +180,29 @@ export interface CrunchyrollLineupEvent {
 ramen.subscribe<CrunchyrollLineupEvent>("crunchyroll:new_lineup_announcement", async (data): Promise<void> => {
     try {
         const { announcements, targetChannelIds } = data;
+        const embeds = announcements.map(a => buildLineupEmbed(a));
 
-        for (const channelId of targetChannelIds) {
-            try {
-                const channel =
-                    client.channels.cache.get(channelId) ?? (await client.channels.fetch(channelId).catch(() => null));
-                if (channel && channel instanceof TextChannel) {
-                    for (const announcement of announcements) {
-                        const embed = buildLineupEmbed(announcement);
-                        await channel.send({ embeds: [embed] });
-                        await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
+        for (let i = 0; i < targetChannelIds.length; i += CHANNEL_CONCURRENCY) {
+            const batch = targetChannelIds.slice(i, i + CHANNEL_CONCURRENCY);
+            await Promise.all(
+                batch.map(async channelId => {
+                    try {
+                        const channel = await resolveTargetChannel(channelId);
+                        if (!channel) return;
+
+                        for (let j = 0; j < embeds.length; j++) {
+                            if (j > 0) await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
+                            const message = await channel.send({ embeds: [embeds[j]!] });
+                            if (channel.type === ChannelType.GuildAnnouncement) {
+                                await message.crosspost().catch(() => {});
+                            }
+                        }
+                    } catch (error: unknown) {
+                        const err = error instanceof Error ? error : new Error(String(error));
+                        logger.error(err, `RAMEN: Failed to send crunchyroll lineup embed to channel ${channelId}`);
                     }
-                }
-            } catch (error: unknown) {
-                const err = error instanceof Error ? error : new Error(String(error));
-                logger.error(err, `RAMEN: Failed to send crunchyroll lineup embed to channel ${channelId}`);
-            }
+                })
+            );
         }
     } catch (outerError: unknown) {
         const err = outerError instanceof Error ? outerError : new Error(String(outerError));

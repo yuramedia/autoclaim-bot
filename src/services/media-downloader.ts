@@ -11,16 +11,18 @@ import { logger } from "../core/logger";
 // Re-export types for backwards compatibility
 export type { VKRResponse, VKRFormat, DownloadResult };
 
-// Parse size string like "10 MB", "5.2 MB" to bytes
+// Parse size string like "10 MB", "5.2 MB", "512 B" to bytes
 function parseSizeToBytes(sizeStr: string): number {
     if (!sizeStr) return Infinity;
-    const match = sizeStr.match(/([\d.]+)\s*(KB|MB|GB)/i);
+    const match = sizeStr.match(/([\d.]+)\s*(KB|MB|GB|B)\b/i);
     if (!match || !match[1] || !match[2]) return Infinity;
 
     const value = parseFloat(match[1]);
     const unit = match[2].toUpperCase();
 
     switch (unit) {
+        case "B":
+            return value;
         case "KB":
             return value * 1024;
         case "MB":
@@ -30,6 +32,11 @@ function parseSizeToBytes(sizeStr: string): number {
         default:
             return Infinity;
     }
+}
+
+function isHtmlContentType(headers: Record<string, unknown> | undefined): boolean {
+    const contentType = headers?.["content-type"];
+    return typeof contentType === "string" && contentType.toLowerCase().includes("text/html");
 }
 
 /**
@@ -108,12 +115,23 @@ export async function downloadMedia(
             };
         }
 
-        // Sort formats by size descending (prefer higher quality)
-        const sortedFormats = info.formats.toSorted((a, b) => parseSizeToBytes(b.size) - parseSizeToBytes(a.size));
+        // Sort formats by known size descending (unknown sizes last so known-fitting formats are tried first)
+        const sortedFormats = info.formats.toSorted((a, b) => {
+            const sizeA = parseSizeToBytes(a.size);
+            const sizeB = parseSizeToBytes(b.size);
+            if (!Number.isFinite(sizeA) && !Number.isFinite(sizeB)) return 0;
+            if (!Number.isFinite(sizeA)) return 1;
+            if (!Number.isFinite(sizeB)) return -1;
+            return sizeB - sizeA;
+        });
         const validFormats = sortedFormats.filter(f => parseSizeToBytes(f.size) <= maxSizeLimit);
+        const candidates =
+            validFormats.length > 0
+                ? validFormats.slice(0, 3)
+                : sortedFormats.filter(f => !Number.isFinite(parseSizeToBytes(f.size))).slice(0, 3);
 
-        // Try downloading top valid formats automatically (up to 3 candidates)
-        for (const candidateFormat of validFormats.slice(0, 3)) {
+        // Try downloading top candidate formats automatically (up to 3 candidates)
+        for (const candidateFormat of candidates) {
             try {
                 const response = await axios.get(candidateFormat.url, {
                     responseType: "arraybuffer",
@@ -124,11 +142,18 @@ export async function downloadMedia(
                     }
                 });
 
+                if (isHtmlContentType(response.headers as Record<string, unknown>)) continue;
+
                 const buffer = Buffer.from(response.data);
 
                 if (buffer.length <= maxSizeLimit) {
                     const ext = candidateFormat.ext || "mp4";
-                    const filename = `${(info.title || "video").slice(0, 50).replace(/[^\w\s-]/g, "")}_${Date.now()}.${ext}`;
+                    const baseName =
+                        (info.title || "video")
+                            .slice(0, 50)
+                            .replace(/[^\w\s-]/g, "")
+                            .trim() || "video";
+                    const filename = `${baseName}_${Date.now()}.${ext}`;
 
                     return {
                         success: true,
@@ -139,7 +164,7 @@ export async function downloadMedia(
                     };
                 }
             } catch {
-                // If this format fails, try the next valid candidate format
+                // If this format fails, try the next candidate format
             }
         }
 
@@ -185,6 +210,10 @@ export async function downloadDirect(
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             }
         });
+
+        if (isHtmlContentType(response.headers as Record<string, unknown>)) {
+            return { success: false, error: "Received HTML error page instead of media" };
+        }
 
         const buffer = Buffer.from(response.data);
         if (buffer.length > maxSizeLimit) {

@@ -71,7 +71,7 @@ export const data = new SlashCommandBuilder()
                 opt
                     .setName("channel")
                     .setDescription("Discord channel to receive notifications")
-                    .addChannelTypes(ChannelType.GuildText)
+                    .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
                     .setRequired(true)
             )
     )
@@ -178,19 +178,28 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     return;
                 }
 
-                const resolved = await ytService.resolveChannelId(input);
                 const cleanInput = input.toLowerCase();
 
-                const index = currentChannels.findIndex(
-                    c =>
-                        (resolved && c.channelId.toLowerCase() === resolved.channelId.toLowerCase()) ||
-                        c.channelId.toLowerCase() === cleanInput ||
-                        c.handle.toLowerCase() === cleanInput ||
-                        c.handle.toLowerCase() === `@${cleanInput.replace(/^@/, "")}` ||
-                        c.channelName.toLowerCase().includes(cleanInput) ||
-                        cleanInput.includes(c.channelId.toLowerCase()) ||
-                        cleanInput.includes(c.handle.toLowerCase().replace(/^@/, ""))
-                );
+                // Check local watch list before falling back to remote YouTube resolution
+                const findMatch = (resolvedId?: string) =>
+                    currentChannels.findIndex(
+                        c =>
+                            (resolvedId && c.channelId.toLowerCase() === resolvedId.toLowerCase()) ||
+                            c.channelId.toLowerCase() === cleanInput ||
+                            c.handle.toLowerCase() === cleanInput ||
+                            c.handle.toLowerCase() === `@${cleanInput.replace(/^@/, "")}` ||
+                            c.channelName.toLowerCase().includes(cleanInput) ||
+                            cleanInput.includes(c.channelId.toLowerCase()) ||
+                            cleanInput.includes(c.handle.toLowerCase().replace(/^@/, ""))
+                    );
+
+                let index = findMatch();
+                if (index === -1) {
+                    const resolved = await ytService.resolveChannelId(input);
+                    if (resolved) {
+                        index = findMatch(resolved.channelId);
+                    }
+                }
 
                 if (index === -1) {
                     await interaction.editReply({

@@ -5,6 +5,7 @@
  */
 
 import crypto from "crypto";
+import { EmbedBuilder } from "discord.js";
 import type {
     CrunchyrollAuth,
     CrunchyrollEpisodes,
@@ -16,12 +17,12 @@ import type {
     CrunchyrollBrowseResponse,
     LineupAnnouncement
 } from "../types/crunchyroll";
-import { LANG_MAP, CR_RELEASE_ITEMS_PER_PAGE, getActiveCrunchyrollAuth } from "../constants";
+import { LANG_MAP, CRUNCHYROLL_COLOR, CR_RELEASE_ITEMS_PER_PAGE, getActiveCrunchyrollAuth } from "../constants";
 import { syncCrunchyrollCredentials } from "./crunchyroll-credentials";
 import { config } from "../config";
 import { logger } from "../core/logger";
 import { fetchWithTimeout } from "../utils/http";
-import { parseXml, xmlNodeArray, xmlAttr, type XmlNode } from "../utils/xml";
+import { parseXml, xmlNodeArray, xmlAttr, xmlText, type XmlNode } from "../utils/xml";
 
 // Cache for anonymous auth token
 let cachedAuth: CrunchyrollAuth | null = null;
@@ -82,14 +83,26 @@ export class CrunchyrollService {
         return `${timeLow}-${timeMid}-${timeHiAndVersion}-${clockSeq}-${node}`;
     }
 
+    /** Clear cached anonymous auth token so the next request obtains a fresh token. */
+    private invalidateAnonymousAuth(): void {
+        cachedAuth = null;
+        authExpiresAt = 0;
+        anonymousAuthPromise = null;
+    }
+
+    /** Clear cached account auth token so the next request obtains a fresh token. */
+    private invalidateAccountAuth(): void {
+        cachedAccountAuth = null;
+        accountAuthExpiresAt = 0;
+        accountAuthPromise = null;
+    }
+
     /**
      * Get auth token (cached). Concurrent callers share a single in-flight request.
      */
     async getAuth(forceRefresh = false): Promise<CrunchyrollAuth | null> {
         if (forceRefresh) {
-            cachedAuth = null;
-            authExpiresAt = 0;
-            anonymousAuthPromise = null;
+            this.invalidateAnonymousAuth();
         } else if (cachedAuth && Date.now() < authExpiresAt) {
             return cachedAuth;
         }
@@ -162,7 +175,11 @@ export class CrunchyrollService {
      * @param count - Number of episodes to return.
      * @returns A promise resolving to an array of Crunchyroll episodes.
      */
-    async fetchLatestEpisodes(lang = "", count = CR_RELEASE_ITEMS_PER_PAGE): Promise<CrunchyrollEpisode[]> {
+    async fetchLatestEpisodes(
+        lang = "",
+        count = CR_RELEASE_ITEMS_PER_PAGE,
+        retryOnAuthError = true
+    ): Promise<CrunchyrollEpisode[]> {
         const auth = await this.getAuth();
         if (!auth) return [];
 
@@ -190,6 +207,10 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
+                if ((response.status === 401 || response.status === 403) && retryOnAuthError) {
+                    this.invalidateAnonymousAuth();
+                    return await this.fetchLatestEpisodes(lang, count, false);
+                }
                 logger.error(`Crunchyroll fetch failed: ${response.status}`);
                 return [];
             }
@@ -546,7 +567,7 @@ export class CrunchyrollService {
     /**
      * Get series poster (tall) by series ID
      */
-    async getSeriesPoster(seriesId: string): Promise<string | undefined> {
+    async getSeriesPoster(seriesId: string, retryOnAuthError = true): Promise<string | undefined> {
         if (!seriesId) return undefined;
 
         // Check cache first
@@ -567,6 +588,10 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
+                if ((response.status === 401 || response.status === 403) && retryOnAuthError) {
+                    this.invalidateAnonymousAuth();
+                    return await this.getSeriesPoster(seriesId, false);
+                }
                 logger.error(`Failed to fetch series ${seriesId}: ${response.status}`);
                 return undefined;
             }
@@ -640,9 +665,7 @@ export class CrunchyrollService {
      */
     async getAccountAuth(forceRefresh = false): Promise<CrunchyrollAuth | null> {
         if (forceRefresh) {
-            cachedAccountAuth = null;
-            accountAuthExpiresAt = 0;
-            accountAuthPromise = null;
+            this.invalidateAccountAuth();
         } else if (cachedAccountAuth && Date.now() < accountAuthExpiresAt) {
             return cachedAccountAuth;
         }
@@ -658,7 +681,7 @@ export class CrunchyrollService {
     /**
      * Perform the password grant and populate the cache.
      */
-    private async requestAccountAuth(): Promise<CrunchyrollAuth | null> {
+    private async requestAccountAuth(retryOnAuthError = true): Promise<CrunchyrollAuth | null> {
         const email = config.crunchyroll.email;
         const password = config.crunchyroll.password;
 
@@ -688,6 +711,15 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
+                if ((response.status === 401 || response.status === 403) && retryOnAuthError) {
+                    logger.warn(
+                        `[CrunchyrollService] Account auth failed with HTTP ${response.status}. Attempting credential sync...`
+                    );
+                    const updated = await syncCrunchyrollCredentials(true);
+                    if (updated) {
+                        return await this.requestAccountAuth(false);
+                    }
+                }
                 logger.error(`Crunchyroll account auth failed: ${response.status}`);
                 return null;
             }
@@ -713,7 +745,7 @@ export class CrunchyrollService {
      * Search episodes by anime title and episode number
      * Returns matching episodes from the browse API
      */
-    async searchEpisode(query: string, episodeNumber?: number): Promise<CrunchyrollEpisode[]> {
+    async searchEpisode(query: string, episodeNumber?: number, retryOnAuthError = true): Promise<CrunchyrollEpisode[]> {
         const auth = await this.getAuth();
         if (!auth) return [];
 
@@ -734,6 +766,10 @@ export class CrunchyrollService {
             });
 
             if (!response.ok) {
+                if ((response.status === 401 || response.status === 403) && retryOnAuthError) {
+                    this.invalidateAnonymousAuth();
+                    return await this.searchEpisode(query, episodeNumber, false);
+                }
                 logger.error(`Crunchyroll search failed: ${response.status}`);
                 return [];
             }
@@ -1024,7 +1060,11 @@ export class CrunchyrollService {
      * @param locale - content locale
      * @returns Array of all series for the given season
      */
-    async fetchSeasonalSeries(seasonTag: string, locale = "en-US"): Promise<CrunchyrollBrowseItem[]> {
+    async fetchSeasonalSeries(
+        seasonTag: string,
+        locale = "en-US",
+        retryOnAuthError = true
+    ): Promise<CrunchyrollBrowseItem[]> {
         const auth = await this.getAuth();
         if (!auth) return [];
 
@@ -1050,6 +1090,10 @@ export class CrunchyrollService {
                 });
 
                 if (!response.ok) {
+                    if ((response.status === 401 || response.status === 403) && retryOnAuthError && start === 0) {
+                        this.invalidateAnonymousAuth();
+                        return await this.fetchSeasonalSeries(seasonTag, locale, false);
+                    }
                     logger.error(`Crunchyroll seasonal fetch failed with status: ${response.status}`);
                     return allSeries;
                 }
@@ -1097,8 +1141,8 @@ export class CrunchyrollService {
             const announcements: LineupAnnouncement[] = [];
 
             for (const item of items) {
-                const title = String(item.title || "");
-                const url = String(item.link || "");
+                const title = xmlText(item.title);
+                const url = xmlText(item.link);
 
                 if (onlySeasonal) {
                     const isSeasonal =
@@ -1107,15 +1151,10 @@ export class CrunchyrollService {
                     if (!isSeasonal) continue;
                 }
 
-                const description = String(item.description || "");
-                const author =
-                    (typeof item.author === "string"
-                        ? item.author
-                        : typeof item["dc:creator"] === "string"
-                          ? item["dc:creator"]
-                          : null) || null;
+                const description = xmlText(item.description);
+                const author = xmlText(item.author) || xmlText(item["dc:creator"]) || null;
                 const thumbnail = xmlAttr(item["media:thumbnail"] as XmlNode | undefined, "url");
-                const pubDate = String(item.pubDate || new Date().toUTCString());
+                const pubDate = xmlText(item.pubDate) || new Date().toUTCString();
 
                 announcements.push({
                     title,
@@ -1141,4 +1180,42 @@ export class CrunchyrollService {
         const announcements = await this.fetchLineupAnnouncements(onlySeasonal);
         return announcements[0] || null;
     }
+}
+
+/**
+ * Build a Crunchyroll seasonal lineup announcement embed.
+ */
+export function buildLineupEmbed(announcement: {
+    title: string;
+    url: string;
+    description: string;
+    thumbnail: string | null;
+    author: string | null;
+    pubDate: string;
+}): EmbedBuilder {
+    const authorName = (announcement.author || "Kyle Cardine").slice(0, 256);
+    const title = (announcement.title || "Crunchyroll Lineup").slice(0, 256);
+    const description = (announcement.description || "").slice(0, 4096);
+    const parsedDate = announcement.pubDate ? new Date(announcement.pubDate) : new Date();
+    const validDate = !isNaN(parsedDate.getTime()) ? parsedDate : new Date();
+
+    const embed = new EmbedBuilder()
+        .setColor(CRUNCHYROLL_COLOR)
+        .setAuthor({
+            name: authorName,
+            iconURL: "https://www.crunchyroll.com/favicons/favicon-32x32.png"
+        })
+        .setTitle(title)
+        .setURL(announcement.url)
+        .setDescription(description || null)
+        .setTimestamp(validDate)
+        .setFooter({
+            text: `Latest Anime News • ${announcement.url}`.slice(0, 2048)
+        });
+
+    if (announcement.thumbnail) {
+        embed.setImage(announcement.thumbnail);
+    }
+
+    return embed;
 }

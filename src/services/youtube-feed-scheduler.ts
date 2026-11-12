@@ -16,16 +16,8 @@ const cachedChannelVideos: Map<string, FormattedYouTubeVideo[]> = new Map();
 /** Tracks channel IDs that have completed their initial silent cache run */
 const initializedChannels: Set<string> = new Set();
 const ytLock = { isChecking: false };
-
-/**
- * Check if two videos are equal (by videoId)
- * @param a First video
- * @param b Second video
- * @returns Whether the videos have the same videoId
- */
-function videoEquals(a: FormattedYouTubeVideo, b: FormattedYouTubeVideo): boolean {
-    return a.videoId === b.videoId;
-}
+let startupTimer: ReturnType<typeof setTimeout> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Run async tasks with a concurrency limit.
@@ -70,15 +62,31 @@ function isStableStatus(statusType: YouTubeVideoStatusType): boolean {
 }
 
 /**
+ * Stops the YouTube feed scheduler timers for graceful shutdown.
+ */
+export function stopYouTubeFeed(): void {
+    if (startupTimer) {
+        clearTimeout(startupTimer);
+        startupTimer = null;
+    }
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
+
+/**
  * Starts the YouTube feed scheduler loop.
  * @param client Discord client instance
  */
 export function startYouTubeFeed(client: Client): void {
     logger.info("🎥 Starting YouTube feed scheduler...");
+    stopYouTubeFeed();
     const service = new YouTubeFeedService();
 
     // Initial check after 5 seconds delay (shard-guarded)
-    setTimeout(async () => {
+    startupTimer = setTimeout(async () => {
+        startupTimer = null;
         try {
             if (client.shard && client.shard.ids[0] !== 0) return;
             await checkAllFeeds(service);
@@ -86,9 +94,10 @@ export function startYouTubeFeed(client: Client): void {
             logger.error(error, "YouTube Feed initial check failed:");
         }
     }, 5000);
+    if (typeof startupTimer.unref === "function") startupTimer.unref();
 
     // Poll every 1 minute (YT_POLL_INTERVAL)
-    setInterval(async () => {
+    pollTimer = setInterval(async () => {
         try {
             if (client.shard && client.shard.ids[0] !== 0) return;
             await checkAllFeeds(service);
@@ -96,6 +105,7 @@ export function startYouTubeFeed(client: Client): void {
             logger.error(error, "YouTube Feed poll check failed:");
         }
     }, YT_POLL_INTERVAL);
+    if (typeof pollTimer.unref === "function") pollTimer.unref();
 }
 
 /**
@@ -170,8 +180,11 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
                 channelIndex++;
 
                 const region = channelToRegionMap.get(ytChannelId) || "ID";
-                const rssEntries = await service.fetchFeed(ytChannelId);
-                const webEntries = await service.fetchVideosFromWeb(ytChannelId, region);
+                const [rssEntries, webEntries, channelIcon] = await Promise.all([
+                    service.fetchFeed(ytChannelId),
+                    service.fetchVideosFromWeb(ytChannelId, region),
+                    service.getChannelIcon(ytChannelId)
+                ]);
 
                 // Merge RSS & Web scraper entries uniquely by videoId
                 // RSS entries are preferred (they have accurate published dates)
@@ -196,11 +209,10 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
                 if (rawEntries.length === 0) continue;
 
                 let channelCache = cachedChannelVideos.get(ytChannelId) || [];
+                const cachedById = new Map<string, FormattedYouTubeVideo>(channelCache.map(v => [v.videoId, v]));
                 const isFirstCheckForChannel = !initializedChannels.has(ytChannelId);
 
                 const newlyDiscoveredVideos: FormattedYouTubeVideo[] = [];
-
-                const channelIcon = await service.getChannelIcon(ytChannelId);
 
                 // Determine which entries actually need a status fetch:
                 // - New entries not in cache -> always fetch
@@ -214,7 +226,7 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
 
                 for (let i = 0; i < rawEntries.length; i++) {
                     const raw = rawEntries[i]!;
-                    const existing = channelCache.find(v => v.videoId === raw.videoId);
+                    const existing = cachedById.get(raw.videoId);
 
                     if (existing && isStableStatus(existing.statusType)) {
                         // Skip status fetch — reuse cached stable status
@@ -254,7 +266,7 @@ async function checkAllFeeds(service: YouTubeFeedService): Promise<void> {
                     if (!raw || !statusInfo) continue;
                     try {
                         const formatted = service.formatEntry(raw, statusInfo, channelIcon);
-                        const existing = channelCache.find(v => videoEquals(v, formatted));
+                        const existing = cachedById.get(formatted.videoId);
 
                         if (existing) {
                             // Check if status transitioned to a different state

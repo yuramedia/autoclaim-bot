@@ -14,6 +14,9 @@ import { getCooldownRemaining, setCooldown, formatCooldown } from "../utils/cool
 /** Cooldown duration for the claim command in milliseconds (30 seconds). */
 export const CLAIM_COOLDOWN_MS = 30_000;
 
+/** Tracks users with an active /claim request in flight to prevent double-submit races. */
+const inFlightClaims = new Set<string>();
+
 /**
  * Slash command definition for manual daily rewards claiming.
  */
@@ -39,9 +42,18 @@ export const data = new SlashCommandBuilder()
  * @returns A promise that resolves when the command finishes.
  */
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    const userId = interaction.user.id;
+    let acquiredLock = false;
     try {
-        // Cooldown check
-        const remaining = getCooldownRemaining("claim", interaction.user.id, CLAIM_COOLDOWN_MS);
+        // Cooldown & in-flight check
+        if (inFlightClaims.has(userId)) {
+            await interaction.reply({
+                content: "⏳ Your previous `/claim` request is still running. Please wait a moment.",
+                flags: MessageFlags.Ephemeral
+            });
+            return;
+        }
+        const remaining = getCooldownRemaining("claim", userId, CLAIM_COOLDOWN_MS);
         if (remaining > 0) {
             await interaction.reply({
                 content: `⏳ Slow down! You can use \`/claim\` again in **${formatCooldown(remaining)}**.`,
@@ -50,10 +62,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             return;
         }
 
+        inFlightClaims.add(userId);
+        acquiredLock = true;
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const service = interaction.options.getString("service") || "all";
-        const user = await User.findOne({ discordId: interaction.user.id }).lean();
+        const user = await User.findOne({ discordId: userId }).lean();
 
         if (!user) {
             await interaction.editReply({
@@ -64,8 +78,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         const embed = new EmbedBuilder().setTitle("🎁 Daily Claim Results").setColor(0x00ae86).setTimestamp();
 
-        // Run services in parallel — they hit independent APIs and each
-        // persists its own atomic result update.
+        // Run services in parallel — isolate failures per service so partial results still render
         const [hoyolabField, endfieldField] = await Promise.all([
             (async (): Promise<{ name: string; value: string } | null> => {
                 if ((service !== "all" && service !== "hoyolab") || !user.hoyolab?.token) return null;
@@ -84,12 +97,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     if (hoyolabDecrypt.needsReEncryption) {
                         hoyolabUpdate["hoyolab.token"] = encryptToken(hoyolabDecrypt.value);
                     }
-                    await User.updateOne({ discordId: interaction.user.id }, { $set: hoyolabUpdate });
+                    await User.updateOne({ discordId: userId }, { $set: hoyolabUpdate });
 
                     // Record history asynchronously
                     void recordClaimHistory(
                         results.map(r => ({
-                            discordId: interaction.user.id,
+                            discordId: userId,
                             service: "hoyolab",
                             game: r.game,
                             success: r.success,
@@ -100,7 +113,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     return { name: "🌟 Hoyolab", value: formatHoyolabResults(results) };
                 } catch (error) {
                     logger.error(error, "[Claim] Hoyolab claim failed");
-                    throw error;
+                    const msg = error instanceof Error ? error.message : String(error);
+                    return { name: "🌟 Hoyolab", value: `❌ Error: ${msg}` };
                 }
             })(),
             (async (): Promise<{ name: string; value: string } | null> => {
@@ -122,11 +136,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     if (endfieldDecrypt.needsReEncryption) {
                         endfieldUpdate["endfield.accountToken"] = encryptToken(endfieldDecrypt.value);
                     }
-                    await User.updateOne({ discordId: interaction.user.id }, { $set: endfieldUpdate });
+                    await User.updateOne({ discordId: userId }, { $set: endfieldUpdate });
 
                     // Record history asynchronously
                     void recordClaimHistory({
-                        discordId: interaction.user.id,
+                        discordId: userId,
                         service: "endfield",
                         game: "Endfield",
                         success: result.success,
@@ -136,7 +150,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     return { name: "🎮 Endfield", value: formatEndfieldResult(result) };
                 } catch (error) {
                     logger.error(error, "[Claim] Endfield claim failed");
-                    throw error;
+                    const msg = error instanceof Error ? error.message : String(error);
+                    return { name: "🎮 Endfield", value: `❌ Error: ${msg}` };
                 }
             })()
         ]);
@@ -158,12 +173,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             return;
         }
 
-        setCooldown("claim", interaction.user.id);
+        setCooldown("claim", userId);
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         logger.error(error, "Claim command failed");
-        // decryptTokenCompat never throws for format reasons, but claim logic
-        // could still fail (API errors, validation, etc.)
         const userMessage = "❌ An error occurred while executing the claim command.";
         try {
             if (interaction.deferred || interaction.replied) {
@@ -179,5 +192,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         } catch (e) {
             logger.error(e, "Failed to send error reply");
         }
+    } finally {
+        if (acquiredLock) inFlightClaims.delete(userId);
     }
 }

@@ -7,7 +7,7 @@
 
 import crypto from "crypto";
 import { logger } from "../core/logger";
-import { fetchWithTimeout } from "../utils/http";
+import { fetchWithTimeout, withRetry } from "../utils/http";
 import type { EndfieldClaimResult, EndfieldRoleResult, EndfieldServiceOptions, EndfieldValidation } from "../types";
 import {
     ENDFIELD,
@@ -52,26 +52,50 @@ function computeSignV2(path: string, body: string, timestamp: string, signToken:
 
 // ── Auth Pipeline ───────────────────────────────────────────────────────
 
+async function fetchSkportWithRetry(url: string, options: Parameters<typeof fetchWithTimeout>[1]): Promise<Response> {
+    return withRetry(
+        async () => {
+            const response = await fetchWithTimeout(url, options);
+            if (response.status === 429 || response.status >= 500) {
+                const err = new Error(`HTTP ${response.status}`) as Error & { status?: number };
+                err.status = response.status;
+                throw err;
+            }
+            return response;
+        },
+        { retries: 2 }
+    );
+}
+
 /**
  * Step 1: Exchange ACCOUNT_TOKEN for an OAuth code
  * POST https://as.gryphline.com/user/oauth2/v2/grant
  * @param accountToken - The user's account token
- * @returns OAuth code string or null if failed
+ * @returns OAuth code plus whether the API explicitly rejected the token
  */
-async function getOAuthCode(accountToken: string): Promise<string | null> {
+async function getOAuthCode(accountToken: string): Promise<{ code: string | null; tokenRejected: boolean }> {
     try {
         const payload = { token: accountToken, appCode: ENDFIELD_APP_CODE, type: 0 };
-        const response = await fetchWithTimeout(ENDFIELD_GRANT_URL, {
+        const response = await fetchSkportWithRetry(ENDFIELD_GRANT_URL, {
             timeoutMs: 15000,
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
+        if (response.status === 401 || response.status === 403) {
+            return { code: null, tokenRejected: true };
+        }
+        if (!response.ok) {
+            return { code: null, tokenRejected: false };
+        }
         const json = (await response.json()) as { status?: number; data?: { code?: string } };
-        return json.status === 0 && json.data?.code ? json.data.code : null;
+        if (json.status === 0 && json.data?.code) {
+            return { code: json.data.code, tokenRejected: false };
+        }
+        return { code: null, tokenRejected: true };
     } catch (error) {
         logger.error(error as Error, "[Endfield] getOAuthCode error");
-        return null;
+        return { code: null, tokenRejected: false };
     }
 }
 
@@ -95,12 +119,13 @@ interface CredResponse {
 async function getCredAndSalt(oauthCode: string): Promise<CredResponse | null> {
     try {
         const payload = { kind: 1, code: oauthCode };
-        const response = await fetchWithTimeout(ENDFIELD_GENERATE_CRED_URL, {
+        const response = await fetchSkportWithRetry(ENDFIELD_GENERATE_CRED_URL, {
             timeoutMs: 15000,
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
+        if (!response.ok) return null;
         const json = (await response.json()) as {
             code?: number;
             data?: { cred?: string; token?: string; userId?: string };
@@ -143,11 +168,12 @@ async function getPlayerBindings(cred: string, signToken: string): Promise<strin
             Origin: "https://game.skport.com",
             Referer: "https://game.skport.com/"
         };
-        const response = await fetchWithTimeout(ENDFIELD_BINDING_URL, {
+        const response = await fetchSkportWithRetry(ENDFIELD_BINDING_URL, {
             timeoutMs: 15000,
             method: "GET",
             headers
         });
+        if (!response.ok) return [];
 
         interface BindingRole {
             roleId: string;
@@ -217,7 +243,7 @@ async function sendAttendanceRequest(
             Origin: "https://game.skport.com",
             Referer: "https://game.skport.com/"
         };
-        const response = await fetchWithTimeout(ENDFIELD_ATTENDANCE_URL, {
+        const response = await fetchSkportWithRetry(ENDFIELD_ATTENDANCE_URL, {
             timeoutMs: 20000,
             method: "POST",
             headers
@@ -285,43 +311,46 @@ export class EndfieldService {
      * @returns Claim results.
      */
     async claim(): Promise<EndfieldClaimResult> {
-        logger.info("[Endfield] Starting auth pipeline...");
+        logger.debug("[Endfield] Starting auth pipeline...");
 
         // Step 1: Get OAuth code from ACCOUNT_TOKEN
-        // Token is now stored in decoded form (URI-decoded at entry point in endfield-modal),
-        // so no decodeURIComponent needed here.
-        const oauthCode = await getOAuthCode(this.accountToken);
+        const { code: oauthCode, tokenRejected } = await getOAuthCode(this.accountToken);
         if (!oauthCode) {
+            if (tokenRejected) {
+                return {
+                    success: false,
+                    message:
+                        "⚠️ Failed to get OAuth code — ACCOUNT_TOKEN may be expired. Please update via `/setup-endfield`.",
+                    tokenExpired: true
+                };
+            }
             return {
                 success: false,
-                message:
-                    "⚠️ Failed to get OAuth code — ACCOUNT_TOKEN may be expired. Please update via `/setup-endfield`.",
-                tokenExpired: true
+                message: "❌ Failed to reach SKPORT OAuth service. Please try again later."
             };
         }
-        logger.info("[Endfield] OAuth code obtained");
+        logger.debug("[Endfield] OAuth code obtained");
 
         // Step 2: Generate cred and salt (signToken) in one call
-        // Reference: Areha11Fz/ArknightsEndfieldAutoCheckIn - generate_cred_by_code returns both
         const credData = await getCredAndSalt(oauthCode);
         if (!credData) {
             return { success: false, message: "❌ Failed to generate credential from OAuth code" };
         }
         const { cred, salt: signToken } = credData;
-        logger.info("[Endfield] Cred and sign token obtained");
+        logger.debug("[Endfield] Cred and sign token obtained");
 
         // Step 3: Get player bindings (auto-detect all game roles)
         const gameRoles = await getPlayerBindings(cred, signToken);
         if (gameRoles.length === 0) {
             return { success: false, message: "❌ No Endfield game roles found for this account" };
         }
-        logger.info(`[Endfield] Found ${gameRoles.length} game role(s): ${gameRoles.join(", ")}`);
+        logger.debug(`[Endfield] Found ${gameRoles.length} game role(s): ${gameRoles.join(", ")}`);
 
         // Step 4: Send attendance for each role in parallel
         const rolePromises = gameRoles.map(async (gameRole): Promise<EndfieldRoleResult> => {
             try {
                 const response = await sendAttendanceRequest(cred, signToken, gameRole, this.language);
-                logger.info(`[Endfield] Role ${gameRole} response: ${JSON.stringify(response)}`);
+                logger.debug(`[Endfield] Role ${gameRole} response: ${JSON.stringify(response)}`);
 
                 return this.handleResponse(gameRole, response);
             } catch (error: unknown) {

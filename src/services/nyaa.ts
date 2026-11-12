@@ -149,7 +149,7 @@ export async function buildNyaaCommentEmbed(
         .setURL(url)
         .setTitle(`Comment on: ${torrentTitle}`.slice(0, 256))
         .setAuthor({
-            name: comment.user || "Unknown User",
+            name: (comment.user || "Unknown User").slice(0, 256),
             iconURL: comment.avatar || `https://${domain}/static/img/avatar/default.png`,
             url: comment.profileUrl || url
         });
@@ -158,10 +158,8 @@ export async function buildNyaaCommentEmbed(
 
     // Extract images from comment using shared utility
     const commentImages = extractImageUrls(description);
-    let firstImageUrl: string | null = null;
     if (commentImages.length > 0) {
-        firstImageUrl = commentImages[0]!;
-        embed.setImage(firstImageUrl);
+        embed.setImage(commentImages[0]!);
         // Remove the first image markdown from description to avoid clutter
         description = description.replace(/!\[.*?\]\((.*?)\)/, "").trim();
     }
@@ -194,12 +192,7 @@ export async function buildNyaaCommentEmbed(
     }
 
     if (tsukihimeCover) {
-        // Tsukihime provided a cover — use it as thumbnail
-        if (!firstImageUrl) {
-            embed.setThumbnail(tsukihimeCover);
-        } else {
-            embed.setThumbnail(tsukihimeCover);
-        }
+        embed.setThumbnail(tsukihimeCover);
     } else {
         const fallbackCover = await fetchAnilistCoverByTitle(torrentTitle);
         if (fallbackCover) embed.setThumbnail(fallbackCover);
@@ -231,19 +224,19 @@ export async function buildNyaaEmbed(
         .setURL(url)
         .setTitle(info.title.slice(0, 256))
         .setAuthor({
-            name: authorName,
+            name: authorName.slice(0, 256),
             iconURL: `https://${domain}/static/img/avatar/default.png`,
             url: authorUrl
         })
         .setThumbnail(`https://${domain}/static/img/avatar/default.png`);
 
     embed.addFields(
-        { name: "Category", value: info.category, inline: true },
-        { name: "Uploader", value: info.uploader, inline: true }
+        { name: "Category", value: (info.category || "Unknown").slice(0, 1024), inline: true },
+        { name: "Uploader", value: (info.uploader || "Anonymous").slice(0, 1024), inline: true }
     );
 
     if (info.information) {
-        embed.addFields({ name: "Information", value: info.information, inline: true });
+        embed.addFields({ name: "Information", value: info.information.slice(0, 1024), inline: true });
     }
 
     // Ensure they align correctly

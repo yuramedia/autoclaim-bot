@@ -24,7 +24,13 @@ export async function handleHoyolabSelect(interaction: StringSelectMenuInteracti
             zenlessZoneZero: selectedGames.includes("zenlessZoneZero")
         };
 
-        await updateHoyolabGames(interaction.user.id, games);
+        const updated = await updateHoyolabGames(interaction.user.id, games);
+        if (!updated) {
+            await interaction.editReply({
+                content: "❌ No Hoyolab account found. Please run `/setup-hoyolab` first."
+            });
+            return;
+        }
 
         const enabledGamesList = Object.entries(games)
             .filter(([, enabled]) => enabled)

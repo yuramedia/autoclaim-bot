@@ -15,13 +15,13 @@ import { logger } from "../core/logger";
 import { decryptTokenCompat, encryptToken } from "../utils/token-crypto";
 
 /** Batch processing configuration */
-const BATCH_SIZE = 5; // Process 5 users concurrently
-const DELAY_BETWEEN_BATCHES = 2000; // 2 seconds between batches
+const BATCH_SIZE = 10; // Process 10 users concurrently
+const DELAY_BETWEEN_BATCHES = 1000; // 1 second between batches
 
 /** Per-user claim safety timeout (45 seconds) */
 export const USER_CLAIM_TIMEOUT_MS = 45_000;
 
-/** Maximum lock duration before forced auto-release (15 minutes) */
+/** Maximum lock duration before forced auto-release (15 minutes without batch progress) */
 export const MAX_LOCK_DURATION_MS = 15 * 60 * 1000;
 
 /** Interval for periodic missed claim watchdog (30 minutes) */
@@ -38,8 +38,12 @@ const CLAIM_PROJECTION = {
     "settings.notifyOnClaim": 1,
     "hoyolab.token": 1,
     "hoyolab.games": 1,
-    "endfield.accountToken": 1
+    "hoyolab.lastClaim": 1,
+    "endfield.accountToken": 1,
+    "endfield.lastClaim": 1
 };
+
+type ClaimUserRecord = Pick<IUser, "discordId" | "settings" | "hoyolab" | "endfield">;
 
 /** Token-error substrings used to force-notify users regardless of preferences */
 const TOKEN_ERROR_PATTERNS = [
@@ -64,15 +68,18 @@ const SG_TIME_FORMATTER = new Intl.DateTimeFormat("en-CA", {
     hourCycle: "h23"
 });
 
-/** Timestamp when current claim execution started, or null if idle */
+/** Timestamp when current claim execution made progress, or null if idle */
 let schedulerStartedAt: number | null = null;
+
+/** Handle for the daily cron schedule (tracked for graceful shutdown) */
+let cronTask: ReturnType<typeof cron.schedule> | null = null;
 
 /** Handle for the periodic watchdog interval (tracked for shutdown/tests) */
 let watchdogTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Checks whether the daily claims execution lock is currently held.
- * Automatically breaks deadlocks if a run exceeds MAX_LOCK_DURATION_MS.
+ * Automatically breaks deadlocks if no batch progress occurs within MAX_LOCK_DURATION_MS.
  */
 export function isSchedulerRunning(): boolean {
     if (schedulerStartedAt === null) return false;
@@ -104,6 +111,17 @@ export function stopSchedulerWatchdog(): void {
 }
 
 /**
+ * Stops the daily claim cron task and missed-claims watchdog for graceful shutdown.
+ */
+export function stopScheduler(): void {
+    if (cronTask) {
+        cronTask.stop();
+        cronTask = null;
+    }
+    stopSchedulerWatchdog();
+}
+
+/**
  * Start the daily claim scheduler and periodic recovery watchdog.
  * @param client - Discord client instance
  */
@@ -115,8 +133,12 @@ export function startScheduler(client: Client): void {
         `📅 Scheduler set for ${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")} every day (UTC+8)`
     );
 
+    if (cronTask) {
+        cronTask.stop();
+    }
+
     // Primary daily cron trigger
-    cron.schedule(
+    cronTask = cron.schedule(
         cronExpression,
         async () => {
             try {
@@ -186,9 +208,10 @@ export async function runDailyClaims(client: Client, userFilter?: Record<string,
 
     schedulerStartedAt = Date.now();
     try {
-        // Use cursor + projection for memory efficiency
+        // Use lean() + cursor + projection for memory efficiency
         const cursor = User.find(userFilter ?? USERS_WITH_TOKENS_FILTER)
             .select(CLAIM_PROJECTION)
+            .lean<ClaimUserRecord>()
             .cursor();
 
         let batch: Promise<void>[] = [];
@@ -202,6 +225,7 @@ export async function runDailyClaims(client: Client, userFilter?: Record<string,
 
             if (batch.length >= BATCH_SIZE) {
                 await Promise.all(batch);
+                schedulerStartedAt = Date.now();
                 batch = []; // Clear batch
                 await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
             }
@@ -233,135 +257,130 @@ export function getTodayMidnightUtc8(): Date {
  * @param user - User document from database
  * @returns A promise that resolves when processing is complete
  */
-async function processUserClaim(user: IUser): Promise<void> {
+async function processUserClaim(user: ClaimUserRecord): Promise<void> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<void>((_, reject) => {
-        const timer = setTimeout(() => {
+        timeoutId = setTimeout(() => {
             reject(new Error(`Claim processing timed out after ${USER_CLAIM_TIMEOUT_MS / 1000}s`));
         }, USER_CLAIM_TIMEOUT_MS);
-        if (typeof timer.unref === "function") timer.unref();
+        if (typeof timeoutId.unref === "function") timeoutId.unref();
     });
 
     try {
         await Promise.race([executeUserClaims(user), timeoutPromise]);
     } catch (err) {
         logger.error(err, `[Scheduler] Error processing claim for user ${user.discordId}:`);
+    } finally {
+        if (timeoutId) clearTimeout(timeoutId);
     }
+}
+
+interface ServiceClaimOutcome {
+    text: string;
+    tokenExpired?: boolean;
 }
 
 /**
  * Execute actual claims and database updates for a single user
  * @param user - User document
  */
-async function executeUserClaims(user: IUser): Promise<void> {
-    const results: string[] = [];
-    let hasTokenExpired = false; // Track structured token expiry from Endfield
-    const claimPromises: Promise<void>[] = [];
+async function executeUserClaims(user: ClaimUserRecord): Promise<void> {
     const todayMidnight = getTodayMidnightUtc8();
-
-    // Claim Hoyolab (skip if already claimed today)
     const hoyolabAlreadyClaimed = Boolean(user.hoyolab?.lastClaim && user.hoyolab.lastClaim >= todayMidnight);
-    if (user.hoyolab?.token && !hoyolabAlreadyClaimed) {
-        claimPromises.push(
-            (async () => {
-                try {
-                    const hoyolabDecrypt = decryptTokenCompat(user.hoyolab!.token);
-                    const hoyolab = new HoyolabService(hoyolabDecrypt.value);
-                    const hoyolabResults = await hoyolab.claimAll(user.hoyolab!.games);
-                    const resultText = formatHoyolabResults(hoyolabResults);
-                    results.push("**Hoyolab**\n" + resultText);
-
-                    // Update last claim (atomic) + re-encrypt if needed
-                    const hoyolabUpdate: Record<string, unknown> = {
-                        "hoyolab.lastClaim": new Date(),
-                        "hoyolab.lastClaimResult": resultText
-                    };
-                    if (hoyolabDecrypt.needsReEncryption) {
-                        hoyolabUpdate["hoyolab.token"] = encryptToken(hoyolabDecrypt.value);
-                    }
-                    await User.updateOne({ discordId: user.discordId }, { $set: hoyolabUpdate });
-
-                    // Record claim history
-                    void recordClaimHistory(
-                        hoyolabResults.map(r => ({
-                            discordId: user.discordId,
-                            service: "hoyolab",
-                            game: r.game,
-                            success: r.success,
-                            message: r.message
-                        }))
-                    );
-                } catch (error: unknown) {
-                    const err = error as { message?: string };
-                    logger.error({
-                        msg: `[Scheduler] Hoyolab claim error for ${user.discordId}:`,
-                        detail: err.message
-                    });
-                    results.push("**Hoyolab**\n❌ Error: " + err.message);
-                }
-            })()
-        );
-    }
-
-    // Claim Endfield (skip if already claimed today)
     const endfieldAlreadyClaimed = Boolean(user.endfield?.lastClaim && user.endfield.lastClaim >= todayMidnight);
-    if (user.endfield?.accountToken && !endfieldAlreadyClaimed) {
-        claimPromises.push(
-            (async () => {
-                try {
-                    const endfieldDecrypt = decryptTokenCompat(user.endfield!.accountToken);
-                    const endfield = new EndfieldService({
-                        accountToken: endfieldDecrypt.value
-                    });
-                    const endfieldResult = await endfield.claim();
-                    const resultText = formatEndfieldResult(endfieldResult);
-                    results.push("**SKPORT/Endfield**\n" + resultText);
 
-                    // Track structured token expiry flag from Endfield result
-                    if (endfieldResult.tokenExpired) {
-                        hasTokenExpired = true;
-                    }
+    const claimHoyolab = async (): Promise<ServiceClaimOutcome | null> => {
+        if (!user.hoyolab?.token || hoyolabAlreadyClaimed) return null;
+        try {
+            const hoyolabDecrypt = decryptTokenCompat(user.hoyolab.token);
+            const hoyolab = new HoyolabService(hoyolabDecrypt.value);
+            const hoyolabResults = await hoyolab.claimAll(user.hoyolab.games);
+            const resultText = formatHoyolabResults(hoyolabResults);
 
-                    // Update last claim (atomic) + re-encrypt if needed
-                    const endfieldUpdate: Record<string, unknown> = {
-                        "endfield.lastClaim": new Date(),
-                        "endfield.lastClaimResult": resultText
-                    };
-                    if (endfieldDecrypt.needsReEncryption) {
-                        endfieldUpdate["endfield.accountToken"] = encryptToken(endfieldDecrypt.value);
-                    }
-                    await User.updateOne({ discordId: user.discordId }, { $set: endfieldUpdate });
+            const hoyolabUpdate: Record<string, unknown> = {
+                "hoyolab.lastClaim": new Date(),
+                "hoyolab.lastClaimResult": resultText
+            };
+            if (hoyolabDecrypt.needsReEncryption) {
+                hoyolabUpdate["hoyolab.token"] = encryptToken(hoyolabDecrypt.value);
+            }
+            await User.updateOne({ discordId: user.discordId }, { $set: hoyolabUpdate });
 
-                    // Record claim history
-                    void recordClaimHistory({
-                        discordId: user.discordId,
-                        service: "endfield",
-                        game: "Endfield",
-                        success: endfieldResult.success,
-                        message: endfieldResult.message
-                    });
-                } catch (error: unknown) {
-                    const err = error as { message?: string };
-                    logger.error({
-                        msg: `[Scheduler] Endfield claim error for ${user.discordId}:`,
-                        detail: err.message
-                    });
-                    results.push("**SKPORT/Endfield**\n❌ Error: " + err.message);
-                }
-            })()
-        );
-    }
+            void recordClaimHistory(
+                hoyolabResults.map(r => ({
+                    discordId: user.discordId,
+                    service: "hoyolab",
+                    game: r.game,
+                    success: r.success,
+                    message: r.message
+                }))
+            );
 
-    // Wait for all claims to finish
-    if (claimPromises.length > 0) {
-        await Promise.all(claimPromises);
-    }
+            return { text: "**Hoyolab**\n" + resultText };
+        } catch (error: unknown) {
+            const err = error as { message?: string };
+            logger.error({
+                msg: `[Scheduler] Hoyolab claim error for ${user.discordId}:`,
+                detail: err.message
+            });
+            return { text: "**Hoyolab**\n❌ Error: " + err.message };
+        }
+    };
+
+    const claimEndfield = async (): Promise<ServiceClaimOutcome | null> => {
+        if (!user.endfield?.accountToken || endfieldAlreadyClaimed) return null;
+        try {
+            const endfieldDecrypt = decryptTokenCompat(user.endfield.accountToken);
+            const endfield = new EndfieldService({
+                accountToken: endfieldDecrypt.value
+            });
+            const endfieldResult = await endfield.claim();
+            const resultText = formatEndfieldResult(endfieldResult);
+
+            const endfieldUpdate: Record<string, unknown> = {
+                "endfield.lastClaim": new Date(),
+                "endfield.lastClaimResult": resultText
+            };
+            if (endfieldDecrypt.needsReEncryption) {
+                endfieldUpdate["endfield.accountToken"] = encryptToken(endfieldDecrypt.value);
+            }
+            await User.updateOne({ discordId: user.discordId }, { $set: endfieldUpdate });
+
+            void recordClaimHistory({
+                discordId: user.discordId,
+                service: "endfield",
+                game: "Endfield",
+                success: endfieldResult.success,
+                message: endfieldResult.message
+            });
+
+            return {
+                text: "**SKPORT/Endfield**\n" + resultText,
+                tokenExpired: endfieldResult.tokenExpired
+            };
+        } catch (error: unknown) {
+            const err = error as { message?: string };
+            logger.error({
+                msg: `[Scheduler] Endfield claim error for ${user.discordId}:`,
+                detail: err.message
+            });
+            return { text: "**SKPORT/Endfield**\n❌ Error: " + err.message };
+        }
+    };
+
+    const [hoyolabOutcome, endfieldOutcome] = await Promise.all([claimHoyolab(), claimEndfield()]);
+    const outcomes = [hoyolabOutcome, endfieldOutcome].filter((o): o is ServiceClaimOutcome => o !== null);
+    if (outcomes.length === 0) return;
+
+    const results = outcomes.map(o => o.text);
+    const hasTokenExpired = outcomes.some(o => o.tokenExpired);
 
     // Detect token errors — notify regardless of notifyOnClaim preference.
     const hasTokenError =
         hasTokenExpired || results.some(r => TOKEN_ERROR_PATTERNS.some(p => r.toLowerCase().includes(p.toLowerCase())));
 
     // Publish to RAMEN
-    if (results.length > 0 && (user.settings?.notifyOnClaim || hasTokenError)) {
+    if (user.settings?.notifyOnClaim || hasTokenError) {
         ramen.publish("account:claim_result", {
             discordId: user.discordId,
             results,
@@ -406,6 +425,11 @@ export async function checkMissedClaims(client: Client): Promise<void> {
     // Verify MongoDB connection readiness
     if (!isDatabaseConnected()) {
         logger.debug("⏰ Skipping missed claims check — MongoDB not currently connected");
+        return;
+    }
+
+    if (isSchedulerRunning()) {
+        logger.debug("⏰ Skipping missed claims check — claim run already in progress");
         return;
     }
 

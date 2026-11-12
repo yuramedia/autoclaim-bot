@@ -230,4 +230,18 @@ describe("YouTubeFeedService", () => {
             expect(service.getCachedIcon("UC_NON_EXISTENT")).toBeNull();
         });
     });
+
+    describe("resolveChannelId SSRF guard", () => {
+        test("rejects non-YouTube URLs without performing network fetch", async () => {
+            let fetchCalled = false;
+            (service as any).fetchWithTimeout = mock(async () => {
+                fetchCalled = true;
+                return "";
+            });
+
+            expect(await service.resolveChannelId("http://127.0.0.1:8080/admin")).toBeNull();
+            expect(await service.resolveChannelId("https://evil.example.com/@channel")).toBeNull();
+            expect(fetchCalled).toBe(false);
+        });
+    });
 });

@@ -14,22 +14,20 @@
 
 import {
     SlashCommandBuilder,
-    ChatInputCommandInteraction,
-    EmbedBuilder,
+    type ChatInputCommandInteraction,
+    type EmbedBuilder,
     AttachmentBuilder,
     ActionRowBuilder,
-    StringSelectMenuBuilder,
-    StringSelectMenuOptionBuilder,
-    ButtonBuilder,
+    type StringSelectMenuBuilder,
+    type ButtonBuilder,
     MessageFlags
 } from "discord.js";
 import { findPlatform, applyFix, extractPostId } from "../services/embed-fix";
 import { logger } from "../core/logger";
-import type { DownloadResult } from "../types/media-downloader";
 import { PlatformId } from "../types/embed-fix";
 import { PLATFORMS } from "../constants/embed-fix";
 import { getMaxDownloadSize } from "../constants/media-downloader";
-import { videoSelectionCache } from "../handlers/message";
+import { DOWNLOADABLE_PLATFORMS, createResolutionSelectMenu } from "../handlers/message";
 
 /**
  * Slash command definition for the embed command
@@ -38,52 +36,6 @@ export const data = new SlashCommandBuilder()
     .setName("embed")
     .setDescription("Generate a rich embed from a supported URL")
     .addStringOption(opt => opt.setName("url").setDescription("URL to generate embed for").setRequired(true));
-
-/** Platforms that VKrDownloader supports (video download) */
-const DOWNLOADABLE_PLATFORMS: PlatformId[] = [
-    PlatformId.TWITTER,
-    PlatformId.TIKTOK,
-    PlatformId.INSTAGRAM,
-    PlatformId.REDDIT,
-    PlatformId.FACEBOOK,
-    PlatformId.THREADS
-];
-
-/**
- * Build a resolution-select action row from an oversized download result.
- * Stores available formats in the shared videoSelectionCache so the
- * resolution-select handler can look up the full URL by index.
- */
-function buildResolutionSelect(
-    downloadResult: DownloadResult,
-    url: string,
-    platformId: PlatformId
-): ActionRowBuilder<StringSelectMenuBuilder> | null {
-    if (!downloadResult.oversized || !downloadResult.availableFormats) return null;
-
-    const selectionId = Date.now().toString(36) + Math.random().toString(36).substring(2);
-    videoSelectionCache.set(selectionId, {
-        url,
-        platform: platformId,
-        formats: downloadResult.availableFormats
-    });
-    setTimeout(() => videoSelectionCache.delete(selectionId), 15 * 60 * 1000);
-
-    const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId(`res_select|${selectionId}`)
-        .setPlaceholder("Video too large. Select a smaller resolution.")
-        .addOptions(
-            downloadResult.availableFormats
-                .slice(0, 25)
-                .map((fmt, idx) =>
-                    new StringSelectMenuOptionBuilder()
-                        .setLabel(`${fmt.format_id || "Unknown"} ${fmt.size ? `(${fmt.size})` : ""}`)
-                        .setValue(idx.toString())
-                )
-        );
-
-    return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
-}
 
 /**
  * Execution handler for the embed command
@@ -117,7 +69,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         const postId = extractPostId(url, platform);
         const fixedUrl = applyFix(url, platform);
-        const canDownload = DOWNLOADABLE_PLATFORMS.includes(platform.id);
+        const canDownload = DOWNLOADABLE_PLATFORMS.has(platform.id);
         const maxSizeLimit = getMaxDownloadSize(interaction.guild?.premiumTier ?? 0);
 
         let embeds: EmbedBuilder[] = [];
@@ -203,7 +155,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
             // All other platforms: rich embed + optional media download
             default: {
                 const { fetchPostInfo, buildRichEmbed } = await import("../services/embed-builder");
-                const info = await fetchPostInfo(url, platform, postId);
+                const info = await fetchPostInfo(fixedUrl, platform, postId);
 
                 if (info) {
                     embeds.push(...buildRichEmbed(info, platform, url));
@@ -214,16 +166,18 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                     // Try to download & upload video when available
                     if (videoList.length > 0 && canDownload) {
                         const { downloadMedia, downloadDirect } = await import("../services/media-downloader");
+                        const isDirectPlatform =
+                            platform.id === PlatformId.FACEBOOK ||
+                            platform.id === PlatformId.TIKTOK ||
+                            platform.id === PlatformId.TWITTER;
 
                         for (let idx = 0; idx < videoList.length; idx++) {
+                            if (!isDirectPlatform && idx > 0) break;
+
                             const videoUrl = videoList[idx]!;
                             let downloadResult;
 
-                            if (
-                                platform.id === PlatformId.FACEBOOK ||
-                                platform.id === PlatformId.TIKTOK ||
-                                platform.id === PlatformId.TWITTER
-                            ) {
+                            if (isDirectPlatform) {
                                 downloadResult = await downloadDirect(
                                     videoUrl,
                                     `${platform.id}_video_${idx + 1}.mp4`,
@@ -240,9 +194,15 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
                                 files.push(
                                     new AttachmentBuilder(downloadResult.buffer, { name: downloadResult.filename })
                                 );
-                            } else {
-                                const row = buildResolutionSelect(downloadResult, url, platform.id);
-                                if (row) components.push(row);
+                            } else if (downloadResult.oversized && downloadResult.availableFormats) {
+                                const { selectMenu } = createResolutionSelectMenu(
+                                    downloadResult.availableFormats,
+                                    url,
+                                    platform.id
+                                );
+                                components.push(
+                                    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu)
+                                );
                             }
                         }
                     }
@@ -261,9 +221,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
                     if (downloadResult.success && downloadResult.buffer) {
                         files.push(new AttachmentBuilder(downloadResult.buffer, { name: downloadResult.filename }));
-                    } else {
-                        const row = buildResolutionSelect(downloadResult, url, platform.id);
-                        if (row) components.push(row);
+                    } else if (downloadResult.oversized && downloadResult.availableFormats) {
+                        const { selectMenu } = createResolutionSelectMenu(
+                            downloadResult.availableFormats,
+                            url,
+                            platform.id
+                        );
+                        components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
                     }
                 }
 
@@ -273,11 +237,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
         // ── Send result ──────────────────────────────────────────────
 
-        if (embeds.length > 0 || files.length > 0) {
+        if (embeds.length > 0 || files.length > 0 || components.length > 0) {
             await interaction.editReply({
                 embeds: embeds.length > 0 ? embeds.slice(0, 10) : undefined,
-                files: files.length > 0 ? files : undefined,
-                components: components.length > 0 ? components : undefined
+                files: files.length > 0 ? files.slice(0, 10) : undefined,
+                components: components.length > 0 ? components.slice(0, 5) : undefined
             });
             return;
         }

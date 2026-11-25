@@ -9,14 +9,18 @@ This skill covers creating visual images for Discord embeds using node-canvas.
 
 ## Setup
 
+This skill is optional; the bot does not currently depend on a canvas package. Install one explicitly before using it:
+
 ```bash
-bun add canvas
+bun add @napi-rs/canvas
 ```
+
+Import from the package you installed. The examples below use `@napi-rs/canvas`.
 
 ## Basic Canvas Creation
 
 ```typescript
-import { createCanvas, loadImage, registerFont } from "canvas";
+import { createCanvas, loadImage, registerFont } from "@napi-rs/canvas";
 
 // Register custom fonts (optional)
 registerFont("./fonts/Inter-Regular.ttf", { family: "Inter" });

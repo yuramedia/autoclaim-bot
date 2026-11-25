@@ -95,7 +95,7 @@ Darurat dan perlu skip? `git commit --no-verify` / `git push --no-verify`. CI te
     ```
 2. Pastikan `bun run lint` lulus tanpa error.
 3. Buat PR ke branch `main` dengan deskripsi yang jelas tentang perubahan.
-4. CI akan otomatis menjalankan lint check dan Docker build check.
+4. CI akan otomatis menjalankan `format:check`, `lint`, `typecheck`, test, dan Docker build check di PR.
 
 ## Adding a New Game
 

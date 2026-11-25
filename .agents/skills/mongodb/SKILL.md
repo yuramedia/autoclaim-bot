@@ -1,190 +1,129 @@
 ---
 name: MongoDB with Mongoose
-description: Database patterns for user data and credentials storage
+description: Database patterns for user data and credential storage in autoclaim-bot
 ---
 
-# MongoDB with Mongoose Skill
+# MongoDB with Mongoose
 
-This skill covers MongoDB database operations for the autoclaim bot.
+This skill covers MongoDB/Mongoose patterns used by autoclaim-bot.
 
 ## Connection Setup
 
+Read the URI from `config`, never from `process.env` inside services:
+
 ```typescript
-// src/database.ts
+// src/database/connection.ts
 import mongoose from "mongoose";
-import { logger } from "../core/logger";
+import { config } from "../../config";
+import { logger } from "../../core/logger";
 
-export async function connectDatabase() {
-    const uri = process.env.MONGODB_URI;
-    if (!uri) throw new Error("MONGODB_URI not set");
-
-    await mongoose.connect(uri);
+export async function connectDatabase(): Promise<void> {
+    await mongoose.connect(config.mongodb.uri);
     logger.info("Connected to MongoDB");
+}
+
+export async function disconnectDatabase(): Promise<void> {
+    await mongoose.disconnect();
 }
 ```
 
 ## User Schema Pattern
 
 ```typescript
-// src/models/user.ts
-import { Schema, model, Document } from "mongoose";
+// src/database/models/user.ts
+import mongoose, { Schema, type Document } from "mongoose";
 
-interface IHoyolabCredentials {
-    ltoken: string;
-    ltuid: string;
-    cookieToken?: string;
-    games: string[];
-}
-
-interface IEndfieldCredentials {
-    skOauthCredKey: string;
-    gameId: string;
-    server: string;
-}
-
-interface IUser extends Document {
-    discordId: string;
-    hoyolab?: IHoyolabCredentials;
-    endfield?: IEndfieldCredentials;
-    settings: {
-        notifications: boolean;
-        autoClaimEnabled: boolean;
+export interface IHoyolabData {
+    token: string;
+    accountName: string;
+    games: {
+        genshin: boolean;
+        starRail: boolean;
+        honkai3: boolean;
+        tearsOfThemis: boolean;
+        zenlessZoneZero: boolean;
     };
     lastClaim?: Date;
+    lastClaimResult?: string;
+}
+
+export interface IEndfieldData {
+    accountToken: string;
+    accountName: string;
+    lastClaim?: Date;
+    lastClaimResult?: string;
+}
+
+export interface IUser extends Document {
+    discordId: string;
+    username: string;
+    hoyolab?: IHoyolabData;
+    endfield?: IEndfieldData;
+    settings: { notifyOnClaim: boolean };
     createdAt: Date;
     updatedAt: Date;
 }
 
-const userSchema = new Schema<IUser>(
+const UserSchema = new Schema<IUser>(
     {
-        discordId: { type: String, required: true, unique: true, index: true },
-        hoyolab: {
-            ltoken: { type: String },
-            ltuid: { type: String },
-            cookieToken: { type: String },
-            games: [{ type: String }]
-        },
-        endfield: {
-            skOauthCredKey: { type: String },
-            gameId: { type: String },
-            server: { type: String }
-        },
-        settings: {
-            notifications: { type: Boolean, default: true },
-            autoClaimEnabled: { type: Boolean, default: true }
-        },
-        lastClaim: { type: Date }
+        discordId: { type: String, required: true, unique: true },
+        username: { type: String, required: true },
+        hoyolab: { type: Schema.Types.Mixed },
+        endfield: { type: Schema.Types.Mixed },
+        settings: { notifyOnClaim: { type: Boolean, default: true } }
     },
     { timestamps: true }
 );
 
-export const User = model<IUser>("User", userSchema);
+UserSchema.index({ "hoyolab.token": 1, "hoyolab.lastClaim": 1 }, { sparse: true });
+UserSchema.index({ "endfield.accountToken": 1, "endfield.lastClaim": 1 }, { sparse: true });
+UserSchema.index({ "settings.notifyOnClaim": 1 });
+
+export const User = mongoose.model<IUser>("User", UserSchema);
 ```
 
 ## Common Operations
 
-### Find or Create User
-
 ```typescript
-async function findOrCreateUser(discordId: string) {
-    let user = await User.findOne({ discordId });
-    if (!user) {
-        user = await User.create({ discordId });
-    }
-    return user;
-}
-```
+// Get a user
+const user = await User.findOne({ discordId });
 
-### Update Credentials
-
-```typescript
-async function updateHoyolabCredentials(discordId: string, credentials: IHoyolabCredentials) {
-    return User.findOneAndUpdate({ discordId }, { $set: { hoyolab: credentials } }, { new: true, upsert: true });
-}
-```
-
-### Get All Active Users
-
-```typescript
-async function getActiveUsers() {
-    return User.find({
-        "settings.autoClaimEnabled": true,
-        $or: [{ "hoyolab.ltoken": { $exists: true } }, { "endfield.skOauthCredKey": { $exists: true } }]
-    });
-}
-```
-
-### Delete User Data
-
-```typescript
-async function deleteUserData(discordId: string) {
-    return User.deleteOne({ discordId });
-}
-```
-
-### Update Last Claim Time
-
-```typescript
-async function updateLastClaim(discordId: string) {
-    return User.findOneAndUpdate({ discordId }, { $set: { lastClaim: new Date() } }, { new: true });
-}
-```
-
-## Claim History Schema
-
-```typescript
-const claimHistorySchema = new Schema({
-    discordId: { type: String, required: true, index: true },
-    game: { type: String, required: true },
-    success: { type: Boolean, required: true },
-    message: { type: String },
-    rewards: [
-        {
-            name: String,
-            count: Number,
-            icon: String
+// Upsert on concurrent create
+let user = await User.findOne({ discordId });
+if (!user) {
+    try {
+        user = await User.create({ discordId, username });
+    } catch (error) {
+        if ((error as { code?: number }).code === 11000) {
+            user = await User.findOne({ discordId });
+        } else {
+            throw error;
         }
-    ],
-    claimedAt: { type: Date, default: Date.now }
-});
+    }
+}
 
-// Index for efficient queries
-claimHistorySchema.index({ discordId: 1, claimedAt: -1 });
-
-export const ClaimHistory = model("ClaimHistory", claimHistorySchema);
+// Read-only queries
+const leanUser = await User.findOne({ discordId }).lean();
 ```
+
+## Claim History
+
+`ClaimHistory` uses collection `claim_history`, stores success/rewards/message,
+and has a compound index on `discordId` + `claimedAt` plus a 30-day TTL on
+`claimedAt`. Use `recordClaimHistory()` from `src/database/models/claim-history.ts`
+instead of writing raw documents.
+
+## Security
+
+- Encrypt Hoyolab and Endfield credentials with `encryptToken()` from
+  `src/utils/token-crypto.ts` before storing them.
+- Read them with `decryptTokenCompat()`; migrate legacy/plaintext values on write.
+- `CR_ETP_RT` is an environment secret, not user data. Do not store it in MongoDB.
+- Never log raw tokens or cookies.
 
 ## Best Practices
 
-- Always use indexes for frequently queried fields
-- Use `lean()` for read-only queries
-- Handle connection errors gracefully
-- Use transactions for multi-document updates
-- Never log or expose raw credentials
-
-## Security Considerations
-
-```typescript
-// Encrypt sensitive data before storing
-import crypto from "crypto";
-
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!;
-
-function encrypt(text: string): string {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv("aes-256-cbc", Buffer.from(ENCRYPTION_KEY, "hex"), iv);
-    let encrypted = cipher.update(text);
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return iv.toString("hex") + ":" + encrypted.toString("hex");
-}
-
-function decrypt(text: string): string {
-    const parts = text.split(":");
-    const iv = Buffer.from(parts[0], "hex");
-    const encrypted = Buffer.from(parts[1], "hex");
-    const decipher = crypto.createDecipheriv("aes-256-cbc", Buffer.from(ENCRYPTION_KEY, "hex"), iv);
-    let decrypted = decipher.update(encrypted);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-}
-```
+- Use indexes for frequently queried fields.
+- Use `lean()` for read-only queries.
+- Handle connection errors gracefully.
+- Use transactions for multi-document updates.

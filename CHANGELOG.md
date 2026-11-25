@@ -10,6 +10,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Crunchyroll account auth ditolak (`unsupported_grant_type`)** — `requestAccountAuth()` sekarang memakai `grant_type=etp_rt_cookie` dengan header web client bila `CR_ETP_RT` tersedia; password grant hanya fallback legacy
 - **`TOKEN_ENCRYPTION_KEY` tidak terdokumentasi di README** — variabel wajib ini sekarang muncul di tabel Environment Variables dengan keterangan cara generate-nya
 - **GitHub Actions menggunakan ref yang salah** — `deploy.yml` dan `pr.yml` menggunakan pinned version tags (`@v4`, `@v7`, dst.) yang tidak konsisten dengan pendekatan proyek. Semua `uses:` sekarang menggunakan mutable branch ref yang sudah diverifikasi via `git ls-remote` (`actions/checkout@main`, `docker/*@master`, `appleboy/*@master`, `oven-sh/setup-bun@main`)
 - **`token-crypto.ts` baca `process.env.TOKEN_ENCRYPTION_KEY` langsung** — sekarang baca dari `config.security.tokenEncryptionKey` sesuai aturan CONTRIBUTING
@@ -18,6 +19,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- `CR_ETP_RT` — konfigurasi cookie `etp_rt` untuk auth Crunchyroll account-scoped
+- `src/services/crunchyroll-auth.ts` + test — builder request `etp_rt_cookie` dan fallback password grant
 - `config.env` — centralize `NODE_ENV` ke `src/config.ts`
 - `src/test-setup.ts` — preload file untuk test runner (set env vars sebelum config.ts dievaluasi)
 - `src/utils/token-crypto.test.ts` — unit tests untuk enkripsi/dekripsi token (round-trip, format, IV randomness, backward compat)
@@ -47,13 +50,13 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `CHANGELOG.md` — file ini
 - `docker-compose.dev.yml` — setup development lokal dengan MongoDB
 - Semua env var (`CR_EMAIL`, `CR_PASSWORD`, `U2_RSS_URL`, `AMENZB_API_KEY`) sekarang terdokumentasi di `README.md`
-- Semua 20 slash commands terdokumentasi di `README.md`
+- Semua 22 slash commands terdokumentasi di `README.md`
 
 ### Removed
 
 - `test-amenzb.ts` (root) — file debug dengan API key hardcoded
 - `src/test-u2-feed.ts` — file debug yang tertinggal di source produksi
-- `CR_ETP_RT` dari semua referensi deploy pipeline
+- Debug scratch `test-*.ts` — tidak lagi dipakai; env `CR_ETP_RT` sekarang justru menjadi jalur auth utama dan perlu didokumentasikan
 
 ### Security
 

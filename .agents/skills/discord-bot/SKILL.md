@@ -129,3 +129,4 @@ await interaction.reply({ content: "Click:", components: [row] });
 - Use `deferReply()` for operations > 3 seconds
 - Provide user-friendly error messages
 - Log detailed errors for debugging
+- For private/error replies, use `flags: MessageFlags.Ephemeral` (`ephemeral: true` is deprecated)

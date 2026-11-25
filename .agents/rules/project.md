@@ -7,7 +7,7 @@ activation: always_on
 
 ## Project Overview
 
-This is a Discord bot that provides auto-claim functionality for Hoyolab and Endfield games.
+This is a Discord bot for daily claims (Hoyolab, Endfield/SKPORT), Crunchyroll/U2/YouTube feeds, and server utilities.
 
 ## Technology Stack
 
@@ -24,7 +24,7 @@ This is a Discord bot that provides auto-claim functionality for Hoyolab and End
 
 - Commands go in `src/commands/`
 - Services go in `src/services/`
-- Event handlers go in `src/events/`
+- Interaction/modal/select handlers go in `src/handlers/`
 - Types/interfaces go in `src/types/`
 - Utilities go in `src/utils/`
 
@@ -42,9 +42,9 @@ This is a Discord bot that provides auto-claim functionality for Hoyolab and End
 
 ### Environment Variables
 
-- All secrets should be in `.env` file
+- All secrets should be in `.env` file, including `CR_ETP_RT`
 - Reference `.env.example` for required variables
-- Use `process.env.VARIABLE_NAME` for access
+- Use `config.<section>.<key>` in code; never read `process.env` outside `src/config.ts`
 
 ## Scripts
 

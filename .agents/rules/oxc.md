@@ -52,9 +52,11 @@ To enable or configure individual rules, add them to the `"rules"` object in `.o
 
 ## CI
 
-Both tools must pass in CI before merging:
+Both tools must pass in CI before merging, together with typecheck and tests:
 
 ```bash
-bunx oxfmt@latest --check
-bunx oxlint@latest src/
+bun run format:check
+bun run lint
+bun run typecheck
+bun test --preload ./src/test-setup.ts
 ```

@@ -19,6 +19,7 @@ import type {
 } from "../types/crunchyroll";
 import { LANG_MAP, CRUNCHYROLL_COLOR, CR_RELEASE_ITEMS_PER_PAGE, getActiveCrunchyrollAuth } from "../constants";
 import { syncCrunchyrollCredentials } from "./crunchyroll-credentials";
+import { buildAccountAuthRequest } from "./crunchyroll-auth";
 import { config } from "../config";
 import { logger } from "../core/logger";
 import { fetchWithTimeout } from "../utils/http";
@@ -679,35 +680,37 @@ export class CrunchyrollService {
     }
 
     /**
-     * Perform the password grant and populate the cache.
+     * Perform account auth. Prefer the working etp_rt cookie grant and keep the
+     * legacy password grant only as a fallback for older deployments.
      */
     private async requestAccountAuth(retryOnAuthError = true): Promise<CrunchyrollAuth | null> {
-        const email = config.crunchyroll.email;
-        const password = config.crunchyroll.password;
+        const authRequest = buildAccountAuthRequest({
+            etpRt: config.crunchyroll.etpRt,
+            email: config.crunchyroll.email,
+            password: config.crunchyroll.password,
+            deviceId: CrunchyrollService.deviceId,
+            androidBasicAuth: this.basicAuth,
+            androidUserAgent: this.userAgent
+        });
 
-        if (!email || !password) {
-            logger.error("CR_EMAIL or CR_PASSWORD not configured");
+        if (!authRequest) {
+            logger.error("CR_ETP_RT, CR_EMAIL/CR_PASSWORD not configured");
             return null;
         }
 
-        try {
-            const body = new URLSearchParams();
-            body.append("grant_type", "password");
-            body.append("username", email);
-            body.append("password", password);
-            body.append("scope", "offline_access");
-            body.append("device_id", CrunchyrollService.deviceId);
-            body.append("device_type", "Android TV");
+        if (authRequest.mode === "password") {
+            logger.warn(
+                "[CrunchyrollService] Using legacy password grant. " +
+                    "Set CR_ETP_RT to the etp_rt cookie from a logged-in browser."
+            );
+        }
 
+        try {
             const response = await fetchWithTimeout(`${this.API_BASE}/auth/v1/token`, {
                 timeoutMs: 10000,
                 method: "POST",
-                headers: {
-                    Authorization: `Basic ${this.basicAuth}`,
-                    "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-                    "User-Agent": this.userAgent
-                },
-                body: body.toString()
+                headers: authRequest.headers,
+                body: authRequest.body
             });
 
             if (!response.ok) {

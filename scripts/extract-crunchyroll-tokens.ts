@@ -14,6 +14,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { parseVersionTuple, compareVersions } from "../src/services/crunchyroll-credentials";
+import { maskCredential } from "../src/services/crunchyroll-auth";
 import { CRUNCHYROLL_USER_AGENT } from "../src/constants/crunchyroll";
 
 const CONSTANTS_FILE_PATH = path.resolve(__dirname, "../src/constants/crunchyroll.ts");
@@ -260,12 +261,12 @@ async function main(): Promise<void> {
         const basicAuth = Buffer.from(`${creds.id}:${creds.secret}`).toString("base64");
         const userAgent = `Crunchyroll/ANDROIDTV/${appInfo.vername}_${appInfo.vercode} (Android 12; en-US; SHIELD Android TV Build/SR1A.220624.014)`;
 
-        console.log("\n================ EXTRACTED CREDENTIALS ================");
-        console.log(`Client ID:     ${creds.id}`);
-        console.log(`Client Secret: ${creds.secret}`);
-        console.log(`Basic Auth:    ${basicAuth}`);
+        console.log("\n================ EXTRACTED CREDENTIALS (REDACTED) ================");
+        console.log(`Client ID:     ${maskCredential(creds.id)}`);
+        console.log(`Client Secret: ${maskCredential(creds.secret)}`);
+        console.log(`Basic Auth:    ${maskCredential(basicAuth)}`);
         console.log(`User-Agent:    ${userAgent}`);
-        console.log("========================================================\n");
+        console.log("===================================================================\n");
 
         console.log(`✏️ Updating ${CONSTANTS_FILE_PATH}...`);
         let constantsContent = fs.readFileSync(CONSTANTS_FILE_PATH, "utf8");

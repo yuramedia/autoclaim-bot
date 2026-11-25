@@ -20,10 +20,10 @@ jobs:
 
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@main
+              uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
 
             - name: Setup Bun
-              uses: oven-sh/setup-bun@main
+              uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
                   bun-version: latest
 
@@ -51,20 +51,20 @@ jobs:
 
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@main
+              uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
 
             - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@master
+              uses: docker/setup-buildx-action@bf8388060db527dff14f48b6a5fdbe70763c1213 # v3
 
             - name: Log in to Container Registry
-              uses: docker/login-action@master
+              uses: docker/login-action@d0b8297dd55199249f38268efae35fcb03f75aab # v3
               with:
                   registry: ${{ env.REGISTRY }}
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Build and Push Docker Image
-              uses: docker/build-push-action@master
+              uses: docker/build-push-action@45f22b1c11cde996551e271bed2de12d5a091009 # v6
               with:
                   context: .
                   push: true
@@ -85,10 +85,10 @@ jobs:
 
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@main
+              uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
 
             - name: Copy docker-compose.yml to Server
-              uses: appleboy/scp-action@master
+              uses: appleboy/scp-action@7e85c2e09aa21988492acd66466b5d68bda49e2b # v0
               with:
                   host: ${{ secrets.DEPLOY_SSH_HOST }}
                   username: ${{ secrets.DEPLOY_SSH_USERNAME }}
@@ -98,15 +98,13 @@ jobs:
                   target: ${{ secrets.DEPLOY_SSH_PATH }}
 
             - name: Deploy to Server
-              uses: appleboy/ssh-action@master
+              uses: appleboy/ssh-action@c4f70287fc37c43b14b30b407224bbbc8e8c6327 # v1
               env:
                   DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
                   DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
                   MONGODB_URI: ${{ secrets.MONGODB_URI }}
                   CLAIM_HOUR: ${{ vars.CLAIM_HOUR || '0' }}
                   CLAIM_MINUTE: ${{ vars.CLAIM_MINUTE || '0' }}
-                  CR_EMAIL: ${{ secrets.CR_EMAIL }}
-                  CR_PASSWORD: ${{ secrets.CR_PASSWORD }}
                   CR_ETP_RT: ${{ secrets.CR_ETP_RT }}
                   U2_RSS_URL: ${{ secrets.U2_RSS_URL }}
                   AMENZB_API_KEY: ${{ secrets.AMENZB_API_KEY }}
@@ -117,7 +115,7 @@ jobs:
                   key: ${{ secrets.DEPLOY_SSH_KEY }}
                   port: ${{ secrets.DEPLOY_SSH_PORT }}
                   password: ${{ secrets.DEPLOY_SSH_PASSWORD }}
-                  envs: DISCORD_TOKEN,DISCORD_CLIENT_ID,MONGODB_URI,CLAIM_HOUR,CLAIM_MINUTE,CR_EMAIL,CR_PASSWORD,CR_ETP_RT,U2_RSS_URL,AMENZB_API_KEY,TOKEN_ENCRYPTION_KEY
+                  envs: DISCORD_TOKEN,DISCORD_CLIENT_ID,MONGODB_URI,CLAIM_HOUR,CLAIM_MINUTE,CR_ETP_RT,U2_RSS_URL,AMENZB_API_KEY,TOKEN_ENCRYPTION_KEY
                   script: |
                       mkdir -p ${{ secrets.DEPLOY_SSH_PATH }}
                       cd ${{ secrets.DEPLOY_SSH_PATH }}
@@ -129,8 +127,6 @@ jobs:
                       MONGODB_URI=${MONGODB_URI}
                       CLAIM_HOUR=${CLAIM_HOUR}
                       CLAIM_MINUTE=${CLAIM_MINUTE}
-                      CR_EMAIL=${CR_EMAIL}
-                      CR_PASSWORD=${CR_PASSWORD}
                       CR_ETP_RT=${CR_ETP_RT}
                       U2_RSS_URL=${U2_RSS_URL}
                       AMENZB_API_KEY=${AMENZB_API_KEY}

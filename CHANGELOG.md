@@ -10,9 +10,14 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- **Crunchyroll account auth ditolak (`unsupported_grant_type`)** — `requestAccountAuth()` sekarang memakai `grant_type=etp_rt_cookie` dengan header web client bila `CR_ETP_RT` tersedia; password grant hanya fallback legacy
+- **Crunchyroll account auth ditolak (`unsupported_grant_type`)** — `requestAccountAuth()` sekarang hanya memakai `grant_type=etp_rt_cookie`; password grant dihapus karena sudah tidak berlaku
+- **Workflow `Update Crunchyroll Tokens` gagal setiap hari** — extraction script butuh `TOKEN_ENCRYPTION_KEY`; workflow sekarang menyediakan placeholder khusus CI
+- **JADX diinstall dari `latest` tanpa verifikasi** — versi dipin ke `1.5.7` dan archive diverifikasi dengan SHA256
+- **Extraction script mencetak client secret ke log** — semua credential sekarang dicetak lewat `maskCredential()`
+- **Remote constants diterima tanpa validasi bentuk** — basic auth dan User-Agent divalidasi sebelum dipakai
 - **`TOKEN_ENCRYPTION_KEY` tidak terdokumentasi di README** — variabel wajib ini sekarang muncul di tabel Environment Variables dengan keterangan cara generate-nya
-- **GitHub Actions menggunakan ref yang salah** — `deploy.yml` dan `pr.yml` menggunakan pinned version tags (`@v4`, `@v7`, dst.) yang tidak konsisten dengan pendekatan proyek. Semua `uses:` sekarang menggunakan mutable branch ref yang sudah diverifikasi via `git ls-remote` (`actions/checkout@main`, `docker/*@master`, `appleboy/*@master`, `oven-sh/setup-bun@main`)
+- **Base image Docker memakai `latest`** — builder/runner sekarang pin ke `oven/bun:1.4.5` / `1.4.5-alpine`
+- **GitHub Actions menggunakan floating ref** — workflow sekarang pin ke commit SHA untuk semua `uses:` (dengan comment versi), mengurangi risiko supply-chain
 - **`token-crypto.ts` baca `process.env.TOKEN_ENCRYPTION_KEY` langsung** — sekarang baca dari `config.security.tokenEncryptionKey` sesuai aturan CONTRIBUTING
 - **`logger.ts` baca `process.env.NODE_ENV` langsung** — sekarang baca dari `config.env` sesuai aturan CONTRIBUTING
 - **`docker-compose.yml` bergantung pada `yura-network` tanpa dokumentasi** — panduan `docker network create yura-network` ditambahkan ke README bagian Self-Hosting
@@ -20,7 +25,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - `CR_ETP_RT` — konfigurasi cookie `etp_rt` untuk auth Crunchyroll account-scoped
-- `src/services/crunchyroll-auth.ts` + test — builder request `etp_rt_cookie` dan fallback password grant
+- `src/services/crunchyroll-auth.ts` + test — builder request `etp_rt_cookie` dan `maskCredential()`
 - `config.env` — centralize `NODE_ENV` ke `src/config.ts`
 - `src/test-setup.ts` — preload file untuk test runner (set env vars sebelum config.ts dievaluasi)
 - `src/utils/token-crypto.test.ts` — unit tests untuk enkripsi/dekripsi token (round-trip, format, IV randomness, backward compat)
@@ -54,6 +59,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Removed
 
+- `CR_EMAIL` / `CR_PASSWORD` — password grant sudah tidak diterima Crunchyroll; hapus dari config, env, docs, dan deploy secret
 - `test-amenzb.ts` (root) — file debug dengan API key hardcoded
 - `src/test-u2-feed.ts` — file debug yang tertinggal di source produksi
 - Debug scratch `test-*.ts` — tidak lagi dipakai; env `CR_ETP_RT` sekarang justru menjadi jalur auth utama dan perlu didokumentasikan

@@ -42,7 +42,7 @@ jobs:
             - name: Setup Bun
               uses: oven-sh/setup-bun@main
               with:
-                  bun-version: 1.4.5
+                  bun-version: latest
 
             - name: Run Independent Extraction Script
               run: bun run scripts/extract-crunchyroll-tokens.ts

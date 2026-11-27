@@ -18,10 +18,10 @@ jobs:
             TOKEN_ENCRYPTION_KEY: ci-placeholder-not-used-by-extraction-script
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
+              uses: actions/checkout@main
 
             - name: Setup Java (for JADX)
-              uses: actions/setup-java@60d2c8e17ef7d5b15559388ab6e3266c0092e942 # v4
+              uses: actions/setup-java@main
               with:
                   java-version: "17"
                   distribution: "temurin"
@@ -40,7 +40,7 @@ jobs:
                   jadx --version
 
             - name: Setup Bun
-              uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              uses: oven-sh/setup-bun@main
               with:
                   bun-version: 1.4.5
 

@@ -20,10 +20,10 @@ jobs:
 
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
+              uses: actions/checkout@main
 
             - name: Setup Bun
-              uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              uses: oven-sh/setup-bun@main
               with:
                   bun-version: latest
 
@@ -51,20 +51,20 @@ jobs:
 
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
+              uses: actions/checkout@main
 
             - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@bf8388060db527dff14f48b6a5fdbe70763c1213 # v3
+              uses: docker/setup-buildx-action@master
 
             - name: Log in to Container Registry
-              uses: docker/login-action@d0b8297dd55199249f38268efae35fcb03f75aab # v3
+              uses: docker/login-action@master
               with:
                   registry: ${{ env.REGISTRY }}
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Build and Push Docker Image
-              uses: docker/build-push-action@45f22b1c11cde996551e271bed2de12d5a091009 # v6
+              uses: docker/build-push-action@master
               with:
                   context: .
                   push: true
@@ -85,10 +85,10 @@ jobs:
 
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v4
+              uses: actions/checkout@main
 
             - name: Copy docker-compose.yml to Server
-              uses: appleboy/scp-action@7e85c2e09aa21988492acd66466b5d68bda49e2b # v0
+              uses: appleboy/scp-action@master
               with:
                   host: ${{ secrets.DEPLOY_SSH_HOST }}
                   username: ${{ secrets.DEPLOY_SSH_USERNAME }}
@@ -98,7 +98,7 @@ jobs:
                   target: ${{ secrets.DEPLOY_SSH_PATH }}
 
             - name: Deploy to Server
-              uses: appleboy/ssh-action@c4f70287fc37c43b14b30b407224bbbc8e8c6327 # v1
+              uses: appleboy/ssh-action@master
               env:
                   DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
                   DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}

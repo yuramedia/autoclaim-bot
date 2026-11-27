@@ -16,8 +16,7 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Extraction script mencetak client secret ke log** — semua credential sekarang dicetak lewat `maskCredential()`
 - **Remote constants diterima tanpa validasi bentuk** — basic auth dan User-Agent divalidasi sebelum dipakai
 - **`TOKEN_ENCRYPTION_KEY` tidak terdokumentasi di README** — variabel wajib ini sekarang muncul di tabel Environment Variables dengan keterangan cara generate-nya
-- **Base image Docker memakai `latest`** — builder/runner sekarang pin ke `oven/bun:1.4.5` / `1.4.5-alpine`
-- **GitHub Actions menggunakan floating ref** — workflow sekarang pin ke commit SHA untuk semua `uses:` (dengan comment versi), mengurangi risiko supply-chain
+- **GitHub Actions menggunakan ref yang salah** — `deploy.yml` dan `pr.yml` menggunakan pinned version tags (`@v4`, `@v7`, dst.) yang tidak konsisten dengan pendekatan proyek. Semua `uses:` sekarang menggunakan mutable branch ref yang sudah diverifikasi via `git ls-remote` (`actions/checkout@main`, `docker/*@master`, `appleboy/*@master`, `oven-sh/setup-bun@main`)
 - **`token-crypto.ts` baca `process.env.TOKEN_ENCRYPTION_KEY` langsung** — sekarang baca dari `config.security.tokenEncryptionKey` sesuai aturan CONTRIBUTING
 - **`logger.ts` baca `process.env.NODE_ENV` langsung** — sekarang baca dari `config.env` sesuai aturan CONTRIBUTING
 - **`docker-compose.yml` bergantung pada `yura-network` tanpa dokumentasi** — panduan `docker network create yura-network` ditambahkan ke README bagian Self-Hosting

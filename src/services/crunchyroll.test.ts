@@ -60,8 +60,7 @@ describe("CrunchyrollService subtitle functions", () => {
     });
 
     test("fetchSubtitles preserves pristine subtitle URLs returned by Crunchyroll", async () => {
-        config.crunchyroll.email = "test@example.com";
-        config.crunchyroll.password = "testpass";
+        config.crunchyroll.etpRt = "123e4567-e89b-12d3-a456-426614174000";
         const originalFetch = globalThis.fetch;
 
         // Mock account auth and play service response
@@ -104,8 +103,7 @@ describe("CrunchyrollService subtitle functions", () => {
     });
 
     test("fetchSubtitles throws CrunchyrollStreamLimitError on HTTP 420", async () => {
-        config.crunchyroll.email = "test@example.com";
-        config.crunchyroll.password = "testpass";
+        config.crunchyroll.etpRt = "123e4567-e89b-12d3-a456-426614174000";
         const originalFetch = globalThis.fetch;
 
         globalThis.fetch = mock(async (url: string | URL | Request) => {

@@ -71,8 +71,7 @@ export class CrunchyrollService {
      * Prevents Crunchyroll from treating each login as a new device (causing security email spam).
      */
     private static get deviceId(): string {
-        const seed =
-            config.crunchyroll.email || config.security.tokenEncryptionKey || "autoclaim-bot-crunchyroll-device";
+        const seed = config.security.tokenEncryptionKey || "autoclaim-bot-crunchyroll-device";
         const hash = crypto.createHash("sha256").update(`cr-device-id:${seed}`).digest("hex");
         const timeLow = hash.substring(0, 8);
         const timeMid = hash.substring(8, 12);
@@ -661,7 +660,7 @@ export class CrunchyrollService {
 
     /**
      * Get auth token using Crunchyroll account credentials (premium access).
-     * Supports grant_type=refresh_token (preferred) and grant_type=password fallback.
+     * Uses grant_type=etp_rt_cookie with the configured etp_rt cookie.
      * Concurrent callers share a single in-flight request.
      */
     async getAccountAuth(forceRefresh = false): Promise<CrunchyrollAuth | null> {
@@ -680,29 +679,17 @@ export class CrunchyrollService {
     }
 
     /**
-     * Perform account auth. Prefer the working etp_rt cookie grant and keep the
-     * legacy password grant only as a fallback for older deployments.
+     * Perform account auth with the etp_rt cookie grant.
      */
     private async requestAccountAuth(retryOnAuthError = true): Promise<CrunchyrollAuth | null> {
         const authRequest = buildAccountAuthRequest({
             etpRt: config.crunchyroll.etpRt,
-            email: config.crunchyroll.email,
-            password: config.crunchyroll.password,
-            deviceId: CrunchyrollService.deviceId,
-            androidBasicAuth: this.basicAuth,
-            androidUserAgent: this.userAgent
+            deviceId: CrunchyrollService.deviceId
         });
 
         if (!authRequest) {
-            logger.error("CR_ETP_RT, CR_EMAIL/CR_PASSWORD not configured");
+            logger.error("CR_ETP_RT is not set or is not a valid UUID-shaped etp_rt cookie");
             return null;
-        }
-
-        if (authRequest.mode === "password") {
-            logger.warn(
-                "[CrunchyrollService] Using legacy password grant. " +
-                    "Set CR_ETP_RT to the etp_rt cookie from a logged-in browser."
-            );
         }
 
         try {

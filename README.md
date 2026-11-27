@@ -106,8 +106,6 @@ Bot Discord untuk auto-claim daily rewards dan notifikasi feed:
 | `CLAIM_HOUR`                 |    —     | Jam claim otomatis, format 24 jam (0–23). Default: `0`                                                    |
 | `CLAIM_MINUTE`               |    —     | Menit claim otomatis (0–59). Default: `0`                                                                 |
 | `CR_ETP_RT`                  |    —     | `etp_rt` cookie from a logged-in browser (preferred account auth; UUID-shaped, optional `etp_rt=` prefix) |
-| `CR_EMAIL`                   |    —     | Legacy Crunchyroll email. Password grant is no longer accepted; kept only as fallback                     |
-| `CR_PASSWORD`                |    —     | Legacy Crunchyroll password. Use `CR_ETP_RT` instead                                                      |
 | `CR_BASIC_AUTH`              |    —     | Optional AndroidTV Basic auth override. Leave empty to use auto-synced constants                          |
 | `CR_USER_AGENT`              |    —     | Optional AndroidTV User-Agent override. Leave empty to use auto-synced constants                          |
 | `CR_AUTO_UPDATE_CREDENTIALS` |    —     | Set `false` to disable daily AndroidTV credential sync. Default: `true`                                   |
@@ -149,7 +147,7 @@ Fitur account-scoped (pencarian series, episode, dan subtitle) memakai cookie `e
 4. Simpan ke env `CR_ETP_RT`. Boleh dengan prefix `etp_rt=...`.
 5. Jangan tempel nilai cookie di chat, issue, atau log.
 
-`CR_EMAIL` / `CR_PASSWORD` tetap diterima sebagai fallback legacy, tetapi Crunchyroll menolak `grant_type=password` sehingga jalur ini tidak lagi diandalkan.
+Cookie `etp_rt` adalah satu-satunya jalur auth account-scoped. Jangan simpan username/password Crunchyroll di repo atau env.
 
 ## Deployment
 

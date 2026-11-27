@@ -3,6 +3,8 @@ import {
     parseVersionTuple,
     compareVersions,
     parseConstantsFromSource,
+    isValidBasicAuth,
+    isValidUserAgent,
     syncCrunchyrollCredentials,
     startCrunchyrollCredentialsScheduler,
     stopCrunchyrollCredentialsScheduler
@@ -112,6 +114,21 @@ export const CRUNCHYROLL_USER_AGENT =
         test("returns null if basic auth or user agent is missing", () => {
             const invalidSource = `export const OTHER_CONST = "hello";`;
             expect(parseConstantsFromSource(invalidSource)).toBeNull();
+        });
+
+        test("validates basic auth and user agent shape", () => {
+            expect(isValidBasicAuth("bmV3LWF1dGgtdG9rZW4=")).toBe(true);
+            expect(isValidBasicAuth("not-base64!")).toBe(false);
+            expect(isValidUserAgent("Crunchyroll/ANDROIDTV/4.0.0_30000")).toBe(true);
+            expect(isValidUserAgent("curl/8.0")).toBe(false);
+        });
+
+        test("rejects parsed credentials with invalid shape", () => {
+            const source = `
+export const CRUNCHYROLL_BASIC_AUTH = "not-base64!";
+export const CRUNCHYROLL_USER_AGENT = "curl/8.0";
+`;
+            expect(parseConstantsFromSource(source)).toBeNull();
         });
     });
 

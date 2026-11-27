@@ -63,21 +63,33 @@ export function compareVersions(a: string, b: string): number {
     return 0;
 }
 
+/** Validate a base64-encoded Basic auth value from the remote constants file. */
+export function isValidBasicAuth(value: string): boolean {
+    return /^[A-Za-z0-9+/]+={0,2}$/.test(value) && value.length <= 256;
+}
+
+/** Validate an AndroidTV User-Agent from the remote constants file. */
+export function isValidUserAgent(value: string): boolean {
+    return /^Crunchyroll\/ANDROIDTV\/\d+\.\d+\.\d+_\d+/.test(value);
+}
+
 /**
  * Parses CRUNCHYROLL_BASIC_AUTH and CRUNCHYROLL_USER_AGENT from raw constants file content.
  *
  * @param sourceText - Raw typescript code from constants file.
- * @returns Parsed credentials or null if not found.
+ * @returns Parsed credentials or null if not found or invalid.
  */
 export function parseConstantsFromSource(sourceText: string): CrunchyrollCredentials | null {
     const basicAuthMatch = sourceText.match(/CRUNCHYROLL_BASIC_AUTH\s*=\s*"([^"]+)"/);
     const userAgentMatch = sourceText.match(/CRUNCHYROLL_USER_AGENT\s*=\s*"([^"]+)"/);
 
     if (basicAuthMatch?.[1] && userAgentMatch?.[1]) {
-        return {
-            basicAuth: basicAuthMatch[1].trim(),
-            userAgent: userAgentMatch[1].trim()
-        };
+        const basicAuth = basicAuthMatch[1].trim();
+        const userAgent = userAgentMatch[1].trim();
+        if (!isValidBasicAuth(basicAuth) || !isValidUserAgent(userAgent)) {
+            return null;
+        }
+        return { basicAuth, userAgent };
     }
 
     return null;

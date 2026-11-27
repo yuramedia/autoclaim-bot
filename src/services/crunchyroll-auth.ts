@@ -1,8 +1,8 @@
 /**
  * Crunchyroll account-auth request builder.
  *
- * The etp_rt cookie grant is the working path. The password grant is kept only
- * as a legacy fallback and should be removed if Crunchyroll rejects it.
+ * The etp_rt cookie grant is the only supported path. The password grant was
+ * removed because Crunchyroll no longer accepts it.
  */
 
 const WEB_BASIC_AUTH = "bm9haWhkZXZtXzZpeWcwYThsMHE6";
@@ -11,7 +11,7 @@ const WEB_USER_AGENT =
 const API_ORIGIN = "https://beta-api.crunchyroll.com";
 const UUID_RE = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
-export type AccountAuthMode = "etp_rt" | "password";
+export type AccountAuthMode = "etp_rt";
 
 export interface AccountAuthRequest {
     mode: AccountAuthMode;
@@ -21,11 +21,12 @@ export interface AccountAuthRequest {
 
 export interface AccountAuthRequestInput {
     etpRt?: string;
-    email?: string;
-    password?: string;
     deviceId: string;
-    androidBasicAuth: string;
-    androidUserAgent: string;
+}
+
+/** Return a log-safe representation of a secret without exposing its value. */
+export function maskCredential(value: string): string {
+    return `[REDACTED] (length ${value.length})`;
 }
 
 /** Strip the optional `etp_rt=` prefix and validate the UUID shape. */
@@ -55,25 +56,6 @@ export function buildAccountAuthRequest(input: AccountAuthRequestInput): Account
                 Origin: API_ORIGIN,
                 Referer: `${API_ORIGIN}/`,
                 Cookie: `etp_rt=${etpRt}`
-            }
-        };
-    }
-
-    if (input.email && input.password) {
-        return {
-            mode: "password",
-            body: new URLSearchParams({
-                grant_type: "password",
-                username: input.email,
-                password: input.password,
-                scope: "offline_access",
-                device_id: input.deviceId,
-                device_type: "Android TV"
-            }).toString(),
-            headers: {
-                Authorization: `Basic ${input.androidBasicAuth}`,
-                "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-                "User-Agent": input.androidUserAgent
             }
         };
     }

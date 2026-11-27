@@ -14,6 +14,8 @@ jobs:
         name: Extract & Update Crunchyroll Tokens
         runs-on: ubuntu-latest
 
+        env:
+            TOKEN_ENCRYPTION_KEY: ci-placeholder-not-used-by-extraction-script
         steps:
             - name: Checkout Repository
               uses: actions/checkout@main
@@ -24,14 +26,17 @@ jobs:
                   java-version: "17"
                   distribution: "temurin"
 
-            - name: Install JADX
+            - name: Install pinned JADX
+              env:
+                  JADX_VERSION: "1.5.7"
+                  JADX_SHA256: "1755e4242ade71a077438723689f404079592ec7764a3a0572f98fef94ebcbf3"
               run: |
-                  JADX_TAG=$(curl -s https://api.github.com/repos/skylot/jadx/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-                  echo "Installing JADX version: ${JADX_TAG}"
-                  JADX_VER="${JADX_TAG#v}"
-                  curl -sL -o /tmp/jadx.zip "https://github.com/skylot/jadx/releases/download/${JADX_TAG}/jadx-${JADX_VER}.zip"
-                  sudo unzip -q /tmp/jadx.zip -d /opt/jadx
-                  sudo ln -s /opt/jadx/bin/jadx /usr/local/bin/jadx
+                  set -euo pipefail
+                  curl -fsSL -o /tmp/jadx.zip \
+                    "https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/jadx-${JADX_VERSION}.zip"
+                  echo "${JADX_SHA256}  /tmp/jadx.zip" | sha256sum --check
+                  unzip -q /tmp/jadx.zip -d /opt/jadx
+                  ln -s /opt/jadx/bin/jadx /usr/local/bin/jadx
                   jadx --version
 
             - name: Setup Bun

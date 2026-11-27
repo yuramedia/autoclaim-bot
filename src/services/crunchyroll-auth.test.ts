@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildAccountAuthRequest, normalizeEtpRt } from "./crunchyroll-auth";
+import { buildAccountAuthRequest, maskCredential, normalizeEtpRt } from "./crunchyroll-auth";
 
 const UUID = "123e4567-e89b-12d3-a456-426614174000";
 
@@ -13,11 +13,7 @@ describe("Crunchyroll account auth request", () => {
     test("prefers etp_rt cookie grant with web client headers", () => {
         const req = buildAccountAuthRequest({
             etpRt: `etp_rt=${UUID}`,
-            email: "user@example.com",
-            password: "secret",
-            deviceId: "device-1",
-            androidBasicAuth: "android-basic",
-            androidUserAgent: "android-ua"
+            deviceId: "device-1"
         });
 
         expect(req).not.toBeNull();
@@ -31,21 +27,15 @@ describe("Crunchyroll account auth request", () => {
         expect(req!.headers["User-Agent"]).toMatch(/^Mozilla\//);
     });
 
-    test("keeps password grant as fallback when no etp_rt is configured", () => {
-        const req = buildAccountAuthRequest({
-            email: "user@example.com",
-            password: "secret",
-            deviceId: "device-1",
-            androidBasicAuth: "android-basic",
-            androidUserAgent: "android-ua"
-        });
+    test("maskCredential never emits plaintext", () => {
+        const masked = maskCredential("super-secret-value");
+        expect(masked).not.toContain("super-secret-value");
+        expect(masked).toContain("[REDACTED]");
+    });
 
-        expect(req).not.toBeNull();
-        expect(req!.mode).toBe("password");
-        const body = new URLSearchParams(req!.body);
-        expect(body.get("grant_type")).toBe("password");
-        expect(body.get("username")).toBe("user@example.com");
-        expect(req!.headers["Authorization"]).toBe("Basic android-basic");
-        expect(req!.headers["User-Agent"]).toBe("android-ua");
+    test("returns null when no etp_rt is configured", () => {
+        const req = buildAccountAuthRequest({ deviceId: "device-1" });
+
+        expect(req).toBeNull();
     });
 });
